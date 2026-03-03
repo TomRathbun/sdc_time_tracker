@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}{{ "Check In" if entry_type == "check_in" else "Check Out" }} — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <a href="/" class="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-4 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+        </a>
+        <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+            {% if entry_type == "check_in" %}
+            <div class="w-10 h-10 rounded-xl bg-success-500/10 flex items-center justify-center">
+                <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                </svg>
+            </div>
+            Check In
+            {% else %}
+            <div class="w-10 h-10 rounded-xl bg-danger-500/10 flex items-center justify-center">
+                <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                </svg>
+            </div>
+            Check Out
+            {% endif %}
+        </h1>
+        <p class="text-gray-400 mt-1">{{ today.strftime("%A, %B %d, %Y") }}</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="glass-card p-8">
+        <form method="POST" action="/time/{{ 'checkin' if entry_type == 'check_in' else 'checkout' }}"
+            id="time-entry-form">
+
+            {% if error %}
+            <div class="flex items-center gap-2 p-4 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm mb-6"
+                id="entry-error">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <!-- Time Selection -->
+            <div class="mb-8">
+                <label class="block text-sm font-medium text-gray-300 mb-3">Select Your Actual Time</label>
+                <p class="text-xs text-gray-500 mb-4">Choose the time you actually {{ "arrived" if entry_type ==
+                    "check_in" else "left" }}. The system will separately record when you submit this entry.</p>
+
+                <div class="flex items-center justify-center gap-4">
+                    <!-- Hour -->
+                    <div class="relative">
+                        <select name="declared_hour" id="declared_hour"
+                            class="form-select text-4xl font-mono font-bold text-center w-28 appearance-none">
+                            {% for h in range(0, 24) %}
+                            <option value="{{ h }}" {% if h==now.hour %}selected{% endif %}>{{ "%02d"|format(h) }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <span class="text-4xl font-bold text-primary-400 animate-pulse">:</span>
+                    <!-- Minute -->
+                    <div class="relative">
+                        <select name="declared_minute" id="declared_minute"
+                            class="form-select text-4xl font-mono font-bold text-center w-28 appearance-none">
+                            {% for m in range(0, 60, 5) %}
+                            <option value="{{ m }}" {% if m==(now.minute // 5) * 5 %}selected{% endif %}>{{
+                                "%02d"|format(m) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <p class="text-xs text-gray-500 text-center mt-3">
+                    <span class="inline-flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        Current system time ({{ now.strftime("%H:%M:%S") }}) will be recorded as the submission
+                        timestamp
+                    </span>
+                </p>
+            </div>
+
+            <!-- Location Type -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-300 mb-3">Location</label>
+                <div class="grid grid-cols-3 gap-3">
+                    <label class="location-radio" id="loc-office">
+                        <input type="radio" name="location_type" value="office" checked class="sr-only peer">
+                        <div
+                            class="p-4 rounded-xl border border-white/5 bg-surface-900/50 text-center cursor-pointer peer-checked:border-primary-500/50 peer-checked:bg-primary-500/5 hover:border-white/10 transition-all">
+                            <svg class="w-6 h-6 mx-auto mb-2 text-gray-400 peer-checked:text-primary-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                            <span class="text-sm font-medium text-gray-300">Office</span>
+                        </div>
+                    </label>
+                    <label class="location-radio" id="loc-remote">
+                        <input type="radio" name="location_type" value="remote" class="sr-only peer">
+                        <div
+                            class="p-4 rounded-xl border border-white/5 bg-surface-900/50 text-center cursor-pointer peer-checked:border-accent-500/50 peer-checked:bg-accent-500/5 hover:border-white/10 transition-all">
+                            <svg class="w-6 h-6 mx-auto mb-2 text-gray-400 peer-checked:text-accent-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            <span class="text-sm font-medium text-gray-300">Remote</span>
+                        </div>
+                    </label>
+                    <label class="location-radio" id="loc-offsite">
+                        <input type="radio" name="location_type" value="offsite" class="sr-only peer">
+                        <div
+                            class="p-4 rounded-xl border border-white/5 bg-surface-900/50 text-center cursor-pointer peer-checked:border-warning-500/50 peer-checked:bg-warning-500/5 hover:border-white/10 transition-all">
+                            <svg class="w-6 h-6 mx-auto mb-2 text-gray-400 peer-checked:text-warning-400" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span class="text-sm font-medium text-gray-300">Offsite</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Lunch deviation (check-out only) -->
+            {% if entry_type == "check_out" %}
+            <div class="mb-6 p-4 rounded-xl bg-warning-500/5 border border-warning-500/10">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" name="lunch_end_of_day" value="true"
+                        class="mt-1 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500 focus:ring-primary-500/25"
+                        id="lunch-eod">
+                    <div>
+                        <p class="text-sm font-medium text-warning-300">Lunch taken at end of day</p>
+                        <p class="text-xs text-gray-500 mt-0.5">Requires prior supervisor approval. Checking this will
+                            flag the entry for review.</p>
+                    </div>
+                </label>
+            </div>
+            {% endif %}
+
+            <!-- Comments -->
+            <div class="mb-8">
+                <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">Comments <span
+                        class="text-gray-600">(optional)</span></label>
+                <textarea name="comments" id="comments" rows="2" class="form-input resize-none"
+                    placeholder="Any notes about this entry..."></textarea>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" id="btn-submit-entry" class="w-full btn-primary py-4 text-lg">
+                {% if entry_type == "check_in" %}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                </svg>
+                Submit Check-In
+                {% else %}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                </svg>
+                Submit Check-Out
+                {% endif %}
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

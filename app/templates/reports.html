@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Reports — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-white">Compliance Reports</h1>
+        <p class="text-gray-400 mt-1">Generate and export attendance reports</p>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="glass-card p-6 mb-8">
+        <form method="GET" action="/reports/compliance" id="report-filter-form" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[180px]">
+                <label for="rpt-employee" class="block text-xs text-gray-500 mb-1">Employee</label>
+                <select name="employee_id" id="rpt-employee" required class="form-select">
+                    <option value="">Select employee...</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if selected_employee_id and selected_employee_id|int==emp.id
+                        %}selected{% endif %}>{{ emp.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="rpt-start" class="block text-xs text-gray-500 mb-1">Start Date</label>
+                <input type="date" name="start_date" id="rpt-start" required class="form-input"
+                    value="{{ selected_start or '' }}">
+            </div>
+            <div>
+                <label for="rpt-end" class="block text-xs text-gray-500 mb-1">End Date</label>
+                <input type="date" name="end_date" id="rpt-end" required class="form-input"
+                    value="{{ selected_end or '' }}">
+            </div>
+            <button type="submit" id="btn-generate-report" class="btn-primary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Generate
+            </button>
+        </form>
+    </div>
+
+    {% if report_data %}
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="glass-card p-4 text-center">
+            <p class="text-2xl font-bold text-white">{{ report_data.total_worked }}</p>
+            <p class="text-xs text-gray-500">Hours Worked</p>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <p class="text-2xl font-bold text-white">{{ report_data.total_target | int }}</p>
+            <p class="text-xs text-gray-500">Target Hours</p>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <p
+                class="text-2xl font-bold {% if report_data.compliance_pct >= 100 %}text-success-400{% elif report_data.compliance_pct >= 90 %}text-warning-400{% else %}text-danger-400{% endif %}">
+                {{ report_data.compliance_pct }}%</p>
+            <p class="text-xs text-gray-500">Compliance</p>
+        </div>
+        <div class="glass-card p-4 text-center">
+            <p
+                class="text-2xl font-bold {% if report_data.deviation_days|length == 0 %}text-success-400{% else %}text-warning-400{% endif %}">
+                {{ report_data.deviation_days|length }}</p>
+            <p class="text-xs text-gray-500">Deviation Days</p>
+        </div>
+    </div>
+
+    <!-- Export Button -->
+    <div class="flex justify-end mb-4">
+        <a href="/reports/export/excel?employee_id={{ selected_employee_id }}&start_date={{ selected_start }}&end_date={{ selected_end }}"
+            class="btn-secondary" id="btn-export-excel">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export Excel
+        </a>
+    </div>
+
+    <!-- Daily Summary Table -->
+    <div class="glass-card p-6 mb-6">
+        <h2 class="text-lg font-semibold text-white mb-4">Daily Summary — {{ report_data.target_employee.name }}</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/5">
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Date</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Day</th>
+                        <th class="text-right py-3 px-3 text-gray-400 font-medium">Worked</th>
+                        <th class="text-right py-3 px-3 text-gray-400 font-medium">Target</th>
+                        <th class="text-center py-3 px-3 text-gray-400 font-medium">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in report_data.summaries %}
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td class="py-3 px-3 font-mono text-xs text-gray-300">{{ s.date }}</td>
+                        <td class="py-3 px-3 text-gray-300">{{ s.date.strftime("%A") }}</td>
+                        <td class="py-3 px-3 text-right font-mono font-medium text-white">{{ s.total_hours }}h</td>
+                        <td class="py-3 px-3 text-right font-mono text-gray-500">{{ s.target_hours | int }}h</td>
+                        <td class="py-3 px-3 text-center">
+                            {% if s.is_compliant %}
+                            <span
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-500/10 text-success-400">✓
+                                Met</span>
+                            {% else %}
+                            <span
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-danger-500/10 text-danger-400">✗
+                                Below</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Detailed Entries Table -->
+    <div class="glass-card p-6 mb-6">
+        <h2 class="text-lg font-semibold text-white mb-4">Detailed Time Entries</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/5">
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Date</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Type</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Declared</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Submitted</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Δ</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in report_data.entries %}
+                    {% set delta_seconds = (entry.submission_time - entry.declared_time).total_seconds() | abs %}
+                    {% set delta_minutes = (delta_seconds / 60) | round(0) | int %}
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td class="py-3 px-3 font-mono text-xs text-gray-300">{{ entry.date }}</td>
+                        <td class="py-3 px-3">
+                            <span
+                                class="px-2 py-0.5 rounded text-xs font-medium
+                                {% if entry.entry_type.value == 'check_in' %}bg-success-500/10 text-success-400{% else %}bg-danger-500/10 text-danger-400{% endif %}">
+                                {{ entry.entry_type.value.replace('_', ' ').title() }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 font-mono text-white">{{ entry.declared_time.strftime("%H:%M") }}</td>
+                        <td class="py-3 px-3 font-mono text-gray-400">{{ entry.submission_time.strftime("%H:%M:%S") }}
+                        </td>
+                        <td class="py-3 px-3">
+                            {% if delta_minutes > 15 %}
+                            <span class="text-warning-400 text-xs font-mono">{{ delta_minutes }}m</span>
+                            {% else %}
+                            <span class="text-gray-600 text-xs font-mono">{{ delta_minutes }}m</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-3 text-gray-400 text-xs capitalize">{{ entry.location_type.value }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Leave Days -->
+    {% if report_data.leaves %}
+    <div class="glass-card p-6">
+        <h2 class="text-lg font-semibold text-white mb-4">Approved Leave</h2>
+        <div class="space-y-2">
+            {% for leave in report_data.leaves %}
+            <div class="flex items-center justify-between p-3 rounded-lg bg-surface-900/50 border border-white/5">
+                <div>
+                    <span class="text-sm font-medium text-white capitalize">{{ leave.leave_type.value }}</span>
+                    <span class="text-xs text-gray-500 ml-2">{{ leave.start_date }} → {{ leave.end_date }}</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-xs bg-success-500/10 text-success-400">Approved</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Log Offsite Work — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-8">
+        <a href="/" class="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-4 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+        </a>
+        <h1 class="text-2xl font-bold text-white flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center">
+                <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </div>
+            Log Offsite Work
+        </h1>
+        <p class="text-gray-400 mt-1">{{ today.strftime("%A, %B %d, %Y") }}</p>
+    </div>
+
+    <div class="glass-card p-8">
+        <form method="POST" action="/time/offsite" id="offsite-form">
+
+            {% if error %}
+            <div class="flex items-center gap-2 p-4 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm mb-6"
+                id="offsite-error">
+                <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <!-- Location -->
+            <div class="mb-6">
+                <label for="location" class="block text-sm font-medium text-gray-300 mb-2">Location</label>
+                <input type="text" name="location" id="location" required class="form-input"
+                    placeholder="e.g. Client site, Training center, etc.">
+            </div>
+
+            <!-- Time Range -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-300 mb-3">Time Period</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">Start Time</label>
+                        <div class="flex gap-2">
+                            <select name="start_hour" id="start_hour" class="form-select flex-1">
+                                {% for h in range(0, 24) %}
+                                <option value="{{ h }}" {% if h==8 %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="start_minute" id="start_minute" class="form-select flex-1">
+                                {% for m in range(0, 60, 5) %}
+                                <option value="{{ m }}" {% if m==0 %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 mb-1 block">End Time</label>
+                        <div class="flex gap-2">
+                            <select name="end_hour" id="end_hour" class="form-select flex-1">
+                                {% for h in range(0, 24) %}
+                                <option value="{{ h }}" {% if h==17 %}selected{% endif %}>{{ "%02d"|format(h) }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <select name="end_minute" id="end_minute" class="form-select flex-1">
+                                {% for m in range(0, 60, 5) %}
+                                <option value="{{ m }}" {% if m==0 %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comments -->
+            <div class="mb-8">
+                <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">Comments</label>
+                <textarea name="comments" id="comments" rows="3" class="form-input resize-none"
+                    placeholder="Describe the offsite work or deviation..."></textarea>
+            </div>
+
+            <button type="submit" id="btn-submit-offsite" class="w-full btn-primary py-4 text-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Submit Offsite Entry
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

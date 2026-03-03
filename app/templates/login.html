@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Login — SDC Time Tracker{% endblock %}
+
+{% block public_content %}
+<div class="w-full max-w-md">
+    <!-- Decorative background elements -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-primary-500/10 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-accent-500/10 rounded-full blur-3xl"></div>
+    </div>
+
+    <div class="relative">
+        <!-- Logo -->
+        <div class="text-center mb-8">
+            <div
+                class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 shadow-2xl shadow-primary-500/30 mb-6">
+                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
+                Time Tracker</h1>
+            <p class="text-gray-400 mt-2 text-sm">
+                {% if selected_employee %}
+                Enter your PIN, {{ selected_employee.name.split()[0] }}
+                {% else %}
+                Select your name to sign in
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="bg-surface-800/50 backdrop-blur-xl rounded-2xl border border-white/5 p-6 shadow-2xl">
+
+            {% if not selected_employee %}
+            <!-- ═══ Step 1: Employee List ═══ -->
+            <div class="space-y-2" id="employee-list">
+                {% for emp in employees %}
+                <a href="/login/{{ emp.id }}"
+                    class="flex items-center gap-4 p-4 rounded-xl border border-white/5 bg-surface-900/30 hover:bg-surface-900/60 hover:border-primary-500/30 transition-all group"
+                    id="emp-select-{{ emp.id }}">
+                    <!-- Avatar -->
+                    <div
+                        class="w-11 h-11 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-base font-bold text-white shadow-lg shadow-primary-500/15 group-hover:shadow-primary-500/30 transition-shadow flex-shrink-0">
+                        {{ emp.name[0] }}
+                    </div>
+                    <!-- Name & Role -->
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-gray-200 group-hover:text-white transition-colors">{{ emp.name }}</p>
+                        <p class="text-xs text-gray-500 capitalize">{{ emp.role.value }}</p>
+                    </div>
+                    <!-- Arrow -->
+                    <svg class="w-5 h-5 text-gray-600 group-hover:text-primary-400 transition-colors flex-shrink-0"
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+                {% endfor %}
+
+                {% if not employees %}
+                <div class="text-center py-8 text-gray-500">
+                    <p>No employees configured yet.</p>
+                    <p class="text-xs mt-1">Contact your administrator.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            {% else %}
+            <!-- ═══ Step 2: PIN Entry for Selected Employee ═══ -->
+            <div>
+                <!-- Selected employee header -->
+                <div class="flex items-center gap-4 p-4 mb-6 rounded-xl bg-primary-500/5 border border-primary-500/20">
+                    <div
+                        class="w-12 h-12 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-lg font-bold text-white shadow-lg shadow-primary-500/25 flex-shrink-0">
+                        {{ selected_employee.name[0] }}
+                    </div>
+                    <div class="flex-1">
+                        <p class="font-semibold text-white">{{ selected_employee.name }}</p>
+                        <p class="text-xs text-gray-400 capitalize">{{ selected_employee.role.value }}</p>
+                    </div>
+                    <a href="/login"
+                        class="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                        title="Choose a different person" id="btn-back-to-list">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </a>
+                </div>
+
+                <!-- PIN Form -->
+                <form method="POST" action="/login" id="login-form">
+                    <input type="hidden" name="employee_id" value="{{ selected_employee.id }}">
+                    <div class="space-y-6">
+                        <!-- PIN Input -->
+                        <div>
+                            <label for="pin" class="block text-sm font-medium text-gray-300 mb-2">Your PIN</label>
+                            <div class="relative">
+                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                </div>
+                                <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]*"
+                                    autofocus required
+                                    class="w-full bg-surface-900/50 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                                    placeholder="••••" maxlength="8">
+                            </div>
+                        </div>
+
+                        {% if error %}
+                        <div class="flex items-center gap-2 p-3 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm"
+                            id="login-error">
+                            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {{ error }}
+                        </div>
+                        {% endif %}
+
+                        <!-- Submit Button -->
+                        <button type="submit" id="btn-login"
+                            class="w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]">
+                            <span class="relative z-10 flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                                </svg>
+                                Sign In
+                            </span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Back link -->
+                <div class="text-center mt-4">
+                    <a href="/login" class="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                        id="link-back-to-list">
+                        ← Not {{ selected_employee.name.split()[0] }}? Choose a different name
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Footer hint -->
+        <p class="text-center text-xs text-gray-600 mt-6">
+            Secure access • All sessions are logged
+        </p>
+    </div>
+</div>
+{% endblock %}

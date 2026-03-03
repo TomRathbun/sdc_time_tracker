@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Admin — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-white">Administration</h1>
+        <p class="text-gray-400 mt-1">Manage employees and remote work authorizations</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Add Employee -->
+        <div class="glass-card p-6">
+            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                Add Employee
+            </h2>
+            <form method="POST" action="/admin/employee" id="add-employee-form">
+                <div class="space-y-3">
+                    <div>
+                        <label for="emp-name" class="block text-xs text-gray-500 mb-1">Full Name</label>
+                        <input type="text" name="name" id="emp-name" required class="form-input"
+                            placeholder="e.g. John Smith">
+                    </div>
+                    <div>
+                        <label for="emp-pin" class="block text-xs text-gray-500 mb-1">PIN</label>
+                        <input type="text" name="pin" id="emp-pin" required class="form-input font-mono"
+                            placeholder="e.g. 1234" maxlength="8" pattern="[0-9]+">
+                    </div>
+                    <div>
+                        <label for="emp-role" class="block text-xs text-gray-500 mb-1">Role</label>
+                        <select name="role" id="emp-role" class="form-select">
+                            <option value="employee">Employee</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="manager">Manager</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="btn-add-employee" class="w-full btn-primary">Add Employee</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Create Remote Authorization -->
+        <div class="lg:col-span-2 glass-card p-6">
+            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                Remote Work Authorization
+            </h2>
+            <form method="POST" action="/admin/authorization" id="auth-form">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="auth-employee" class="block text-xs text-gray-500 mb-1">Employee</label>
+                        <select name="employee_id" id="auth-employee" required class="form-select">
+                            {% for emp in employees %}
+                            {% if emp.is_active %}
+                            <option value="{{ emp.id }}">{{ emp.name }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="auth-date" class="block text-xs text-gray-500 mb-1">Date</label>
+                        <input type="date" name="auth_date" id="auth-date" required class="form-input">
+                    </div>
+                    <div>
+                        <label for="auth-hours" class="block text-xs text-gray-500 mb-1">Max Hours</label>
+                        <input type="number" name="max_hours" id="auth-hours" required class="form-input" step="0.5"
+                            min="0.5" max="9" value="2">
+                    </div>
+                    <div>
+                        <label for="auth-location" class="block text-xs text-gray-500 mb-1">Location</label>
+                        <input type="text" name="location" id="auth-location" class="form-input" value="WFH"
+                            placeholder="e.g. WFH, Client Site">
+                    </div>
+                </div>
+                <button type="submit" id="btn-create-auth" class="w-full btn-primary mt-4">Create Authorization</button>
+            </form>
+
+            <!-- Active Authorizations -->
+            {% if authorizations %}
+            <div class="mt-6 pt-4 border-t border-white/5">
+                <h3 class="text-sm font-medium text-gray-400 mb-3">Upcoming Authorizations</h3>
+                <div class="space-y-2">
+                    {% for auth in authorizations %}
+                    <div
+                        class="flex items-center justify-between p-3 rounded-lg bg-surface-900/50 border border-white/5">
+                        <div>
+                            <span class="text-sm font-medium text-white">{{ auth.employee.name }}</span>
+                            <span class="text-xs text-gray-500 ml-2">{{ auth.date }} • {{ auth.max_hours }}h • {{
+                                auth.location }}</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-medium
+                            {% if auth.status.value == 'active' %}bg-success-500/10 text-success-400
+                            {% elif auth.status.value == 'used' %}bg-gray-500/10 text-gray-400
+                            {% else %}bg-danger-500/10 text-danger-400{% endif %}">
+                            {{ auth.status.value.title() }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Employee List -->
+    <div class="glass-card p-6">
+        <h2 class="text-lg font-semibold text-white mb-4">All Employees</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/5">
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Name</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Role</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Status</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Created</th>
+                        <th class="text-right py-3 px-3 text-gray-400 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for emp in employees %}
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td class="py-3 px-3">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-xs font-bold text-white">
+                                    {{ emp.name[0] }}
+                                </div>
+                                <span class="font-medium text-white">{{ emp.name }}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-3">
+                            <span class="px-2 py-1 rounded-full text-xs font-medium
+                                {% if emp.role.value == 'manager' %}bg-primary-500/10 text-primary-400
+                                {% elif emp.role.value == 'supervisor' %}bg-accent-500/10 text-accent-400
+                                {% else %}bg-gray-500/10 text-gray-400{% endif %}">
+                                {{ emp.role.value.title() }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3">
+                            <div class="flex flex-col gap-1">
+                                {% if emp.is_active %}
+                                <span class="flex items-center gap-1.5 text-success-400 text-xs"><span
+                                        class="w-1.5 h-1.5 rounded-full bg-success-400"></span> Active</span>
+                                {% else %}
+                                <span class="flex items-center gap-1.5 text-gray-500 text-xs"><span
+                                        class="w-1.5 h-1.5 rounded-full bg-gray-500"></span> Inactive</span>
+                                {% endif %}
+
+                                {% if emp.pin_needs_reset %}
+                                <span
+                                    class="text-[10px] text-warning-400 border border-warning-400/30 px-1.5 py-0.5 rounded uppercase font-bold w-fit">Reset
+                                    Required</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="py-3 px-3 text-gray-500 text-xs">{{ emp.created_at.strftime("%Y-%m-%d") if
+                            emp.created_at else "—" }}</td>
+                        <td class="py-3 px-3 text-right">
+                            {% if emp.id != employee.id %}
+                            <form method="POST" action="/admin/employee/{{ emp.id }}/toggle" class="inline">
+                                <button type="submit" class="text-xs px-3 py-1.5 rounded-lg
+                                    {% if emp.is_active %}bg-danger-500/10 text-danger-400 hover:bg-danger-500/20
+                                    {% else %}bg-success-500/10 text-success-400 hover:bg-success-500/20{% endif %}
+                                    transition-colors" id="btn-toggle-{{ emp.id }}">
+                                    {{ "Deactivate" if emp.is_active else "Activate" }}
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

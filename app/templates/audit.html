@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Audit Trail — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="mb-8">
+        <h1 class="text-2xl font-bold text-white">Audit Trail</h1>
+        <p class="text-gray-400 mt-1">Tamper-evident log of all system actions</p>
+    </div>
+
+    <!-- Filter -->
+    <div class="glass-card p-6 mb-6">
+        <form method="GET" action="/audit" id="audit-filter-form" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[180px]">
+                <label for="audit-employee" class="block text-xs text-gray-500 mb-1">Employee</label>
+                <select name="employee_id" id="audit-employee" class="form-select">
+                    <option value="">All employees</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.id }}" {% if selected_employee_id and selected_employee_id|int==emp.id
+                        %}selected{% endif %}>{{ emp.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="audit-start" class="block text-xs text-gray-500 mb-1">From</label>
+                <input type="date" name="start_date" id="audit-start" class="form-input"
+                    value="{{ selected_start or '' }}">
+            </div>
+            <div>
+                <label for="audit-end" class="block text-xs text-gray-500 mb-1">To</label>
+                <input type="date" name="end_date" id="audit-end" class="form-input" value="{{ selected_end or '' }}">
+            </div>
+            <button type="submit" id="btn-filter-audit" class="btn-primary">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Audit Log Table -->
+    <div class="glass-card p-6">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/5">
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Timestamp</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">User</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Action</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Entity</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Details</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">IP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                        <td class="py-3 px-3 font-mono text-xs text-gray-300 whitespace-nowrap">{{
+                            log.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                        <td class="py-3 px-3 text-gray-300">{{ log.employee.name if log.employee else "System" }}</td>
+                        <td class="py-3 px-3">
+                            <span class="px-2 py-0.5 rounded text-xs font-medium
+                                {% if 'login' in log.action %}bg-primary-500/10 text-primary-400
+                                {% elif 'check_in' in log.action %}bg-success-500/10 text-success-400
+                                {% elif 'check_out' in log.action %}bg-danger-500/10 text-danger-400
+                                {% elif 'approve' in log.action %}bg-success-500/10 text-success-400
+                                {% elif 'reject' in log.action %}bg-danger-500/10 text-danger-400
+                                {% else %}bg-gray-500/10 text-gray-400{% endif %}">
+                                {{ log.action.replace('_', ' ').title() }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-3 text-gray-400 text-xs">{{ log.entity_type }}{% if log.entity_id %} #{{
+                            log.entity_id }}{% endif %}</td>
+                        <td class="py-3 px-3 text-xs text-gray-500 max-w-xs truncate">
+                            {% if log.new_values %}
+                            <span class="cursor-help" title="{{ log.new_values }}">{{ log.new_values | tojson |
+                                truncate(60) }}</span>
+                            {% elif log.old_values %}
+                            <span class="cursor-help" title="{{ log.old_values }}">{{ log.old_values | tojson |
+                                truncate(60) }}</span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td class="py-3 px-3 font-mono text-xs text-gray-600">{{ log.ip_address or "—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if not logs %}
+        <div class="text-center py-12">
+            <p class="text-gray-500">No audit entries found for the selected filters</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SDC Time Tracker — Electronic Time and Attendance System">
+    <title>{% block title %}SDC Time Tracker{% endblock %}</title>
+
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81' },
+                        surface: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 700: '#1e293b', 800: '#0f172a', 900: '#020617' },
+                        accent: { 400: '#38bdf8', 500: '#0ea5e9', 600: '#0284c7' },
+                        success: { 400: '#4ade80', 500: '#22c55e', 600: '#16a34a' },
+                        warning: { 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706' },
+                        danger: { 400: '#f87171', 500: '#ef4444', 600: '#dc2626' },
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/static/css/app.css">
+
+    {% block head %}{% endblock %}
+</head>
+
+<body class="bg-surface-900 text-gray-100 font-sans min-h-screen antialiased">
+
+    {% if employee and not employee.pin_needs_reset %}
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 border-b border-white/5" id="main-nav">
+        <div class="backdrop-blur-xl bg-surface-800/70">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <!-- Logo -->
+                    <a href="/" class="flex items-center gap-3 group">
+                        <div
+                            class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/25 group-hover:shadow-primary-500/40 transition-shadow">
+                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <span
+                            class="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
+                            Time</span>
+                    </a>
+
+                    <!-- Nav Links -->
+                    <div class="hidden md:flex items-center gap-1">
+                        <a href="/" class="nav-link" id="nav-dashboard">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                            </svg>
+                            Dashboard
+                        </a>
+                        <a href="/leave" class="nav-link" id="nav-leave">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Leave
+                        </a>
+                        {% if employee.role.value in ['manager', 'supervisor'] %}
+                        <a href="/reports" class="nav-link" id="nav-reports">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            Reports
+                        </a>
+                        <a href="/audit" class="nav-link" id="nav-audit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                            Audit
+                        </a>
+                        <a href="/admin/timesheet" class="nav-link" id="nav-timesheet">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Timesheet
+                        </a>
+                        <a href="/admin" class="nav-link" id="nav-admin">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            Admin
+                        </a>
+                        {% endif %}
+                    </div>
+
+                    <!-- User Info + Logout -->
+                    <div class="flex items-center gap-4">
+                        <div class="hidden sm:flex items-center gap-2">
+                            <div
+                                class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-sm font-bold text-white shadow-lg">
+                                {{ employee.name[0] }}
+                            </div>
+                            <div class="text-sm">
+                                <p class="font-medium text-gray-200">{{ employee.name }}</p>
+                                <p class="text-xs text-gray-500 capitalize">{{ employee.role.value }}</p>
+                            </div>
+                        </div>
+                        <a href="/logout"
+                            class="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                            id="btn-logout" title="Logout">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                        </a>
+
+                        <!-- Mobile menu toggle -->
+                        <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')"
+                            class="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden border-t border-white/5 pb-3">
+                <div class="px-4 pt-2 space-y-1">
+                    <a href="/" class="mobile-nav-link">Dashboard</a>
+                    <a href="/leave" class="mobile-nav-link">Leave</a>
+                    {% if employee.role.value in ['manager', 'supervisor'] %}
+                    <a href="/reports" class="mobile-nav-link">Reports</a>
+                    <a href="/audit" class="mobile-nav-link">Audit Trail</a>
+                    <a href="/admin/timesheet" class="mobile-nav-link">Team Timesheet</a>
+                    <a href="/admin" class="mobile-nav-link">Admin</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+        {% block content %}{% endblock %}
+    </main>
+    {% else %}
+    <main class="min-h-screen flex items-center justify-center px-4">
+        {% block public_content %}{% endblock %}
+    </main>
+    {% endif %}
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}PTO Request — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+        <a href="/" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">← Back to Dashboard</a>
+        <h1 class="text-2xl font-bold text-white mt-4">PTO Request</h1>
+        <p class="text-gray-400 mt-1">Log paid time off (vacation or sick leave)</p>
+    </div>
+
+    <!-- Date Selector -->
+    <div class="glass-card p-5 mb-6">
+        <label class="block text-sm font-medium text-gray-300 mb-3">Select Date</label>
+        <div class="flex flex-wrap gap-2">
+            {% for day in recent_days %}
+            <a href="/time/partial-leave?target_date={{ day.date.isoformat() }}" class="px-3 py-2 rounded-lg text-xs font-medium transition-all border
+                   {% if day.date == selected_date %}
+                       bg-primary-500/20 border-primary-500/40 text-primary-300
+                   {% elif day.date == today %}
+                       bg-surface-700/50 border-white/10 text-white hover:border-primary-500/30
+                   {% else %}
+                       bg-surface-900/50 border-white/5 text-gray-400 hover:border-white/10 hover:text-gray-300
+                   {% endif %}">
+                {{ day.label }}
+                {% if day.date == today %}<span class="text-primary-400 ml-1">·</span>{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Current Status for Selected Date -->
+    <div class="glass-card p-5 mb-6">
+        <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+            {{ selected_date.strftime("%A, %B %d, %Y") }}
+            {% if selected_date == today %}
+            <span class="text-primary-400 font-normal normal-case ml-1">(today)</span>
+            {% endif %}
+        </h3>
+        <div class="grid grid-cols-3 gap-4 text-center">
+            <div>
+                <p class="text-xs text-gray-500 mb-1">Worked</p>
+                <p class="text-lg font-mono font-bold text-white">{{ current_worked }}h</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 mb-1">PTO</p>
+                <p
+                    class="text-lg font-mono font-bold {% if current_leave_hours > 0 %}text-accent-400{% else %}text-gray-600{% endif %}">
+                    {{ current_leave_hours }}h
+                </p>
+                {% if current_leave_hours > 0 %}
+                <p class="text-[10px] mt-0.5
+                    {% if current_leave_approved %}text-success-400{% else %}text-warning-400{% endif %}">
+                    {% if current_leave_type == 'vacation' %}PTO (VAC){% elif current_leave_type == 'sick' %}PTO (SIC){%
+                    endif %}
+                    · {% if current_leave_approved %}✓ Approved{% else %}⏳ Pending{% endif %}
+                </p>
+                {% endif %}
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 mb-1">Target</p>
+                <p class="text-lg font-mono font-bold text-gray-300">{{ target }}h</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lunch rule info -->
+    <div class="glass-card p-4 mb-6 border-l-4 border-accent-400">
+        <div class="flex items-start gap-3">
+            <svg class="w-5 h-5 text-accent-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor"
+                viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+                <p class="text-sm text-gray-300 font-medium">PTO Approval Required</p>
+                <p class="text-xs text-gray-500 mt-0.5">All PTO requests must be approved by the Engineering Manager on
+                    the timesheet. You must work at least <span class="text-white font-medium">6 hours</span> to qualify
+                    for the paid lunch credit.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- PTO Form -->
+    <div class="glass-card p-6">
+        <form method="POST" action="/time/partial-leave" id="pto-form">
+            <input type="hidden" name="leave_date" value="{{ selected_date.isoformat() }}">
+            <div class="space-y-6">
+                <!-- PTO Type -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-3">PTO Type</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="relative cursor-pointer">
+                            <input type="radio" name="leave_type" value="vacation" {% if current_leave_type !='sick'
+                                %}checked{% endif %} class="peer sr-only" id="pto-vacation">
+                            <div
+                                class="p-4 rounded-xl bg-surface-900/50 border border-white/5 text-center
+                                        peer-checked:border-primary-500/40 peer-checked:bg-primary-500/10 transition-all">
+                                <div class="text-2xl mb-1">🏖️</div>
+                                <p class="text-sm font-semibold text-white">PTO (VAC)</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Vacation Leave</p>
+                            </div>
+                        </label>
+                        <label class="relative cursor-pointer">
+                            <input type="radio" name="leave_type" value="sick" {% if current_leave_type=='sick'
+                                %}checked{% endif %} class="peer sr-only" id="pto-sick">
+                            <div
+                                class="p-4 rounded-xl bg-surface-900/50 border border-white/5 text-center
+                                        peer-checked:border-warning-500/40 peer-checked:bg-warning-500/10 transition-all">
+                                <div class="text-2xl mb-1">🏥</div>
+                                <p class="text-sm font-semibold text-white">PTO (SIC)</p>
+                                <p class="text-[10px] text-gray-500 mt-0.5">Sick Leave</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Hours -->
+                <div>
+                    <label for="leave_hours" class="block text-sm font-medium text-gray-300 mb-2">PTO Hours</label>
+                    <p class="text-xs text-gray-500 mb-3">Enter 0 to remove PTO for this date. Target is {{ target }}h.
+                    </p>
+                    <div class="relative">
+                        <input type="number" name="leave_hours" id="leave_hours" step="0.5" min="0" max="{{ target }}"
+                            value="{{ current_leave_hours if current_leave_hours > 0 else '' }}" required
+                            class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3.5 text-white text-lg font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                            placeholder="e.g. 5">
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">hours</span>
+                    </div>
+                </div>
+
+                {% if error %}
+                <div class="flex items-center gap-2 p-3 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm"
+                    id="error-msg">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {{ error }}
+                </div>
+                {% endif %}
+
+                <button type="submit" id="btn-submit-pto"
+                    class="w-full bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all active:scale-[0.98]">
+                    <span class="flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        {% if current_leave_hours > 0 %}Update{% else %}Submit{% endif %} PTO Request
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <p class="text-center text-xs text-gray-600 mt-4">
+        ⓘ PTO requests require Engineering Manager approval on the timesheet
+    </p>
+</div>
+{% endblock %}

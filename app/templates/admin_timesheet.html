@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+{% block title %}Team Timesheet — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <!-- Header with week navigation -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Team Timesheet</h1>
+            <p class="text-gray-400 mt-1">
+                Week of <span class="font-mono text-white">{{ week_start.strftime("%b %d") }}</span>
+                — <span class="font-mono text-white">{{ week_end.strftime("%b %d, %Y") }}</span>
+                {% if is_current_week %}
+                <span
+                    class="ml-2 px-2 py-0.5 rounded-full text-xs bg-primary-500/10 text-primary-400 font-medium">Current
+                    Week</span>
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Week Navigation -->
+        <div class="flex items-center gap-2">
+            <a href="/admin/timesheet?week={{ prev_week }}"
+                class="p-2.5 rounded-xl bg-surface-800/50 border border-white/5 hover:border-white/10 hover:bg-surface-700/50 text-gray-400 hover:text-white transition-all"
+                id="btn-prev-week" title="Previous week">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+
+            {% if not is_current_week %}
+            <a href="/admin/timesheet"
+                class="px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 hover:border-white/10 text-sm text-gray-400 hover:text-white transition-all"
+                id="btn-today-week">
+                Today
+            </a>
+            {% endif %}
+
+            {% if not is_future %}
+            <a href="/admin/timesheet?week={{ next_week }}"
+                class="p-2.5 rounded-xl bg-surface-800/50 border border-white/5 hover:border-white/10 hover:bg-surface-700/50 text-gray-400 hover:text-white transition-all"
+                id="btn-next-week" title="Next week">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap items-center gap-4 mb-6 text-xs text-gray-500">
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-success-500/20 border border-success-500/30"></span> Target met</span>
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-warning-500/20 border border-warning-500/30"></span> Below target</span>
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-danger-500/20 border border-danger-500/30"></span> Missing entry</span>
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-red-600/30 border-2 border-red-500/50 animate-pulse"></span> <span
+                class="text-red-400 font-medium">Lunch pending</span></span>
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-amber-600/30 border-2 border-amber-500/50 animate-pulse"></span> <span
+                class="text-amber-400 font-medium">PTO pending</span></span>
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-accent-500/20 border border-accent-500/30"></span> On leave</span>
+        <span class="flex items-center gap-1.5"><span
+                class="w-3 h-3 rounded bg-surface-700/50 border border-white/5"></span> Future</span>
+    </div>
+
+    <!-- Timesheet Grid -->
+    <div class="glass-card overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b border-white/5">
+                        <th class="text-left py-4 px-5 text-gray-400 font-medium w-48">Employee</th>
+                        {% for day in days %}
+                        <th class="text-center py-4 px-3 font-medium min-w-[100px]
+                            {% if day.is_today %}text-primary-300{% else %}text-gray-400{% endif %}">
+                            <div class="text-xs uppercase tracking-wider">{{ day.label }}</div>
+                            <div class="text-[11px] font-normal mt-0.5
+                                {% if day.is_today %}text-primary-400{% else %}text-gray-600{% endif %}">
+                                {{ day.date.strftime("%d %b") }}
+                            </div>
+                            <div class="text-[10px] font-normal text-gray-600 mt-0.5">{{ day.target | int }}h target
+                            </div>
+                        </th>
+                        {% endfor %}
+                        <th class="text-center py-4 px-4 text-gray-400 font-medium min-w-[90px]">
+                            <div class="text-xs uppercase tracking-wider">Total</div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr class="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                        <!-- Employee name -->
+                        <td class="py-3 px-5">
+                            <div class="flex items-center gap-3">
+                                <div
+                                    class="w-9 h-9 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                                    {{ row.employee.name[0] }}
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-medium text-white text-sm truncate">{{ row.employee.name }}</p>
+                                    <p class="text-[11px] text-gray-500 capitalize">{{ row.employee.role.value }}</p>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Day cells -->
+                        {% for cell in row.days %}
+                        <td class="py-3 px-3 text-center">
+                            <div class="mx-auto w-full max-w-[110px] rounded-lg px-2 py-2
+                                {% if cell.status == 'lunch_pending' %}
+                                    bg-red-600/15 border-2 border-red-500/40 animate-pulse
+                                {% elif cell.status == 'pto_pending' %}
+                                    bg-amber-600/15 border-2 border-amber-500/40 animate-pulse
+                                {% elif cell.status == 'compliant' %}
+                                    bg-success-500/10 border border-success-500/20
+                                {% elif cell.status == 'partial' %}
+                                    bg-warning-500/10 border border-warning-500/20
+                                {% elif cell.status == 'missing' %}
+                                    bg-danger-500/10 border border-danger-500/20
+                                {% elif cell.status == 'leave' %}
+                                    bg-accent-500/10 border border-accent-500/20
+                                {% else %}
+                                    bg-surface-900/30 border border-white/5
+                                {% endif %}">
+
+                                {% if cell.status == 'lunch_pending' %}
+                                <div class="text-xs font-mono font-semibold text-red-300">{{ cell.worked }}h</div>
+                                <div class="text-[10px] text-red-400 mt-0.5 font-medium">🍽 Lunch EOD</div>
+                                {% if cell.pto_pending %}
+                                <div class="text-[10px] text-amber-400 mt-0.5 font-medium">📋 {{ cell.leave_type_label
+                                    }} {{ cell.leave_hours }}h</div>
+                                {% endif %}
+                                <form method="POST" action="/admin/approve-lunch" class="mt-1">
+                                    <input type="hidden" name="summary_id" value="{{ cell.summary_id }}">
+                                    <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+                                    <button type="submit"
+                                        class="w-full px-2 py-0.5 rounded text-[10px] font-semibold bg-success-500/15 text-success-400 hover:bg-success-500/30 transition-colors border border-success-500/20"
+                                        title="Approve lunch deviation — adds +1h">
+                                        ✓ Approve Lunch
+                                    </button>
+                                </form>
+
+                                {% elif cell.status == 'pto_pending' %}
+                                <div class="text-xs font-mono font-semibold text-amber-300">{{ cell.worked }}h</div>
+                                <div class="text-[10px] text-amber-400 mt-0.5 font-medium">📋 {{ cell.leave_type_label
+                                    }}</div>
+                                <div class="text-[10px] text-amber-300 font-mono">+{{ cell.leave_hours }}h</div>
+                                <form method="POST" action="/admin/approve-pto" class="mt-1">
+                                    <input type="hidden" name="summary_id" value="{{ cell.summary_id }}">
+                                    <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+                                    <button type="submit"
+                                        class="w-full px-2 py-0.5 rounded text-[10px] font-semibold bg-success-500/15 text-success-400 hover:bg-success-500/30 transition-colors border border-success-500/20"
+                                        title="Approve PTO — adds {{ cell.leave_hours }}h to compliance">
+                                        ✓ Approve
+                                    </button>
+                                </form>
+
+                                {% elif cell.status == 'leave' %}
+                                <span class="text-xs font-medium text-accent-400">Leave</span>
+                                {% elif cell.status == 'future' %}
+                                <span class="text-xs text-gray-600">—</span>
+                                {% elif cell.status == 'missing' %}
+                                <span class="text-xs font-medium text-danger-400">0h</span>
+                                {% else %}
+                                <span class="text-sm font-mono font-semibold
+                                    {% if cell.status == 'compliant' %}text-success-300
+                                    {% else %}text-warning-300{% endif %}">
+                                    {{ cell.worked }}h
+                                </span>
+                                {% if cell.pto_approved %}
+                                <div class="text-[10px] text-accent-400 mt-0.5"
+                                    title="{{ cell.leave_type_label }}: {{ cell.leave_hours }}h approved">📋 {{
+                                    cell.leave_type_label }} +{{ cell.leave_hours }}h ✓</div>
+                                {% endif %}
+                                {% if cell.lunch_approved %}
+                                <div class="text-[10px] text-success-400 mt-0.5"
+                                    title="Lunch at end of day approved (+1h)">🍽 +1h</div>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </td>
+                        {% endfor %}
+
+                        <!-- Weekly total -->
+                        <td class="py-3 px-4 text-center">
+                            <div class="mx-auto">
+                                <span class="text-sm font-mono font-bold
+                                    {% if row.week_compliant %}text-success-400{% else %}text-white{% endif %}">
+                                    {{ row.week_total }}h
+                                </span>
+                                <div class="text-[10px] text-gray-600 mt-0.5">/ {{ row.week_target | int }}h</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+                <!-- Footer totals row -->
+                <tfoot>
+                    <tr class="border-t border-white/5 bg-surface-900/30">
+                        <td class="py-3 px-5 text-xs font-medium text-gray-400">Column Target</td>
+                        {% for day in days %}
+                        <td class="py-3 px-3 text-center">
+                            <span class="text-xs font-mono text-gray-500">{{ day.target | int }}h</span>
+                        </td>
+                        {% endfor %}
+                        <td class="py-3 px-4 text-center">
+                            <span class="text-xs font-mono text-gray-500">{{ days | sum(attribute='target') | int
+                                }}h</span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Back to admin link -->
+    <div class="mt-6">
+        <a href="/admin" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+            ← Back to Administration
+        </a>
+    </div>
+</div>
+{% endblock %}
