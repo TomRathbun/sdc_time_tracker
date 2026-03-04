@@ -475,6 +475,13 @@ async def past_day_submit(
     except ValueError:
         return RedirectResponse(url="/time/past-day", status_code=303)
 
+    # Comments are mandatory for past day entries
+    if not comments or not comments.strip():
+        return RedirectResponse(
+            url=f"/time/past-day?target_date={entry_date}",
+            status_code=303,
+        )
+
     # Build datetimes
     checkin_time = datetime(
         selected_date.year, selected_date.month, selected_date.day,

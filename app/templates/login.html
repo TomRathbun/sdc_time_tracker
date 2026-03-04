@@ -1,8 +1,182 @@
 {% extends "base.html" %}
 {% block title %}Login — SDC Time Tracker{% endblock %}
 
+{% block head %}
+<style>
+    /* ── Background collage ── */
+    .collage-bg {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        background: url('/static/images/lm_collage_bg.png?v=3') center center / contain no-repeat;
+        background-color: #020617;
+        opacity: 0.65;
+        filter: blur(0px);
+        pointer-events: none;
+    }
+
+    .collage-bg::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0.25) 0%, rgba(2, 6, 23, 0.05) 50%, rgba(2, 6, 23, 0.4) 100%);
+    }
+
+    /* ── Multi-timezone Clock Panel ── */
+    .tz-clock-panel {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+        justify-content: center;
+    }
+
+    .tz-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.625rem 0.875rem;
+        border-radius: 0.875rem;
+        background: rgba(15, 23, 42, 0.55);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        min-width: 110px;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .tz-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.08);
+    }
+
+    .tz-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: rgba(148, 163, 184, 0.8);
+        margin-bottom: 0.25rem;
+    }
+
+    .tz-time {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        letter-spacing: 0.04em;
+    }
+
+    .tz-date {
+        font-size: 0.6rem;
+        color: rgba(148, 163, 184, 0.55);
+        margin-top: 0.15rem;
+    }
+
+    .tz-seconds {
+        color: rgba(99, 102, 241, 0.8);
+    }
+
+    /* ── LM Logo ── */
+    .lm-logo-container {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+        max-width: 320px;
+        height: 45px;
+        margin-left: auto;
+        margin-right: auto;
+        border-radius: 6px;
+    }
+
+    .lm-logo-container img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.95;
+        filter: brightness(1.2) drop-shadow(0 4px 12px rgba(99, 102, 241, 0.2));
+        transition: opacity 0.3s ease, filter 0.3s ease;
+    }
+
+    .lm-logo-container img:hover {
+        opacity: 1;
+    }
+
+    /* Subtle scan-line effect over the background */
+    .scanlines {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background: repeating-linear-gradient(0deg,
+                transparent,
+                transparent 2px,
+                rgba(0, 0, 0, 0.03) 2px,
+                rgba(0, 0, 0, 0.03) 4px);
+    }
+
+    /* ── Animated accent bar ── */
+    .accent-bar {
+        height: 3px;
+        background: linear-gradient(90deg, transparent, #6366f1, #0ea5e9, #6366f1, transparent);
+        background-size: 200% 100%;
+        animation: shimmer 3s ease-in-out infinite;
+        border-radius: 2px;
+        margin: 1rem 0;
+        opacity: 0.6;
+    }
+
+    @keyframes shimmer {
+        0% {
+            background-position: -200% 0;
+        }
+
+        100% {
+            background-position: 200% 0;
+        }
+    }
+
+    /* ── Fade-in animation for clocks ── */
+    @keyframes clockFadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(6px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .tz-card {
+        animation: clockFadeIn 0.5s ease forwards;
+    }
+
+    .tz-card:nth-child(2) {
+        animation-delay: 0.08s;
+    }
+
+    .tz-card:nth-child(3) {
+        animation-delay: 0.16s;
+    }
+
+    .tz-card:nth-child(4) {
+        animation-delay: 0.24s;
+    }
+
+    .tz-card:nth-child(5) {
+        animation-delay: 0.32s;
+    }
+</style>
+{% endblock %}
+
 {% block public_content %}
-<div class="w-full max-w-md">
+<!-- Background collage of LM products -->
+<div class="collage-bg"></div>
+<div class="scanlines"></div>
+
+<div class="w-full max-w-lg relative z-10">
     <!-- Decorative background elements -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none">
         <div class="absolute -top-40 -right-40 w-80 h-80 bg-primary-500/10 rounded-full blur-3xl"></div>
@@ -10,52 +184,142 @@
     </div>
 
     <div class="relative">
-        <!-- Logo -->
-        <div class="text-center mb-8">
-            <div
-                class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-500 to-accent-500 shadow-2xl shadow-primary-500/30 mb-6">
-                <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-            </div>
+        <!-- Lockheed Martin Logo -->
+        <div class="lm-logo-container">
+            <img src="/static/images/lm_logo.png" alt="Lockheed Martin" id="lm-logo">
+        </div>
+
+        <!-- App Branding -->
+        <div class="text-center mb-4">
             <h1 class="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
                 Time Tracker</h1>
             <p class="text-gray-400 mt-2 text-sm">
                 {% if selected_employee %}
                 Enter your PIN, {{ selected_employee.name.split()[0] }}
                 {% else %}
-                Select your name to sign in
+                Select your name to sign in, or use quick actions
                 {% endif %}
             </p>
         </div>
 
+        <!-- ═══ Multi-Timezone Clock ═══ -->
+        <div class="accent-bar"></div>
+        <div class="tz-clock-panel mb-4" id="tz-clocks">
+            <div class="tz-card" id="tz-mountain">
+                <span class="tz-label">Mountain</span>
+                <span class="tz-time" id="clock-mountain">--:--:--</span>
+                <span class="tz-date" id="date-mountain"></span>
+            </div>
+            <div class="tz-card" id="tz-eastern">
+                <span class="tz-label">Eastern</span>
+                <span class="tz-time" id="clock-eastern">--:--:--</span>
+                <span class="tz-date" id="date-eastern"></span>
+            </div>
+            <div class="tz-card" id="tz-utc">
+                <span class="tz-label">UTC / Zulu</span>
+                <span class="tz-time" id="clock-utc">--:--:--</span>
+                <span class="tz-date" id="date-utc"></span>
+            </div>
+            <div class="tz-card" id="tz-abudhabi">
+                <span class="tz-label">Abu Dhabi</span>
+                <span class="tz-time" id="clock-abudhabi">--:--:--</span>
+                <span class="tz-date" id="date-abudhabi"></span>
+            </div>
+        </div>
+        <div class="accent-bar"></div>
+
         <!-- Login Card -->
-        <div class="bg-surface-800/50 backdrop-blur-xl rounded-2xl border border-white/5 p-6 shadow-2xl">
+        <div class="bg-surface-800/50 backdrop-blur-xl rounded-2xl border border-white/5 p-6 shadow-2xl mt-4">
 
             {% if not selected_employee %}
-            <!-- ═══ Step 1: Employee List ═══ -->
-            <div class="space-y-2" id="employee-list">
+            <!-- ═══ Step 1: Employee List with Quick Actions ═══ -->
+            <!-- Sort Toggle -->
+            <div class="flex items-center justify-end mb-2">
+                <label class="flex items-center gap-2 cursor-pointer select-none group" for="sort-alpha-toggle">
+                    <span class="text-[11px] text-gray-500 group-hover:text-gray-300 transition-colors">A→Z</span>
+                    <div class="relative">
+                        <input type="checkbox" id="sort-alpha-toggle" class="sr-only peer" onchange="toggleSort()">
+                        <div
+                            class="w-8 h-4 bg-surface-900/80 border border-white/10 rounded-full peer-checked:bg-primary-600/40 peer-checked:border-primary-500/30 transition-all">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-3 h-3 bg-gray-500 rounded-full peer-checked:translate-x-4 peer-checked:bg-primary-400 transition-all">
+                        </div>
+                    </div>
+                </label>
+            </div>
+
+            <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1" id="employee-list">
                 {% for emp in employees %}
-                <a href="/login/{{ emp.id }}"
-                    class="flex items-center gap-4 p-4 rounded-xl border border-white/5 bg-surface-900/30 hover:bg-surface-900/60 hover:border-primary-500/30 transition-all group"
-                    id="emp-select-{{ emp.id }}">
-                    <!-- Avatar -->
-                    <div
-                        class="w-11 h-11 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-base font-bold text-white shadow-lg shadow-primary-500/15 group-hover:shadow-primary-500/30 transition-shadow flex-shrink-0">
-                        {{ emp.name[0] }}
+                {% set emp_info = status_map.get(emp.id, {"status": "not_started", "time": None}) %}
+                {% set emp_status = emp_info.status %}
+                {% set emp_time = emp_info.time %}
+                {% set emp_on_leave = on_leave_map.get(emp.id, False) %}
+                <div class="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-surface-900/30 hover:bg-surface-900/60 hover:border-white/10 transition-all group emp-row"
+                    id="emp-row-{{ emp.id }}" data-name="{{ emp.name }}">
+                    <!-- Avatar + Name -->
+                    <a href="/login/{{ emp.id }}" class="flex items-center gap-3 flex-1 min-w-0">
+                        <div
+                            class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-400 to-accent-500 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-primary-500/15 group-hover:shadow-primary-500/30 transition-shadow flex-shrink-0">
+                            {{ emp.name[0] }}
+                        </div>
+                        <div class="min-w-0">
+                            <p
+                                class="font-medium text-gray-200 group-hover:text-white transition-colors text-sm truncate">
+                                {{ emp.name }}</p>
+                            <div class="flex items-center gap-2">
+                                <p class="text-xs text-gray-500 capitalize">{{ emp.role.value }}</p>
+                                {% if emp_on_leave %}
+                                <span class="flex items-center gap-1 text-[10px] text-warning-400">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    On Leave
+                                </span>
+                                {% elif emp_status == 'checked_in' %}
+                                <span class="flex items-center gap-1 text-[10px] text-success-400">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-success-400 animate-pulse"></span>
+                                    In @ {{ emp_time }}
+                                </span>
+                                {% elif emp_status == 'checked_out' %}
+                                <span class="flex items-center gap-1 text-[10px] text-gray-500">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+                                    Out @ {{ emp_time }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </a>
+
+                    <!-- Quick Action Buttons (hidden for supervisors and PIN-reset-needed) -->
+                    {% if emp.role.value != 'supervisor' and not emp.pin_needs_reset %}
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <!-- Check In -->
+                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkin')"
+                            class="p-2 rounded-lg bg-success-500/10 text-success-400 hover:bg-success-500/20 hover:text-success-300 transition-all active:scale-95"
+                            title="Quick Check In" id="btn-quick-ci-{{ emp.id }}">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                            </svg>
+                        </button>
+                        <!-- Check Out (disabled if no check-in) -->
+                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkout')" class="p-2 rounded-lg transition-all active:scale-95
+                                {% if emp_status == 'checked_in' %}
+                                    bg-danger-500/10 text-danger-400 hover:bg-danger-500/20 hover:text-danger-300
+                                {% else %}
+                                    bg-surface-800/50 text-gray-600 cursor-not-allowed
+                                {% endif %}" title="Quick Check Out" id="btn-quick-co-{{ emp.id }}" {% if emp_status
+                            !='checked_in' %}disabled{% endif %}>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                            </svg>
+                        </button>
                     </div>
-                    <!-- Name & Role -->
-                    <div class="flex-1 min-w-0">
-                        <p class="font-medium text-gray-200 group-hover:text-white transition-colors">{{ emp.name }}</p>
-                        <p class="text-xs text-gray-500 capitalize">{{ emp.role.value }}</p>
-                    </div>
-                    <!-- Arrow -->
-                    <svg class="w-5 h-5 text-gray-600 group-hover:text-primary-400 transition-colors flex-shrink-0"
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                    </svg>
-                </a>
+                    {% endif %}
+                </div>
                 {% endfor %}
 
                 {% if not employees %}
@@ -153,4 +417,263 @@
         </p>
     </div>
 </div>
+{% endblock %}
+
+{% block modals %}
+<!-- ═══ Quick Action PIN Modal ═══ -->
+<div id="quick-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm"
+    onclick="if(event.target===this) closeQuickModal()">
+    <div class="bg-surface-800/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl w-full max-w-sm mx-4 transform transition-all duration-200 scale-95 opacity-0"
+        id="quick-modal-content">
+
+        <!-- Modal Header -->
+        <div class="flex items-center gap-3 mb-5">
+            <div id="modal-icon" class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
+            </div>
+            <div>
+                <p class="font-semibold text-white text-sm" id="modal-title"></p>
+                <p class="text-xs text-gray-500" id="modal-subtitle"></p>
+            </div>
+            <button onclick="closeQuickModal()"
+                class="ml-auto p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-all">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- PIN Input -->
+        <div class="mb-4">
+            <label for="modal-pin" class="block text-xs text-gray-500 mb-1.5">Enter your PIN</label>
+            <input type="password" id="modal-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+                class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                placeholder="••••" onkeydown="if(event.key==='Enter') submitQuickAction()">
+        </div>
+
+        <!-- Error message -->
+        <div id="modal-error" style="display:none"
+            class="mb-4 items-center gap-2 p-2.5 rounded-lg bg-danger-500/10 border border-danger-500/20 text-danger-400 text-xs">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span id="modal-error-text"></span>
+        </div>
+
+        <!-- Success message -->
+        <div id="modal-success" style="display:none"
+            class="mb-4 items-center gap-2 p-2.5 rounded-lg bg-success-500/10 border border-success-500/20 text-success-400 text-xs">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span id="modal-success-text"></span>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="button" id="modal-submit" onclick="submitQuickAction()"
+            class="w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            <span id="modal-btn-text">Confirm</span>
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ═══════════════════════════════════════════
+    //  Multi-Timezone Live Clock
+    // ═══════════════════════════════════════════
+    const timeZones = [
+        { id: 'mountain', tz: 'America/Denver', label: 'Mountain' },
+        { id: 'eastern', tz: 'America/New_York', label: 'Eastern' },
+        { id: 'utc', tz: 'UTC', label: 'UTC' },
+        { id: 'abudhabi', tz: 'Asia/Dubai', label: 'Abu Dhabi' },
+    ];
+
+    function updateClocks() {
+        const now = new Date();
+        timeZones.forEach(function (zone) {
+            var opts = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+            var dateOpts = { weekday: 'short', month: 'short', day: 'numeric' };
+            if (zone.tz) {
+                opts.timeZone = zone.tz;
+                dateOpts.timeZone = zone.tz;
+            }
+            var timeStr = now.toLocaleTimeString('en-US', opts);
+            var dateStr = now.toLocaleDateString('en-US', dateOpts);
+
+            // Split out seconds for accent coloring
+            var parts = timeStr.split(':');
+            var formatted = parts[0] + ':' + parts[1] + ':<span class="tz-seconds">' + parts[2] + '</span>';
+
+            var clockEl = document.getElementById('clock-' + zone.id);
+            var dateEl = document.getElementById('date-' + zone.id);
+            if (clockEl) clockEl.innerHTML = formatted;
+            if (dateEl) dateEl.textContent = dateStr;
+        });
+    }
+
+    // Run immediately, then every second
+    updateClocks();
+    setInterval(updateClocks, 1000);
+
+    // ═══════════════════════════════════════════
+    //  Alphabetical Sort Toggle
+    // ═══════════════════════════════════════════
+    // Save original server-rendered order (smart sort)
+    var originalOrder = [];
+    (function () {
+        var list = document.getElementById('employee-list');
+        if (list) {
+            var rows = list.querySelectorAll('.emp-row');
+            rows.forEach(function (row) { originalOrder.push(row.id); });
+        }
+    })();
+
+    function toggleSort() {
+        var list = document.getElementById('employee-list');
+        if (!list) return;
+        var rows = Array.from(list.querySelectorAll('.emp-row'));
+        var isAlpha = document.getElementById('sort-alpha-toggle').checked;
+
+        if (isAlpha) {
+            rows.sort(function (a, b) {
+                var nameA = (a.getAttribute('data-name') || '').toLowerCase();
+                var nameB = (b.getAttribute('data-name') || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+        } else {
+            // Restore original server-rendered order
+            rows.sort(function (a, b) {
+                return originalOrder.indexOf(a.id) - originalOrder.indexOf(b.id);
+            });
+        }
+
+        rows.forEach(function (row) { list.appendChild(row); });
+    }
+
+
+    // ═══════════════════════════════════════════
+    //  Quick Action Modal (unchanged logic)
+    // ═══════════════════════════════════════════
+    let currentEmployeeId = null;
+    let currentAction = null;
+
+    function showEl(el) { el.style.display = 'flex'; }
+    function hideEl(el) { el.style.display = 'none'; }
+
+    function openQuickModal(empId, empName, action) {
+        currentEmployeeId = empId;
+        currentAction = action;
+
+        const modal = document.getElementById('quick-modal');
+        const content = document.getElementById('quick-modal-content');
+        const icon = document.getElementById('modal-icon');
+        const title = document.getElementById('modal-title');
+        const subtitle = document.getElementById('modal-subtitle');
+        const btn = document.getElementById('modal-submit');
+        const btnText = document.getElementById('modal-btn-text');
+        const pinInput = document.getElementById('modal-pin');
+
+        hideEl(document.getElementById('modal-error'));
+        hideEl(document.getElementById('modal-success'));
+        pinInput.value = '';
+        btn.disabled = false;
+
+        if (action === 'checkin') {
+            icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-success-500/10';
+            icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>';
+            title.textContent = 'Quick Check In';
+            subtitle.textContent = empName;
+            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-success-600 to-success-500 hover:from-success-500 hover:to-success-400 shadow-success-500/25';
+            btnText.textContent = 'Check In';
+        } else {
+            icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-danger-500/10';
+            icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
+            title.textContent = 'Quick Check Out';
+            subtitle.textContent = empName;
+            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-danger-500/25';
+            btnText.textContent = 'Check Out';
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        requestAnimationFrame(function () {
+            content.classList.remove('scale-95', 'opacity-0');
+            content.classList.add('scale-100', 'opacity-100');
+        });
+
+        setTimeout(function () { pinInput.focus(); }, 150);
+    }
+
+    function closeQuickModal() {
+        var modal = document.getElementById('quick-modal');
+        var content = document.getElementById('quick-modal-content');
+        content.classList.remove('scale-100', 'opacity-100');
+        content.classList.add('scale-95', 'opacity-0');
+        setTimeout(function () {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }, 200);
+    }
+
+    function submitQuickAction() {
+        var pin = document.getElementById('modal-pin').value;
+        var errorEl = document.getElementById('modal-error');
+        var errorText = document.getElementById('modal-error-text');
+        var successEl = document.getElementById('modal-success');
+        var successText = document.getElementById('modal-success-text');
+        var btn = document.getElementById('modal-submit');
+        var btnText = document.getElementById('modal-btn-text');
+
+        if (!pin || pin.length < 4) {
+            showEl(errorEl);
+            errorText.textContent = 'Please enter your PIN (at least 4 digits).';
+            return;
+        }
+
+        hideEl(errorEl);
+        hideEl(successEl);
+        btn.disabled = true;
+        btnText.textContent = 'Processing...';
+
+        var url = currentAction === 'checkin' ? '/api/quick-checkin' : '/api/quick-checkout';
+
+        var formData = new FormData();
+        formData.append('employee_id', currentEmployeeId);
+        formData.append('pin', pin);
+
+        fetch(url, { method: 'POST', body: formData })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (data) {
+                if (data.ok) {
+                    showEl(successEl);
+                    successText.textContent = data.message;
+                    btn.disabled = true;
+                    btnText.textContent = 'Done!';
+                    setTimeout(function () {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showEl(errorEl);
+                    errorText.textContent = data.error || 'Something went wrong.';
+                    btn.disabled = false;
+                    btnText.textContent = currentAction === 'checkin' ? 'Check In' : 'Check Out';
+                    document.getElementById('modal-pin').value = '';
+                    document.getElementById('modal-pin').focus();
+                }
+            })
+            .catch(function (err) {
+                showEl(errorEl);
+                errorText.textContent = 'Network error: ' + err.message;
+                btn.disabled = false;
+                btnText.textContent = currentAction === 'checkin' ? 'Check In' : 'Check Out';
+            });
+    }
+</script>
 {% endblock %}

@@ -1,9 +1,9 @@
 /* SDC Time Tracker — Minimal JS helpers */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Auto-dismiss error messages after 5 seconds
-    const errors = document.querySelectorAll('[id$="-error"]');
-    errors.forEach(el => {
+    // Auto-dismiss flash error/success messages after 5 seconds
+    // Only targets elements with the 'flash-message' class (NOT modal elements)
+    document.querySelectorAll('.flash-message').forEach(el => {
         setTimeout(() => {
             el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
             el.style.opacity = '0';

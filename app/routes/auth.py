@@ -1,18 +1,143 @@
 """Authentication routes — PIN login / logout."""
 
+from datetime import date, datetime, timedelta
+
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import verify_pin, create_session_token, get_current_employee
 from app.config import SESSION_COOKIE_NAME
-from app.models import Employee
+from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
 from app.services.audit import log_action
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _get_employee_status(db: Session, employees):
+    """Build a dict of employee_id → {status, time} for today's entries."""
+    today = date.today()
+    status_map = {}
+    for emp in employees:
+        entries = db.query(TimeEntry).filter(
+            TimeEntry.employee_id == emp.id,
+            TimeEntry.date == today,
+        ).order_by(TimeEntry.declared_time).all()
+        if not entries:
+            status_map[emp.id] = {"status": "not_started", "time": None}
+        elif entries[-1].entry_type == EntryType.check_in:
+            status_map[emp.id] = {
+                "status": "checked_in",
+                "time": entries[-1].declared_time.strftime("%H:%M"),
+            }
+        else:
+            status_map[emp.id] = {
+                "status": "checked_out",
+                "time": entries[-1].declared_time.strftime("%H:%M"),
+            }
+    return status_map
+
+
+def _get_avg_times(db: Session, employees):
+    """Compute average check-in and check-out times (as minutes since midnight)
+    per employee from the last 30 days of history.
+    Returns dict: employee_id → {"avg_checkin": float|None, "avg_checkout": float|None}
+    """
+    cutoff = date.today() - timedelta(days=30)
+    result = {}
+    for emp in employees:
+        entries = db.query(TimeEntry).filter(
+            TimeEntry.employee_id == emp.id,
+            TimeEntry.date >= cutoff,
+            TimeEntry.date < date.today(),   # exclude today
+        ).all()
+
+        ci_minutes = []
+        co_minutes = []
+        for e in entries:
+            mins = e.declared_time.hour * 60 + e.declared_time.minute
+            if e.entry_type == EntryType.check_in:
+                ci_minutes.append(mins)
+            else:
+                co_minutes.append(mins)
+
+        result[emp.id] = {
+            "avg_checkin": sum(ci_minutes) / len(ci_minutes) if ci_minutes else None,
+            "avg_checkout": sum(co_minutes) / len(co_minutes) if co_minutes else None,
+        }
+    return result
+
+
+def _is_on_leave_today(db: Session, emp_id: int) -> bool:
+    """Check if an employee has approved full-day leave today."""
+    today = date.today()
+    leave = db.query(LeaveRequest).filter(
+        LeaveRequest.employee_id == emp_id,
+        LeaveRequest.start_date <= today,
+        LeaveRequest.end_date >= today,
+        LeaveRequest.status == LeaveStatus.approved,
+    ).first()
+    if leave:
+        return True
+    # Also check DailySummary for full-day leave
+    summary = db.query(DailySummary).filter(
+        DailySummary.employee_id == emp_id,
+        DailySummary.date == today,
+        DailySummary.leave_hours >= 8,
+    ).first()
+    return summary is not None
+
+
+def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_hour):
+    """Sort employee list intelligently based on time of day and status.
+
+    Tiers (lower = higher in list):
+      0 — Needs action: sort by avg check-in (AM) or check-out (PM) time
+      1 — Already acted today (checked in/out)
+      2 — On leave
+      3 — Supervisors (don't track time, just need login access for reports)
+    """
+    LARGE_VAL = 9999  # push to bottom
+
+    def sort_key(emp):
+        eid = emp.id
+        status = status_map.get(eid, {}).get("status", "not_started")
+        on_leave = on_leave_map.get(eid, False)
+        avg = avg_times.get(eid, {})
+
+        # Supervisors don't track time → always at the very bottom
+        if emp.role.value == "supervisor":
+            return (3, LARGE_VAL, emp.name.lower())
+
+        # On leave → bottom (but above supervisors)
+        if on_leave:
+            return (2, LARGE_VAL, emp.name.lower())
+
+        if now_hour < 12:
+            # Morning: check-in mode
+            if status == "checked_in" or status == "checked_out":
+                # Already acted today → bottom (but above leave)
+                return (1, LARGE_VAL, emp.name.lower())
+            # Not started yet → sort by avg check-in time
+            avg_ci = avg.get("avg_checkin")
+            return (0, avg_ci if avg_ci is not None else LARGE_VAL, emp.name.lower())
+        else:
+            # Afternoon: checkout mode
+            if status == "checked_out":
+                # Already done → bottom
+                return (1, LARGE_VAL, emp.name.lower())
+            if status == "not_started":
+                # Never checked in today → bottom (probably absent)
+                return (1, LARGE_VAL, emp.name.lower())
+            # Checked in, needs checkout → sort by avg checkout time
+            avg_co = avg.get("avg_checkout")
+            return (0, avg_co if avg_co is not None else LARGE_VAL, emp.name.lower())
+
+    return sorted(employees, key=sort_key)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -24,11 +149,20 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/", status_code=303)
 
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    status_map = _get_employee_status(db, employees)
+    avg_times = _get_avg_times(db, employees)
+    on_leave_map = {e.id: _is_on_leave_today(db, e.id) for e in employees}
+    now_hour = datetime.now().hour
+
+    sorted_employees = _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_hour)
+
     return templates.TemplateResponse("login.html", {
         "request": request,
-        "employees": employees,
+        "employees": sorted_employees,
         "selected_employee": None,
         "error": None,
+        "status_map": status_map,
+        "on_leave_map": on_leave_map,
     })
 
 
