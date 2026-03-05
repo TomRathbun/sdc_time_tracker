@@ -207,7 +207,7 @@
                                 <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]*"
                                     autofocus required data-numpad
                                     class="w-full bg-surface-900/50 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                    placeholder="••••" maxlength="8">
+                                    placeholder="••••" maxlength="8" oninput="updateRegularLoginButton()">
                             </div>
                         </div>
 
@@ -223,14 +223,14 @@
                         {% endif %}
 
                         <!-- Submit Button -->
-                        <button type="submit" id="btn-login"
-                            class="w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]">
+                        <button type="submit" id="btn-login" disabled
+                            class="w-full relative overflow-hidden bg-gray-700/50 border border-white/5 text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] cursor-not-allowed opacity-50">
                             <span class="relative z-10 flex items-center justify-center gap-2">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                         d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                                 </svg>
-                                Sign In
+                                <span id="btn-login-text">Enter PIN</span>
                             </span>
                         </button>
                     </div>
@@ -540,5 +540,69 @@
                 });
         }, 300);
     }
+
+    function updateRegularLoginButton() {
+        var pinEl = document.getElementById('pin');
+        if (!pinEl) return;
+        var pin = pinEl.value;
+        var btn = document.getElementById('btn-login');
+        if (!btn) return;
+        var btnText = document.getElementById('btn-login-text');
+        var employeeHid = document.querySelector('input[name="employee_id"]');
+        if (!employeeHid) return;
+        var employeeId = employeeHid.value;
+
+        var disabledClass = 'w-full relative overflow-hidden bg-gray-700/50 border border-white/5 text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] cursor-not-allowed opacity-50';
+
+        if (pin.length < 4) {
+            btn.disabled = true;
+            btn.className = disabledClass;
+            btnText.textContent = 'Enter PIN';
+            return;
+        }
+
+        // Show "Verifying..." state
+        btn.disabled = true;
+        btn.className = 'w-full relative overflow-hidden bg-gray-600/50 border border-white/5 text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] cursor-wait opacity-70';
+        btnText.textContent = 'Verifying...';
+
+        // Debounce
+        if (window._loginCheckTimer) clearTimeout(window._loginCheckTimer);
+        window._loginCheckTimer = setTimeout(function () {
+            var formData = new FormData();
+            formData.append('employee_id', employeeId);
+            formData.append('pin', pin);
+
+            fetch('/api/verify-pin', { method: 'POST', body: formData })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    // Only update if PIN hasn't changed
+                    if (document.getElementById('pin').value !== pin) return;
+
+                    if (data.valid) {
+                        btn.disabled = false;
+                        btn.className = 'w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]';
+                        btnText.textContent = 'Sign In';
+                    } else {
+                        btn.disabled = true;
+                        btn.className = 'w-full relative overflow-hidden bg-danger-500/20 border border-danger-500/30 text-white font-semibold py-3.5 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] cursor-not-allowed opacity-70';
+                        btnText.textContent = 'Invalid PIN';
+                    }
+                })
+                .catch(function () {
+                    // Fail gracefully
+                    btn.disabled = false;
+                    btn.className = 'w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg';
+                    btnText.textContent = 'Sign In';
+                });
+        }, 300);
+    }
+
+    // Initial check in case of browser auto-fill
+    document.addEventListener('DOMContentLoaded', function () {
+        if (document.getElementById('pin')) {
+            updateRegularLoginButton();
+        }
+    });
 </script>
 {% endblock %}
