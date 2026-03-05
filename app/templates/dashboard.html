@@ -5,8 +5,8 @@
 <!-- Greeting & Date -->
 <div class="mb-8">
     <h1 class="text-2xl sm:text-3xl font-bold text-white">
-        Good {{ "morning" if today.strftime("%H")|int < 12 else ("afternoon" if today.strftime("%H")|int < 17
-            else "evening" ) }}, {{ employee.name.split()[0] }} </h1>
+        Good {{ "morning" if now.strftime("%H")|int < 12 else ("afternoon" if now.strftime("%H")|int < 17 else "evening"
+            ) }}, {{ employee.name.split()[0] }} </h1>
             <p class="text-gray-400 mt-1">{{ today.strftime("%A, %B %d, %Y") }}</p>
 </div>
 

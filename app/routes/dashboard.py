@@ -1,6 +1,6 @@
 """Dashboard route — main landing page after login."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -28,7 +28,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     if not employee:
         return RedirectResponse(url="/login", status_code=303)
 
-    today = date.today()
+    now = datetime.now()
+    today = now.date()
     week_start = _monday_of_week(today)
 
     # Today's entries
@@ -73,6 +74,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "employee": employee,
         "today": today,
+        "now": now,
         "is_workday": is_workday,
         "target_hours": target_hours,
         "status": status,
