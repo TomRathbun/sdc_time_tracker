@@ -139,6 +139,7 @@ def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_ho
                 return (1, LARGE_VAL, emp.name.lower())
             
             # Checked in, needs checkout → sort by actual check-in time today (earliest first)
+            status_info = status_map.get(eid, {})
             actual_ci = status_info.get("minutes")
             return (0, actual_ci if actual_ci is not None else LARGE_VAL, emp.name.lower())
 
