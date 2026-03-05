@@ -19,7 +19,7 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 def _get_employee_status(db: Session, employees):
-    """Build a dict of employee_id → {status, time} for today's entries."""
+    """Build a dict of employee_id → {status, time, minutes} for today's entries."""
     today = date.today()
     status_map = {}
     for emp in employees:
@@ -28,16 +28,20 @@ def _get_employee_status(db: Session, employees):
             TimeEntry.date == today,
         ).order_by(TimeEntry.declared_time).all()
         if not entries:
-            status_map[emp.id] = {"status": "not_started", "time": None}
+            status_map[emp.id] = {"status": "not_started", "time": None, "minutes": None}
         elif entries[-1].entry_type == EntryType.check_in:
+            last_time = entries[-1].declared_time
             status_map[emp.id] = {
                 "status": "checked_in",
-                "time": entries[-1].declared_time.strftime("%H:%M"),
+                "time": last_time.strftime("%H:%M"),
+                "minutes": last_time.hour * 60 + last_time.minute
             }
         else:
+            last_time = entries[-1].declared_time
             status_map[emp.id] = {
                 "status": "checked_out",
-                "time": entries[-1].declared_time.strftime("%H:%M"),
+                "time": last_time.strftime("%H:%M"),
+                "minutes": last_time.hour * 60 + last_time.minute
             }
     return status_map
 
@@ -133,9 +137,10 @@ def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_ho
             if status == "not_started":
                 # Never checked in today → bottom (probably absent)
                 return (1, LARGE_VAL, emp.name.lower())
-            # Checked in, needs checkout → sort by avg checkout time
-            avg_co = avg.get("avg_checkout")
-            return (0, avg_co if avg_co is not None else LARGE_VAL, emp.name.lower())
+            
+            # Checked in, needs checkout → sort by actual check-in time today (earliest first)
+            actual_ci = status_info.get("minutes")
+            return (0, actual_ci if actual_ci is not None else LARGE_VAL, emp.name.lower())
 
     return sorted(employees, key=sort_key)
 
