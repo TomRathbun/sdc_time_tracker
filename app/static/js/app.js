@@ -57,4 +57,47 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // ═══════════════════════════════════════════
+    //  Multi-Timezone Clock Updater
+    // ═══════════════════════════════════════════
+    var tzZones = [
+        { id: 'pacific', tz: 'America/Los_Angeles' },
+        { id: 'mountain', tz: 'America/Denver' },
+        { id: 'central', tz: 'America/Chicago' },
+        { id: 'eastern', tz: 'America/New_York' },
+        { id: 'london', tz: 'Europe/London' },
+        { id: 'utc', tz: 'UTC' },
+        { id: 'abudhabi', tz: 'Asia/Dubai' },
+        { id: 'manila', tz: 'Asia/Manila' },
+        { id: 'tokyo', tz: 'Asia/Tokyo' },
+        { id: 'sydney', tz: 'Australia/Sydney' }
+    ];
+
+    function updateTZClocks() {
+        if (!document.getElementById('tz-clocks')) return;
+        var now = new Date();
+        tzZones.forEach(function (zone) {
+            var opts = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            var dateOpts = { weekday: 'short', month: 'short', day: 'numeric' };
+            if (zone.tz) {
+                opts.timeZone = zone.tz;
+                dateOpts.timeZone = zone.tz;
+            }
+            var timeStr = now.toLocaleTimeString('en-US', opts);
+            var dateStr = now.toLocaleDateString('en-US', dateOpts);
+
+            var parts = timeStr.split(':');
+            var formatted = parts[0] + ':' + parts[1] + ':<span class="tz-seconds">' + parts[2] + '</span>';
+
+            var clockEl = document.getElementById('clock-' + zone.id);
+            var dateEl = document.getElementById('date-' + zone.id);
+            if (clockEl) clockEl.innerHTML = formatted;
+            if (dateEl) dateEl.textContent = dateStr;
+        });
+    }
+
+    // Run automatically
+    updateTZClocks();
+    setInterval(updateTZClocks, 1000);
 });

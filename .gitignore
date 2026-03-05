@@ -21,3 +21,5 @@ uploads/
 
 # SSL certs
 certs/
+
+dev_emails/

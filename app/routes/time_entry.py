@@ -58,6 +58,16 @@ async def checkin_submit(
     # Build declared time
     declared_time = datetime(today.year, today.month, today.day, declared_hour, declared_minute)
 
+    # Prevent check-in from being earlier than the last check-out
+    last_checkout = db.query(TimeEntry).filter(
+        TimeEntry.employee_id == employee.id,
+        TimeEntry.date == today,
+        TimeEntry.entry_type == EntryType.check_out,
+    ).order_by(TimeEntry.declared_time.desc()).first()
+
+    if last_checkout and declared_time < last_checkout.declared_time:
+        declared_time = last_checkout.declared_time
+
     # Determine location type
     loc_type = LocationType(location_type) if location_type in [e.value for e in LocationType] else LocationType.office
     is_remote = loc_type in (LocationType.remote, LocationType.offsite)
@@ -109,6 +119,39 @@ async def checkin_submit(
         },
         ip_address=request.client.host if request.client else "",
     )
+
+    # Send check-in confirmation email (non-blocking, if enabled)
+    from app.services.settings import get_bool_setting
+    if employee.email and get_bool_setting(db, "checkin_email_enabled"):
+        import threading
+        from app.services.email import send_checkin_email
+        from app.models import LeaveRequest, LeaveStatus
+
+        target = get_target_hours(today)
+        expected_checkout = declared_time + timedelta(hours=target)
+
+        # Gather upcoming leave in next 2 weeks
+        cutoff = today + timedelta(days=14)
+        leaves = db.query(LeaveRequest).filter(
+            LeaveRequest.employee_id == employee.id,
+            LeaveRequest.start_date <= cutoff,
+            LeaveRequest.end_date >= today,
+            LeaveRequest.status == LeaveStatus.approved,
+        ).all()
+        upcoming_leave = [
+            {
+                "start_date": lv.start_date.strftime("%b %d"),
+                "end_date": lv.end_date.strftime("%b %d"),
+                "leave_type": lv.leave_type.value,
+            }
+            for lv in leaves
+        ]
+
+        threading.Thread(
+            target=send_checkin_email,
+            args=(employee, declared_time, expected_checkout, upcoming_leave),
+            daemon=True,
+        ).start()
 
     # Detect gap: was there a previous checkout today?
     # If so, offer to log the gap as remote site work

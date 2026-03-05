@@ -48,6 +48,7 @@ async def add_employee(
     name: str = Form(...),
     pin: str = Form(...),
     role: str = Form("employee"),
+    email: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Add a new employee."""
@@ -57,6 +58,7 @@ async def add_employee(
 
     new_emp = Employee(
         name=name,
+        email=email.strip() or None,
         pin_hash=hash_pin(pin),
         role=Role(role),
         is_active=True,
@@ -67,7 +69,7 @@ async def add_employee(
     log_action(
         db, action="add_employee", entity_type="Employee",
         entity_id=new_emp.id, employee_id=employee.id,
-        new_values={"name": name, "role": role},
+        new_values={"name": name, "role": role, "email": email.strip() or None},
         ip_address=request.client.host if request.client else "",
     )
 
@@ -138,6 +140,85 @@ async def toggle_employee(
             new_values={"is_active": target.is_active},
             ip_address=request.client.host if request.client else "",
         )
+
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@router.post("/admin/employee/{emp_id}/edit")
+async def edit_employee(
+    emp_id: int,
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(""),
+    role: str = Form("employee"),
+    reset_pin: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Edit an employee's details."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role != Role.manager:
+        return RedirectResponse(url="/login", status_code=303)
+
+    target = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not target:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    old_values = {"name": target.name, "email": target.email, "role": target.role.value}
+
+    target.name = name.strip()
+    target.email = email.strip() or None
+    target.role = Role(role)
+
+    # Optionally reset PIN
+    if reset_pin.strip():
+        target.pin_hash = hash_pin(reset_pin.strip())
+        target.pin_needs_reset = True
+
+    db.commit()
+
+    log_action(
+        db, action="edit_employee", entity_type="Employee",
+        entity_id=target.id, employee_id=employee.id,
+        old_values=old_values,
+        new_values={"name": target.name, "email": target.email, "role": target.role.value},
+        ip_address=request.client.host if request.client else "",
+    )
+
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@router.post("/admin/employee/{emp_id}/delete")
+async def delete_employee(
+    emp_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Delete an employee (only if they have no time entries)."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role != Role.manager:
+        return RedirectResponse(url="/login", status_code=303)
+
+    target = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not target or target.id == employee.id:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    # Check for existing time data
+    has_entries = db.query(TimeEntry).filter(TimeEntry.employee_id == emp_id).first()
+    if has_entries:
+        # Can't delete — has data. Deactivate instead.
+        target.is_active = False
+        db.commit()
+        return RedirectResponse(url="/admin", status_code=303)
+
+    log_action(
+        db, action="delete_employee", entity_type="Employee",
+        entity_id=target.id, employee_id=employee.id,
+        old_values={"name": target.name, "role": target.role.value},
+        ip_address=request.client.host if request.client else "",
+    )
+
+    db.delete(target)
+    db.commit()
 
     return RedirectResponse(url="/admin", status_code=303)
 
@@ -376,3 +457,50 @@ async def approve_pto(
 
     redirect_url = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
     return RedirectResponse(url=redirect_url, status_code=303)
+
+
+# ── Feature Configuration ─────────────────────────────────────────────
+
+@router.get("/admin/config", response_class=HTMLResponse)
+async def config_page(request: Request, db: Session = Depends(get_db)):
+    """Feature configuration page."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role != Role.manager:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services.settings import get_all_settings
+    settings = get_all_settings(db)
+
+    return templates.TemplateResponse("admin_config.html", {
+        "request": request,
+        "employee": employee,
+        "settings": settings,
+        "success": request.query_params.get("saved"),
+    })
+
+
+@router.post("/admin/config", response_class=HTMLResponse)
+async def save_config(request: Request, db: Session = Depends(get_db)):
+    """Save feature configuration toggles."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role != Role.manager:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services.settings import set_setting, FEATURE_DEFAULTS
+
+    form = await request.form()
+
+    for key in FEATURE_DEFAULTS:
+        # Checkbox: present in form → true, absent → false
+        value = "true" if form.get(key) else "false"
+        set_setting(db, key, value)
+
+    log_action(
+        db, action="update_config", entity_type="AppSetting",
+        entity_id=None, employee_id=employee.id,
+        new_values={k: form.get(k, "off") for k in FEATURE_DEFAULTS},
+        ip_address=request.client.host if request.client else "",
+    )
+
+    return RedirectResponse(url="/admin/config?saved=1", status_code=303)
+

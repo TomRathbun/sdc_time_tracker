@@ -55,6 +55,7 @@ class Employee(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
+    email = Column(String(200), nullable=True)
     pin_hash = Column(String(255), nullable=False)
     role = Column(Enum(Role), default=Role.employee, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
@@ -186,3 +187,15 @@ class AuditLog(Base):
 
     # Relationships
     employee = relationship("Employee")
+
+
+class AppSetting(Base):
+    """Key-value store for application feature toggles and settings."""
+    __tablename__ = "app_settings"
+
+    key = Column(String(100), primary_key=True)
+    value = Column(String(500), nullable=False, default="")
+    description = Column(String(500), nullable=True)
+
+    def __repr__(self):
+        return f"<AppSetting {self.key}={self.value}>"

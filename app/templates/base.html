@@ -42,12 +42,16 @@
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=8">
 
     {% block head %}{% endblock %}
 </head>
 
 <body class="bg-surface-900 text-gray-100 font-sans min-h-screen antialiased">
+    <!-- Background collage -->
+    <div class="collage-bg"></div>
+    <div class="scanlines"></div>
+
 
     {% if employee and not employee.pin_needs_reset %}
     <!-- Navigation -->
@@ -58,15 +62,13 @@
                     <!-- Logo -->
                     <a href="/" class="flex items-center gap-3 group">
                         <div
-                            class="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg shadow-primary-500/25 group-hover:shadow-primary-500/40 transition-shadow">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                            class="w-12 h-12 rounded-full overflow-hidden shadow-xl shadow-primary-500/30 group-hover:shadow-primary-500/50 transition-all duration-300 border border-white/10">
+                            <img src="/static/images/app_icon.png?v=5" alt="SDC Time Logo"
+                                class="w-full h-full object-cover">
                         </div>
                         <span
                             class="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
-                            Time</span>
+                            Time Tracker</span>
                     </a>
 
                     <!-- Nav Links -->
@@ -168,18 +170,83 @@
         </div>
     </nav>
 
-    <main class="pt-20 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <main class="pt-24 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto relative z-10">
+        <!-- Dashboard Multi-Timezone Clocks -->
+        <div class="tz-clock-panel mb-8" id="tz-clocks">
+            <!-- Pacific -->
+            <div class="tz-card">
+                <span class="tz-label">Pacific</span>
+                <span class="tz-time" id="clock-pacific">--:--:--</span>
+                <span class="tz-date" id="date-pacific">---, --- --</span>
+            </div>
+            <!-- Mountain -->
+            <div class="tz-card">
+                <span class="tz-label">Mountain</span>
+                <span class="tz-time" id="clock-mountain">--:--:--</span>
+                <span class="tz-date" id="date-mountain">---, --- --</span>
+            </div>
+            <!-- Central -->
+            <div class="tz-card">
+                <span class="tz-label">Central</span>
+                <span class="tz-time" id="clock-central">--:--:--</span>
+                <span class="tz-date" id="date-central">---, --- --</span>
+            </div>
+            <!-- Eastern -->
+            <div class="tz-card">
+                <span class="tz-label">Eastern</span>
+                <span class="tz-time" id="clock-eastern">--:--:--</span>
+                <span class="tz-date" id="date-eastern">---, --- --</span>
+            </div>
+            <!-- London -->
+            <div class="tz-card">
+                <span class="tz-label">London</span>
+                <span class="tz-time" id="clock-london">--:--:--</span>
+                <span class="tz-date" id="date-london">---, --- --</span>
+            </div>
+            <!-- UTC / Zulu -->
+            <div class="tz-card">
+                <span class="tz-label">UTC / Zulu</span>
+                <span class="tz-time" id="clock-utc">--:--:--</span>
+                <span class="tz-date" id="date-utc">---, --- --</span>
+            </div>
+            <!-- Abu Dhabi -->
+            <div class="tz-card tz-featured" id="tz-abudhabi-card">
+                <span class="tz-label">Abu Dhabi</span>
+                <span class="tz-time" id="clock-abudhabi">--:--:--</span>
+                <span class="tz-date" id="date-abudhabi">---, --- --</span>
+            </div>
+            <!-- Manila -->
+            <div class="tz-card">
+                <span class="tz-label">Manila</span>
+                <span class="tz-time" id="clock-manila">--:--:--</span>
+                <span class="tz-date" id="date-manila">---, --- --</span>
+            </div>
+            <!-- Tokyo -->
+            <div class="tz-card">
+                <span class="tz-label">Tokyo</span>
+                <span class="tz-time" id="clock-tokyo">--:--:--</span>
+                <span class="tz-date" id="date-tokyo">---, --- --</span>
+            </div>
+            <!-- Sydney -->
+            <div class="tz-card">
+                <span class="tz-label">Sydney</span>
+                <span class="tz-time" id="clock-sydney">--:--:--</span>
+                <span class="tz-date" id="date-sydney">---, --- --</span>
+            </div>
+        </div>
+
         {% block content %}{% endblock %}
     </main>
     {% else %}
-    <main class="min-h-screen flex items-center justify-center px-4">
+    <main class="min-h-screen flex items-center justify-center px-4 relative z-10">
         {% block public_content %}{% endblock %}
     </main>
     {% endif %}
 
     {% block modals %}{% endblock %}
 
-    <script src="/static/js/app.js?v=2"></script>
+    <script src="/static/js/app.js?v=6"></script>
+    <script src="/static/js/onscreen_input.js?v=4"></script>
     {% block scripts %}{% endblock %}
 </body>
 

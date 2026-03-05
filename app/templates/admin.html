@@ -3,9 +3,22 @@
 
 {% block content %}
 <div class="max-w-5xl mx-auto">
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-white">Administration</h1>
-        <p class="text-gray-400 mt-1">Manage employees and remote work authorizations</p>
+    <div class="mb-8 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Administration</h1>
+            <p class="text-gray-400 mt-1">Manage employees and remote work authorizations</p>
+        </div>
+        <a href="/admin/config"
+            class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 hover:border-primary-500/30 hover:bg-primary-500/5 text-gray-300 hover:text-white text-sm font-medium transition-all"
+            id="btn-config">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Feature Config
+        </a>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -24,6 +37,12 @@
                         <label for="emp-name" class="block text-xs text-gray-500 mb-1">Full Name</label>
                         <input type="text" name="name" id="emp-name" required class="form-input"
                             placeholder="e.g. John Smith">
+                    </div>
+                    <div>
+                        <label for="emp-email" class="block text-xs text-gray-500 mb-1">Email <span
+                                class="text-gray-600">(optional)</span></label>
+                        <input type="email" name="email" id="emp-email" class="form-input"
+                            placeholder="e.g. john.smith@company.com">
                     </div>
                     <div>
                         <label for="emp-pin" class="block text-xs text-gray-500 mb-1">PIN</label>
@@ -117,6 +136,7 @@
                 <thead>
                     <tr class="border-b border-white/5">
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Name</th>
+                        <th class="text-left py-3 px-3 text-gray-400 font-medium">Email</th>
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Role</th>
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Status</th>
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Created</th>
@@ -134,6 +154,13 @@
                                 </div>
                                 <span class="font-medium text-white">{{ emp.name }}</span>
                             </div>
+                        </td>
+                        <td class="py-3 px-3">
+                            {% if emp.email %}
+                            <span class="text-xs text-gray-400">{{ emp.email }}</span>
+                            {% else %}
+                            <span class="text-[10px] text-gray-600 italic">No email</span>
+                            {% endif %}
                         </td>
                         <td class="py-3 px-3">
                             <span class="px-2 py-1 rounded-full text-xs font-medium
@@ -164,14 +191,51 @@
                             emp.created_at else "—" }}</td>
                         <td class="py-3 px-3 text-right">
                             {% if emp.id != employee.id %}
-                            <form method="POST" action="/admin/employee/{{ emp.id }}/toggle" class="inline">
-                                <button type="submit" class="text-xs px-3 py-1.5 rounded-lg
-                                    {% if emp.is_active %}bg-danger-500/10 text-danger-400 hover:bg-danger-500/20
-                                    {% else %}bg-success-500/10 text-success-400 hover:bg-success-500/20{% endif %}
-                                    transition-colors" id="btn-toggle-{{ emp.id }}">
-                                    {{ "Deactivate" if emp.is_active else "Activate" }}
+                            <div class="flex items-center gap-1 justify-end">
+                                <!-- Edit -->
+                                <button
+                                    onclick="openEditModal({{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}')"
+                                    class="p-1.5 rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 transition-colors"
+                                    title="Edit" id="btn-edit-{{ emp.id }}">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
                                 </button>
-                            </form>
+                                <!-- Toggle Active/Inactive -->
+                                <form method="POST" action="/admin/employee/{{ emp.id }}/toggle" class="inline">
+                                    <button type="submit"
+                                        class="p-1.5 rounded-lg transition-colors
+                                        {% if emp.is_active %}bg-warning-500/10 text-warning-400 hover:bg-warning-500/20
+                                        {% else %}bg-success-500/10 text-success-400 hover:bg-success-500/20{% endif %}"
+                                        title="{{ 'Deactivate' if emp.is_active else 'Reactivate' }}"
+                                        id="btn-toggle-{{ emp.id }}">
+                                        {% if emp.is_active %}
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                        </svg>
+                                        {% else %}
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        {% endif %}
+                                    </button>
+                                </form>
+                                <!-- Delete -->
+                                <form method="POST" action="/admin/employee/{{ emp.id }}/delete" class="inline"
+                                    onsubmit="return confirm('Delete {{ emp.name }}? If they have time entries, they will be deactivated instead.')">
+                                    <button type="submit"
+                                        class="p-1.5 rounded-lg bg-danger-500/10 text-danger-400 hover:bg-danger-500/20 transition-colors"
+                                        title="Delete" id="btn-delete-{{ emp.id }}">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
                             {% endif %}
                         </td>
                     </tr>
@@ -181,4 +245,81 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Employee Modal -->
+<div id="edit-modal" class="fixed inset-0 z-50 items-center justify-center bg-black/60 backdrop-blur-sm"
+    style="display:none;">
+    <div class="bg-surface-800 border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-auto mt-[15vh]">
+        <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit Employee
+        </h3>
+        <form id="edit-form" method="POST" action="">
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Full Name</label>
+                    <input type="text" name="name" id="edit-name" required class="form-input">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Email <span
+                            class="text-gray-600">(optional)</span></label>
+                    <input type="email" name="email" id="edit-email" class="form-input">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Role</label>
+                    <select name="role" id="edit-role" class="form-select">
+                        <option value="employee">Employee</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="manager">Manager</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Reset PIN <span class="text-gray-600">(leave blank
+                            to keep current)</span></label>
+                    <input type="text" name="reset_pin" id="edit-pin" class="form-input font-mono" placeholder="New PIN"
+                        maxlength="8" pattern="[0-9]*">
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button type="button" onclick="closeEditModal()"
+                    class="flex-1 py-2.5 rounded-xl bg-surface-900/50 text-gray-400 hover:text-white border border-white/5 hover:border-white/10 transition-all text-sm">
+                    Cancel
+                </button>
+                <button type="submit" class="flex-1 btn-primary py-2.5 text-sm">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function openEditModal(id, name, email, role) {
+        document.getElementById('edit-form').action = '/admin/employee/' + id + '/edit';
+        document.getElementById('edit-name').value = name;
+        document.getElementById('edit-email').value = email;
+        document.getElementById('edit-role').value = role;
+        document.getElementById('edit-pin').value = '';
+        var modal = document.getElementById('edit-modal');
+        modal.style.display = 'flex';
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').style.display = 'none';
+    }
+
+    // Close on backdrop click
+    document.getElementById('edit-modal').addEventListener('click', function (e) {
+        if (e.target === this) closeEditModal();
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeEditModal();
+    });
+</script>
 {% endblock %}

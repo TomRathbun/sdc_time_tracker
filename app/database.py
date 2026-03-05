@@ -41,3 +41,27 @@ def init_db():
     """Create all tables."""
     from app import models  # noqa: F401 – import so models are registered
     Base.metadata.create_all(bind=engine)
+    _run_migrations()
+
+
+def _run_migrations():
+    """Lightweight schema migrations for new columns."""
+    import sqlite3
+    from app.config import BASE_DIR
+
+    db_path = BASE_DIR / "sdc_time.db"
+    if not db_path.exists():
+        return
+
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+
+    # Check if 'email' column exists in employees table
+    cursor.execute("PRAGMA table_info(employees)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "email" not in columns:
+        cursor.execute("ALTER TABLE employees ADD COLUMN email VARCHAR(200)")
+        conn.commit()
+        print("✅ Migration: Added 'email' column to employees table")
+
+    conn.close()

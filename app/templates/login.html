@@ -1,180 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Login — SDC Time Tracker{% endblock %}
 
-{% block head %}
-<style>
-    /* ── Background collage ── */
-    .collage-bg {
-        position: fixed;
-        inset: 0;
-        z-index: 0;
-        background: url('/static/images/lm_collage_bg.png?v=3') center center / contain no-repeat;
-        background-color: #020617;
-        opacity: 0.65;
-        filter: blur(0px);
-        pointer-events: none;
-    }
-
-    .collage-bg::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(180deg, rgba(2, 6, 23, 0.25) 0%, rgba(2, 6, 23, 0.05) 50%, rgba(2, 6, 23, 0.4) 100%);
-    }
-
-    /* ── Multi-timezone Clock Panel ── */
-    .tz-clock-panel {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: nowrap;
-        justify-content: center;
-    }
-
-    .tz-card {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        padding: 0.625rem 0.875rem;
-        border-radius: 0.875rem;
-        background: rgba(15, 23, 42, 0.55);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        min-width: 110px;
-        transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .tz-card:hover {
-        border-color: rgba(99, 102, 241, 0.3);
-        box-shadow: 0 0 20px rgba(99, 102, 241, 0.08);
-    }
-
-    .tz-label {
-        font-size: 0.65rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: rgba(148, 163, 184, 0.8);
-        margin-bottom: 0.25rem;
-    }
-
-    .tz-time {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.125rem;
-        font-weight: 600;
-        color: #e2e8f0;
-        letter-spacing: 0.04em;
-    }
-
-    .tz-date {
-        font-size: 0.6rem;
-        color: rgba(148, 163, 184, 0.55);
-        margin-top: 0.15rem;
-    }
-
-    .tz-seconds {
-        color: rgba(99, 102, 241, 0.8);
-    }
-
-    /* ── LM Logo ── */
-    .lm-logo-container {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 0.75rem;
-        overflow: hidden;
-        max-width: 320px;
-        height: 45px;
-        margin-left: auto;
-        margin-right: auto;
-        border-radius: 6px;
-    }
-
-    .lm-logo-container img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        opacity: 0.95;
-        filter: brightness(1.2) drop-shadow(0 4px 12px rgba(99, 102, 241, 0.2));
-        transition: opacity 0.3s ease, filter 0.3s ease;
-    }
-
-    .lm-logo-container img:hover {
-        opacity: 1;
-    }
-
-    /* Subtle scan-line effect over the background */
-    .scanlines {
-        position: fixed;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-        background: repeating-linear-gradient(0deg,
-                transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.03) 2px,
-                rgba(0, 0, 0, 0.03) 4px);
-    }
-
-    /* ── Animated accent bar ── */
-    .accent-bar {
-        height: 3px;
-        background: linear-gradient(90deg, transparent, #6366f1, #0ea5e9, #6366f1, transparent);
-        background-size: 200% 100%;
-        animation: shimmer 3s ease-in-out infinite;
-        border-radius: 2px;
-        margin: 1rem 0;
-        opacity: 0.6;
-    }
-
-    @keyframes shimmer {
-        0% {
-            background-position: -200% 0;
-        }
-
-        100% {
-            background-position: 200% 0;
-        }
-    }
-
-    /* ── Fade-in animation for clocks ── */
-    @keyframes clockFadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(6px);
-        }
-
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .tz-card {
-        animation: clockFadeIn 0.5s ease forwards;
-    }
-
-    .tz-card:nth-child(2) {
-        animation-delay: 0.08s;
-    }
-
-    .tz-card:nth-child(3) {
-        animation-delay: 0.16s;
-    }
-
-    .tz-card:nth-child(4) {
-        animation-delay: 0.24s;
-    }
-
-    .tz-card:nth-child(5) {
-        animation-delay: 0.32s;
-    }
-</style>
-{% endblock %}
-
 {% block public_content %}
-<!-- Background collage of LM products -->
-<div class="collage-bg"></div>
-<div class="scanlines"></div>
 
 <div class="w-full max-w-lg relative z-10">
     <!-- Decorative background elements -->
@@ -190,10 +17,19 @@
         </div>
 
         <!-- App Branding -->
-        <div class="text-center mb-4">
-            <h1 class="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
-                Time Tracker</h1>
-            <p class="text-gray-400 mt-2 text-sm">
+        <div class="text-center mb-6">
+            <div class="flex items-center justify-center gap-4 mb-2">
+                <div
+                    class="w-24 h-24 rounded-full overflow-hidden shadow-2xl shadow-primary-500/40 border border-white/10 ring-1 ring-white/5 transition-transform duration-500 hover:scale-110">
+                    <img src="/static/images/app_icon.png?v=5" alt="SDC Time Logo"
+                        class="w-full h-full object-cover shadow-inner">
+                </div>
+                <h1
+                    class="text-4xl font-extrabold bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent tracking-tight">
+                    SDC Time Tracker
+                </h1>
+            </div>
+            <p class="text-gray-400 text-sm">
                 {% if selected_employee %}
                 Enter your PIN, {{ selected_employee.name.split()[0] }}
                 {% else %}
@@ -220,7 +56,7 @@
                 <span class="tz-time" id="clock-utc">--:--:--</span>
                 <span class="tz-date" id="date-utc"></span>
             </div>
-            <div class="tz-card" id="tz-abudhabi">
+            <div class="tz-card tz-featured" id="tz-abudhabi">
                 <span class="tz-label">Abu Dhabi</span>
                 <span class="tz-time" id="clock-abudhabi">--:--:--</span>
                 <span class="tz-date" id="date-abudhabi"></span>
@@ -369,7 +205,7 @@
                                     </svg>
                                 </div>
                                 <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]*"
-                                    autofocus required
+                                    autofocus required data-numpad
                                     class="w-full bg-surface-900/50 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
                                     placeholder="••••" maxlength="8">
                             </div>
@@ -445,9 +281,11 @@
         <!-- PIN Input -->
         <div class="mb-4">
             <label for="modal-pin" class="block text-xs text-gray-500 mb-1.5">Enter your PIN</label>
-            <input type="password" id="modal-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+            <input type="password" id="modal-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" data-numpad
                 class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                placeholder="••••" onkeydown="if(event.key==='Enter') submitQuickAction()">
+                placeholder="••••"
+                onkeydown="if(event.key==='Enter' && !document.getElementById('modal-submit').disabled) submitQuickAction()"
+                oninput="updateQuickButton()">
         </div>
 
         <!-- Error message -->
@@ -470,12 +308,12 @@
         </div>
 
         <!-- Submit Button -->
-        <button type="button" id="modal-submit" onclick="submitQuickAction()"
-            class="w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white">
+        <button type="button" id="modal-submit" onclick="submitQuickAction()" disabled
+            class="w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gray-700/50 border border-white/5 cursor-not-allowed opacity-50">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            <span id="modal-btn-text">Confirm</span>
+            <span id="modal-btn-text">Enter PIN</span>
         </button>
     </div>
 </div>
@@ -483,43 +321,6 @@
 
 {% block scripts %}
 <script>
-    // ═══════════════════════════════════════════
-    //  Multi-Timezone Live Clock
-    // ═══════════════════════════════════════════
-    const timeZones = [
-        { id: 'mountain', tz: 'America/Denver', label: 'Mountain' },
-        { id: 'eastern', tz: 'America/New_York', label: 'Eastern' },
-        { id: 'utc', tz: 'UTC', label: 'UTC' },
-        { id: 'abudhabi', tz: 'Asia/Dubai', label: 'Abu Dhabi' },
-    ];
-
-    function updateClocks() {
-        const now = new Date();
-        timeZones.forEach(function (zone) {
-            var opts = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
-            var dateOpts = { weekday: 'short', month: 'short', day: 'numeric' };
-            if (zone.tz) {
-                opts.timeZone = zone.tz;
-                dateOpts.timeZone = zone.tz;
-            }
-            var timeStr = now.toLocaleTimeString('en-US', opts);
-            var dateStr = now.toLocaleDateString('en-US', dateOpts);
-
-            // Split out seconds for accent coloring
-            var parts = timeStr.split(':');
-            var formatted = parts[0] + ':' + parts[1] + ':<span class="tz-seconds">' + parts[2] + '</span>';
-
-            var clockEl = document.getElementById('clock-' + zone.id);
-            var dateEl = document.getElementById('date-' + zone.id);
-            if (clockEl) clockEl.innerHTML = formatted;
-            if (dateEl) dateEl.textContent = dateStr;
-        });
-    }
-
-    // Run immediately, then every second
-    updateClocks();
-    setInterval(updateClocks, 1000);
-
     // ═══════════════════════════════════════════
     //  Alphabetical Sort Toggle
     // ═══════════════════════════════════════════
@@ -581,22 +382,22 @@
         hideEl(document.getElementById('modal-error'));
         hideEl(document.getElementById('modal-success'));
         pinInput.value = '';
-        btn.disabled = false;
+        btn.disabled = true;
+        btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gray-700/50 border border-white/5 cursor-not-allowed opacity-50';
+        document.getElementById('modal-btn-text').textContent = 'Enter PIN';
+        _lastCheckedPin = '';
+        if (_pinCheckTimer) { clearTimeout(_pinCheckTimer); _pinCheckTimer = null; }
 
         if (action === 'checkin') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-success-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>';
             title.textContent = 'Quick Check In';
             subtitle.textContent = empName;
-            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-success-600 to-success-500 hover:from-success-500 hover:to-success-400 shadow-success-500/25';
-            btnText.textContent = 'Check In';
         } else {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-danger-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
             title.textContent = 'Quick Check Out';
             subtitle.textContent = empName;
-            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-danger-500/25';
-            btnText.textContent = 'Check Out';
         }
 
         modal.classList.remove('hidden');
@@ -662,18 +463,82 @@
                 } else {
                     showEl(errorEl);
                     errorText.textContent = data.error || 'Something went wrong.';
-                    btn.disabled = false;
-                    btnText.textContent = currentAction === 'checkin' ? 'Check In' : 'Check Out';
                     document.getElementById('modal-pin').value = '';
                     document.getElementById('modal-pin').focus();
+                    updateQuickButton();
                 }
             })
             .catch(function (err) {
                 showEl(errorEl);
                 errorText.textContent = 'Network error: ' + err.message;
-                btn.disabled = false;
-                btnText.textContent = currentAction === 'checkin' ? 'Check In' : 'Check Out';
+                updateQuickButton();
             });
+    }
+
+    // Update button state as PIN is typed — validates against server
+    var _pinCheckTimer = null;
+    var _lastCheckedPin = '';
+
+    function updateQuickButton() {
+        var pin = document.getElementById('modal-pin').value;
+        var btn = document.getElementById('modal-submit');
+        var btnText = document.getElementById('modal-btn-text');
+        var disabledClass = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gray-700/50 border border-white/5 cursor-not-allowed opacity-50';
+
+        if (pin.length < 4) {
+            btn.disabled = true;
+            btn.className = disabledClass;
+            btnText.textContent = 'Enter PIN';
+            _lastCheckedPin = '';
+            if (_pinCheckTimer) { clearTimeout(_pinCheckTimer); _pinCheckTimer = null; }
+            return;
+        }
+
+        // Don't re-check the same PIN
+        if (pin === _lastCheckedPin) return;
+
+        // Show "Checking..." state
+        btn.disabled = true;
+        btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gray-600/50 border border-white/5 cursor-wait opacity-70';
+        btnText.textContent = 'Verifying...';
+
+        // Debounce so we don't fire on every digit
+        if (_pinCheckTimer) clearTimeout(_pinCheckTimer);
+        _pinCheckTimer = setTimeout(function () {
+            var formData = new FormData();
+            formData.append('employee_id', currentEmployeeId);
+            formData.append('pin', pin);
+
+            fetch('/api/verify-pin', { method: 'POST', body: formData })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    _lastCheckedPin = pin;
+                    // Only update if PIN hasn't changed while we were checking
+                    var currentPin = document.getElementById('modal-pin').value;
+                    if (currentPin !== pin) return;
+
+                    if (data.valid) {
+                        btn.disabled = false;
+                        if (currentAction === 'checkin') {
+                            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-success-600 to-success-500 hover:from-success-500 hover:to-success-400 shadow-success-500/25';
+                            btnText.textContent = 'Check In';
+                        } else {
+                            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-danger-500/25';
+                            btnText.textContent = 'Check Out';
+                        }
+                    } else {
+                        btn.disabled = true;
+                        btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-danger-500/20 border border-danger-500/30 cursor-not-allowed opacity-70';
+                        btnText.textContent = 'Invalid PIN';
+                    }
+                })
+                .catch(function () {
+                    // On error, allow submit anyway (server will re-validate)
+                    btn.disabled = false;
+                    btn.className = disabledClass;
+                    btnText.textContent = currentAction === 'checkin' ? 'Check In' : 'Check Out';
+                });
+        }, 300);
     }
 </script>
 {% endblock %}

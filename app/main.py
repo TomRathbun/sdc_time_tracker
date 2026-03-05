@@ -34,6 +34,19 @@ async def startup():
     init_db()
     _seed_default_data()
 
+    # Seed feature toggle settings
+    from app.database import SessionLocal
+    from app.services.settings import seed_settings
+    db = SessionLocal()
+    try:
+        seed_settings(db)
+    finally:
+        db.close()
+
+    # Start background checkout reminder scheduler
+    from app.services.scheduler import start_scheduler
+    start_scheduler()
+
 
 def _seed_default_data():
     """Create default manager account if no employees exist."""

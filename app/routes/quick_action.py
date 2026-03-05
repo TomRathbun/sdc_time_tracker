@@ -62,6 +62,16 @@ async def quick_checkin(
     today = date.today()
     rounded_time = round_down_5(now)
 
+    # Prevent check-in from being earlier than the last check-out
+    last_checkout = db.query(TimeEntry).filter(
+        TimeEntry.employee_id == emp.id,
+        TimeEntry.date == today,
+        TimeEntry.entry_type == EntryType.check_out,
+    ).order_by(TimeEntry.declared_time.desc()).first()
+
+    if last_checkout and rounded_time < last_checkout.declared_time:
+        rounded_time = last_checkout.declared_time
+
     entry = TimeEntry(
         employee_id=emp.id,
         date=today,
@@ -86,6 +96,39 @@ async def quick_checkin(
         },
         ip_address=request.client.host if request.client else "",
     )
+
+    # Send check-in confirmation email (non-blocking, if enabled)
+    from app.services.settings import get_bool_setting
+    if emp.email and get_bool_setting(db, "checkin_email_enabled"):
+        import threading
+        from app.services.email import send_checkin_email
+        from app.services.time_calc import get_target_hours
+        from app.models import LeaveRequest, LeaveStatus
+
+        target_hrs = get_target_hours(today)
+        expected_checkout = rounded_time + timedelta(hours=target_hrs)
+
+        cutoff = today + timedelta(days=14)
+        leaves = db.query(LeaveRequest).filter(
+            LeaveRequest.employee_id == emp.id,
+            LeaveRequest.start_date <= cutoff,
+            LeaveRequest.end_date >= today,
+            LeaveRequest.status == LeaveStatus.approved,
+        ).all()
+        upcoming_leave = [
+            {
+                "start_date": lv.start_date.strftime("%b %d"),
+                "end_date": lv.end_date.strftime("%b %d"),
+                "leave_type": lv.leave_type.value,
+            }
+            for lv in leaves
+        ]
+
+        threading.Thread(
+            target=send_checkin_email,
+            args=(emp, rounded_time, expected_checkout, upcoming_leave),
+            daemon=True,
+        ).start()
 
     return JSONResponse({
         "ok": True,
@@ -162,3 +205,32 @@ async def quick_checkout(
         "message": f"Checked out at {rounded_time.strftime('%H:%M')}",
         "time": rounded_time.strftime("%H:%M"),
     })
+
+
+@router.get("/settings")
+async def get_settings(db: Session = Depends(get_db)):
+    """Return feature toggle settings for frontend use."""
+    from app.services.settings import get_bool_setting
+    return JSONResponse({
+        "onscreen_numpad_enabled": get_bool_setting(db, "onscreen_numpad_enabled"),
+        "onscreen_keyboard_enabled": get_bool_setting(db, "onscreen_keyboard_enabled"),
+    })
+
+
+@router.post("/verify-pin")
+async def verify_pin_endpoint(
+    employee_id: int = Form(...),
+    pin: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Lightweight PIN check — returns valid: true/false without performing any action."""
+    emp = db.query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.is_active == True,
+    ).first()
+
+    if not emp or not verify_pin(pin, emp.pin_hash):
+        return JSONResponse({"valid": False})
+
+    return JSONResponse({"valid": True})
+
