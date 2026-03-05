@@ -197,12 +197,6 @@
                 <span class="tz-time" id="clock-eastern">--:--:--</span>
                 <span class="tz-date" id="date-eastern">---, --- --</span>
             </div>
-            <!-- London -->
-            <div class="tz-card">
-                <span class="tz-label">London</span>
-                <span class="tz-time" id="clock-london">--:--:--</span>
-                <span class="tz-date" id="date-london">---, --- --</span>
-            </div>
             <!-- UTC / Zulu -->
             <div class="tz-card">
                 <span class="tz-label">UTC / Zulu</span>
@@ -214,6 +208,12 @@
                 <span class="tz-label">Abu Dhabi</span>
                 <span class="tz-time" id="clock-abudhabi">--:--:--</span>
                 <span class="tz-date" id="date-abudhabi">---, --- --</span>
+            </div>
+            <!-- Thailand -->
+            <div class="tz-card">
+                <span class="tz-label">Thailand</span>
+                <span class="tz-time" id="clock-thailand">--:--:--</span>
+                <span class="tz-date" id="date-thailand">---, --- --</span>
             </div>
             <!-- Manila -->
             <div class="tz-card">
@@ -245,8 +245,33 @@
 
     {% block modals %}{% endblock %}
 
-    <script src="/static/js/app.js?v=6"></script>
+    <script src="/static/js/app.js?v=7"></script>
     <script src="/static/js/onscreen_input.js?v=4"></script>
+
+    <!-- Tab Session Sync — Prevents "confused" tabs when multiple users log in -->
+    <script>
+            (function () {
+                const currentUserId = "{{ employee.id if employee else 'guest' }}";
+                const sessionKey = 'sdc_active_session_id';
+
+                // Set our state on load
+                localStorage.setItem(sessionKey, currentUserId);
+
+                // Listen for changes from other tabs
+                window.addEventListener('storage', (e) => {
+                    if (e.key === sessionKey && e.newValue !== currentUserId) {
+                        // Logic: If another tab switched users, we must reload to stay in sync
+                        // since cookies are shared across all tabs of the same origin.
+                        console.log('Session mismatch detected (expected ' + currentUserId + ', got ' + e.newValue + '). Syncing tab...');
+
+                        // Small delay to avoid race conditions with logout/login redirect sequences
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 100);
+                    }
+                });
+            })();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 

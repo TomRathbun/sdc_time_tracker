@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'mountain', tz: 'America/Denver' },
         { id: 'central', tz: 'America/Chicago' },
         { id: 'eastern', tz: 'America/New_York' },
-        { id: 'london', tz: 'Europe/London' },
+        { id: 'thailand', tz: 'Asia/Bangkok' },
         { id: 'utc', tz: 'UTC' },
         { id: 'abudhabi', tz: 'Asia/Dubai' },
         { id: 'manila', tz: 'Asia/Manila' },
