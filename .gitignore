@@ -18,6 +18,7 @@ uploads/
 *.json
 !requirements.txt
 !pyproject.toml
+!app/static/lockheed_weapons.json
 
 # SSL certs
 certs/

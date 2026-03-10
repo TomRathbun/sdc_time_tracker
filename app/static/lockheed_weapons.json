@@ -1,0 +1,326 @@
+[
+    {
+        "name": "F-35 Lightning II",
+        "summary": "The F-35 Lightning II is a 5th Generation fighter, combining advanced stealth with fighter speed and agility, fully fused sensor information, network-enabled operations and advanced sustainment.",
+        "link": "https://www.lockheedmartin.com/en-us/products/f-35.html",
+        "image": "/static/images/weapons/f35.png"
+    },
+    {
+        "name": "HIMARS",
+        "summary": "The M142 HIMARS is a light multiple rocket launcher developed in the late 1990s for the United States Army, mounted on a standard Army M1140 truck frame.",
+        "link": "https://www.lockheedmartin.com/en-us/products/himars.html",
+        "image": "/static/images/weapons/himars.png"
+    },
+    {
+        "name": "PAC-3 MSE",
+        "summary": "The PAC-3 Missile Segment Enhancement (MSE) is a high-velocity, hit-to-kill surface-to-air missile that provides advanced firepower to the Patriot air defense system.",
+        "link": "https://www.lockheedmartin.com/en-us/products/pac-3-mse.html",
+        "image": "/static/images/weapons/pac3.png"
+    },
+    {
+        "name": "Javelin",
+        "summary": "Javelin is a premier man-portable, fire-and-forget anti-tank missile system. It's highly effective against modern tanks and light armored vehicles.",
+        "link": "https://www.lockheedmartin.com/en-us/products/javelin.html",
+        "image": "/static/images/weapons/javelin.png"
+    },
+    {
+        "name": "C-130J Super Hercules",
+        "summary": "The C-130J Super Hercules is the most advanced C-130 ever designed, built and flown. It is the tactical airlifter of choice for 22 nations and 26 operators.",
+        "link": "https://www.lockheedmartin.com/en-us/products/c-130.html",
+        "image": "/static/images/weapons/c130j.png"
+    },
+    {
+        "name": "Aegis Combat System",
+        "summary": "The Aegis Combat System is a centralized, automated, command-and-control and weapons control system that is the heart of the U.S. Navy's surface fleet.",
+        "link": "https://www.lockheedmartin.com/en-us/products/aegis-combat-system.html",
+        "image": "/static/images/weapons/aegis.png"
+    },
+    {
+        "name": "CH-53K King Stallion",
+        "summary": "The CH-53K King Stallion is the most powerful helicopter ever built by the United States. It is designed to lift extreme loads over long distances in high/hot conditions.",
+        "link": "https://www.lockheedmartin.com/en-us/products/ch-53k-helicopter.html",
+        "image": "/static/images/weapons/ch53k.png"
+    },
+    {
+        "name": "LRASM",
+        "summary": "The Long Range Anti-Ship Missile (LRASM) is a precision-guided, intelligent anti-ship missile designed to meet the needs of U.S. Navy and Air Force warfighters.",
+        "link": "https://www.lockheedmartin.com/en-us/products/lrasm.html",
+        "image": "/static/images/weapons/lrasm.png"
+    },
+    {
+        "name": "SR-71 Blackbird",
+        "summary": "The SR-71 Blackbird remains the world's fastest and highest-flying air-breathing manned aircraft. Developed by Skunk Works, it could outrun missiles.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works/sr-71.html",
+        "image": "/static/images/weapons/sr71.png"
+    },
+    {
+        "name": "F-22 Raptor",
+        "summary": "The F-22 Raptor defines air dominance. Its combination of stealth, speed, agility, and integrated avionics enables it to deliver lethal capabilities in any environment.",
+        "link": "https://www.lockheedmartin.com/en-us/products/f-22.html",
+        "image": "/static/images/weapons/f22.png"
+    },
+    {
+        "name": "Orion Spacecraft",
+        "summary": "Lockheed Martin is building the Orion spacecraft for NASA’s Artemis program, designed to carry astronauts to the Moon and beyond to Mars.",
+        "link": "https://www.lockheedmartin.com/en-us/products/orion.html",
+        "image": "/static/images/weapons/orion.png"
+    },
+    {
+        "name": "THAAD Weapon System",
+        "summary": "Terminal High Altitude Area Defense (THAAD) is a highly effective, combat-proven defense against short, medium, and intermediate-range ballistic missile threats.",
+        "link": "https://www.lockheedmartin.com/en-us/products/thaad.html",
+        "image": "/static/images/weapons/thaad.png"
+    },
+    {
+        "name": "Autonomous BLACK HAWK",
+        "summary": "In 2022, Lockheed Martin and DARPA completed the first-ever pilotless BLACK HAWK flight, demonstrating the future of autonomous battlefield logistics.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/2022/first-unmanned-black-hawk-flight.html",
+        "image": "/static/images/weapons/blackhawk_auto.png"
+    },
+    {
+        "name": "F-117 Nighthawk",
+        "summary": "The F-117 Nighthawk was the world's first operational stealth aircraft. Its 'faceting' design paved the way for all future stealth platforms.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works/f-117-nighthawk.html",
+        "image": "/static/images/weapons/f117.png"
+    },
+    {
+        "name": "Viking Mars Lander",
+        "summary": "In 1976, the Viking 1 and 2 landers, built by Martin Marietta, became the first U.S. spacecraft to successfully land on Mars and return high-resolution images.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/2021/45-years-later-the-legacy-of-viking-on-mars.html",
+        "image": "/static/images/weapons/viking.png"
+    },
+    {
+        "name": "Founding of Skunk Works",
+        "summary": "In 1943, Kelly Johnson founded the Advanced Development Programs (Skunk Works) in a circus tent. It has since developed the world's most advanced aircraft.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works.html",
+        "image": "/static/images/weapons/skunkworks.png"
+    },
+    {
+        "name": "The First Packed Parachute",
+        "summary": "In 1913, Glenn L. Martin invented the first parachute to be packed into a backpack-style container, revolutionizing aviation safety.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/2015/martin-parachute.html",
+        "image": "/static/images/weapons/parachute.png"
+    },
+    {
+        "name": "Sinking of the Ostfriesland",
+        "summary": "In 1921, Glenn Martin’s MB-2 bombers proved the power of air supremacy by successfully sinking the captured German battleship Ostfriesland.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/history/mb-2.html",
+        "image": "/static/images/weapons/mb2_bomber.png"
+    },
+    {
+        "name": "Hellfire Missile",
+        "summary": "The AGM-114 Hellfire is a combat-proven air-to-ground precision missile used on helicopters and fixed-wing aircraft for anti-armor and precision strikes.",
+        "link": "https://www.lockheedmartin.com/en-us/products/hellfire.html",
+        "image": "/static/images/weapons/hellfire.png"
+    },
+    {
+        "name": "JASSM",
+        "summary": "The Joint Air-to-Surface Standoff Missile (JASSM) is a long-range, precision-guided cruise missile for penetrating enemy air defenses from standoff distances.",
+        "link": "https://www.lockheedmartin.com/en-us/products/jassm.html",
+        "image": "/static/images/weapons/jassm.png"
+    },
+    {
+        "name": "AGM-179 JAGM",
+        "summary": "The Joint Air-to-Ground Missile (JAGM) is a multi-mode precision strike missile replacing legacy systems for rotary- and fixed-wing platforms.",
+        "link": "https://www.lockheedmartin.com/en-us/products/jagm.html",
+        "image": "/static/images/weapons/jagm.png"
+    },
+    {
+        "name": "GMLRS",
+        "summary": "Guided Multiple Launch Rocket System (GMLRS) provides precision long-range fires for HIMARS and MLRS platforms, with extended range variants in development.",
+        "link": "https://www.lockheedmartin.com/en-us/products/gmlrs.html",
+        "image": "/static/images/weapons/gmlrs.png"
+    },
+    {
+        "name": "ATACMS",
+        "summary": "Army Tactical Missile System (ATACMS) is a surface-to-surface missile delivering precision strikes against high-value targets at extended ranges.",
+        "link": "https://www.lockheedmartin.com/en-us/products/army-tactical-missile-system.html",
+        "image": "/static/images/weapons/atacms.png"
+    },
+    {
+        "name": "PrSM",
+        "summary": "Precision Strike Missile (PrSM) is the next-generation surface-to-surface missile for HIMARS, offering increased range, lethality, and survivability.",
+        "link": "https://www.lockheedmartin.com/en-us/products/precision-strike-missile.html",
+        "image": "/static/images/weapons/prsm.png"
+    },
+    {
+        "name": "U-2 Dragon Lady",
+        "summary": "The U-2 high-altitude reconnaissance aircraft, developed by Skunk Works, provides critical intelligence, surveillance, and reconnaissance capabilities.",
+        "link": "https://www.lockheedmartin.com/en-us/products/u2.html",
+        "image": "/static/images/weapons/u2.png"
+    },
+    {
+        "name": "P-3 Orion",
+        "summary": "The P-3 Orion maritime patrol aircraft excels in anti-submarine warfare, surveillance, and search-and-rescue missions worldwide.",
+        "link": "https://www.lockheedmartin.com/en-us/products/p-3.html",
+        "image": "/static/images/weapons/c130j.png"
+    },
+    {
+        "name": "UH-60 Black Hawk",
+        "summary": "The UH-60 Black Hawk is the U.S. Army's primary utility helicopter, renowned for troop transport, medical evacuation, and assault missions.",
+        "link": "https://www.lockheedmartin.com/en-us/products/black-hawk-helicopter.html",
+        "image": "/static/images/weapons/blackhawk_auto.png"
+    },
+    {
+        "name": "Sikorsky S-92",
+        "summary": "The S-92 helicopter serves military and civil roles, including search-and-rescue, offshore transport, and executive transport with proven reliability.",
+        "link": "https://www.lockheedmartin.com/en-us/products/s-92.html",
+        "image": "/static/images/weapons/ch53k.png"
+    },
+    {
+        "name": "F-16 Fighting Falcon",
+        "summary": "The F-16 Fighting Falcon is a versatile multirole fighter with over 4,600 built, serving dozens of air forces worldwide.",
+        "link": "https://www.lockheedmartin.com/en-us/products/f-16.html",
+        "image": "/static/images/weapons/f16.png"
+    },
+    {
+        "name": "First Flight of the U-2",
+        "summary": "In 1955, the U-2 spy plane took its first flight, enabling high-altitude reconnaissance during the Cold War.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works/u2.html",
+        "image": "/static/images/weapons/u2.png"
+    },
+    {
+        "name": "Apollo Program Contribution",
+        "summary": "Lockheed (via heritage companies) contributed to NASA's Apollo program, including propulsion and systems for lunar missions.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/history/apollo.html",
+        "image": "/static/images/weapons/apollo.png"
+    },
+    {
+        "name": "Trident II D5 Missile",
+        "summary": "The Trident II D5 is a submarine-launched ballistic missile providing strategic nuclear deterrence for the U.S. Navy.",
+        "link": "https://www.lockheedmartin.com/en-us/products/trident-ii-d5.html",
+        "image": "/static/images/weapons/pac3.png"
+    },
+    {
+        "name": "LONGBOW Fire Control",
+        "summary": "LONGBOW provides advanced fire control and radar for the AH-64 Apache helicopter, enhancing targeting in all conditions.",
+        "link": "https://www.lockheedmartin.com/en-us/products/longbow.html",
+        "image": "/static/images/weapons/hellfire.png"
+    },
+    {
+        "name": "Space Fence",
+        "summary": "The Space Fence system tracks objects in orbit for space situational awareness and national security.",
+        "link": "https://www.lockheedmartin.com/en-us/products/space-fence.html",
+        "image": "/static/images/weapons/space_fence.png"
+    },
+    {
+        "name": "First Autonomous F-35 Flight Demo",
+        "summary": "Lockheed Martin demonstrated AI and autonomy integrations on the F-35, advancing manned-unmanned teaming.",
+        "link": "https://news.lockheedmartin.com/autonomy-f35",
+        "image": "/static/images/weapons/f35.png"
+    },
+    {
+        "name": "Directed Energy Laser Systems",
+        "summary": "Lockheed Martin's high-energy laser systems provide counter-drone and precision defense capabilities.",
+        "link": "https://www.lockheedmartin.com/en-us/capabilities/directed-energy.html",
+        "image": "/static/images/weapons/directed_energy_laser.png"
+    },
+    {
+        "name": "MQ-25 Stingray Contribution",
+        "summary": "Lockheed Martin supports unmanned aerial refueling systems like elements of the MQ-25 program.",
+        "link": "https://www.lockheedmartin.com/en-us/products/mq-25.html",
+        "image": "/static/images/weapons/lrasm.png"
+    },
+    {
+        "name": "Hypersonic Strike Weapon Development",
+        "summary": "Lockheed Martin advances hypersonic weapons like ARRW for rapid, long-range precision strike.",
+        "link": "https://news.lockheedmartin.com/hypersonics",
+        "image": "/static/images/weapons/thaad.png"
+    },
+    {
+        "name": "First Flight of the F-117",
+        "summary": "In 1981, the F-117 Nighthawk's first flight marked the dawn of operational stealth aviation.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works/f-117-nighthawk.html",
+        "image": "/static/images/weapons/f117.png"
+    },
+    {
+        "name": "Blackbird's Mach 3+ Record",
+        "summary": "In 1976, the SR-71 set an absolute speed record of Mach 3.3+ that still stands for air-breathing aircraft.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works/sr-71.html",
+        "image": "/static/images/weapons/sr71.png"
+    },
+    {
+        "name": "First Orion Test Flight (EFT-1)",
+        "summary": "In 2014, the Orion spacecraft's Exploration Flight Test-1 successfully demonstrated reentry and recovery.",
+        "link": "https://www.lockheedmartin.com/en-us/products/orion.html",
+        "image": "/static/images/weapons/orion.png"
+    },
+    {
+        "name": "Skunk Works' Have Blue Prototype",
+        "summary": "In 1977, the Have Blue demonstrator proved low-observable technology, leading to the F-117.",
+        "link": "https://www.lockheedmartin.com/en-us/who-we-are/business-areas/aeronautics/skunk-works.html",
+        "image": "/static/images/weapons/have_blue.png"
+    },
+    {
+        "name": "Pave Low MH-53 Helicopter Legacy",
+        "summary": "Heritage Sikorsky MH-53 Pave Low helicopters enabled special operations deep behind enemy lines.",
+        "link": "https://www.lockheedmartin.com/en-us/products/mh-53.html",
+        "image": "/static/images/weapons/ch53k.png"
+    },
+    {
+        "name": "First Production F-35 Delivery",
+        "summary": "In 2011, the first operational F-35 was delivered, ushering in 5th-generation fighter era for multiple nations.",
+        "link": "https://www.lockheedmartin.com/en-us/products/f-35.html",
+        "image": "/static/images/weapons/f35.png"
+    },
+    {
+        "name": "Aegis Ashore Deployment",
+        "summary": "Aegis Ashore systems extend naval missile defense to land-based sites for ballistic missile threats.",
+        "link": "https://www.lockheedmartin.com/en-us/products/aegis-combat-system.html",
+        "image": "/static/images/weapons/aegis.png"
+    },
+    {
+        "name": "Viking 1 First Mars Photo",
+        "summary": "In 1976, Viking 1 transmitted the first color images from Mars' surface, a landmark in planetary exploration.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/2021/45-years-later-the-legacy-of-viking-on-mars.html",
+        "image": "/static/images/weapons/viking.png"
+    },
+    {
+        "name": "EADGE-T C2 Program",
+        "summary": "The Enterprise Air Defense Ground Environment – Transformation (EADGE-T) provides the UAE with a state-of-the-art, integrated command and control system.",
+        "link": "https://www.lockheedmartin.com/en-us/products/eadge-t.html",
+        "image": "/static/images/weapons/eadget.png"
+    },
+    {
+        "name": "L-1011 TriStar",
+        "summary": "The L-1011 TriStar was a technologically advanced wide-body trijet airliner, often called the 'most intelligent airliner ever built'.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/history/l-1011.jpg",
+        "image": "/static/images/weapons/l1011.png"
+    },
+    {
+        "name": "P-51 Mustang",
+        "summary": "The P-51 Mustang, while originally a North American Aviation design, shares a historical legacy with Lockheed Martin's heritage companies in the defense industry's evolution.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/history/p-51.html",
+        "image": "/static/images/weapons/p51_mustang.png"
+    },
+    {
+        "name": "Polaris SLBM",
+        "summary": "The UGM-27 Polaris was the first submarine-launched ballistic missile, revolutionizing strategic nuclear deterrence.",
+        "link": "https://www.lockheedmartin.com/en-us/news/features/history/polaris.html",
+        "image": "/static/images/weapons/polaris_slbm.png"
+    },
+    {
+        "name": "SBIRS Satellite",
+        "summary": "The Space-Based Infrared System (SBIRS) provides critical missile warning and surveillance capabilities from space.",
+        "link": "https://www.lockheedmartin.com/en-us/products/sbirs.html",
+        "image": "/static/images/weapons/sbirs.png"
+    },
+    {
+        "name": "C2BMC",
+        "summary": "Command, Control, Battle Management, and Communications (C2BMC) is the 'brain' of the U.S. Ballistic Missile Defense System.",
+        "link": "https://www.lockheedmartin.com/en-us/products/c2bmc.html",
+        "image": "/static/images/weapons/c2bmc.png"
+    },
+    {
+        "name": "Presidential Helicopter",
+        "summary": "Lockheed Martin and Sikorsky build the VH-92A, the next-generation helicopter for the President of the United States.",
+        "link": "https://www.lockheedmartin.com/en-us/products/vh-92a.html",
+        "image": "/static/images/weapons/presidential_helicopter.png"
+    },
+    {
+        "name": "UH-60 Black Hawk",
+        "summary": "The Sikorsky UH-60 Black Hawk is the most widely used multi-mission helicopter in the world, with over 4,000 aircraft in service with dozens of nations.",
+        "link": "https://www.lockheedmartin.com/en-us/products/sikorsky-black-hawk-helicopter.html",
+        "image": "/static/images/weapons/blackhawk.png"
+    }
+]
