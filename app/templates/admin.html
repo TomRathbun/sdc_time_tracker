@@ -47,7 +47,7 @@
                     <div>
                         <label for="emp-pin" class="block text-xs text-gray-500 mb-1">PIN</label>
                         <input type="text" name="pin" id="emp-pin" required class="form-input font-mono"
-                            placeholder="e.g. 1234" maxlength="8" pattern="[0-9]+">
+                            placeholder="e.g. 1234" maxlength="8" pattern="[0-9]+" autocomplete="off">
                     </div>
                     <div>
                         <label for="emp-role" class="block text-xs text-gray-500 mb-1">Role</label>
@@ -190,7 +190,6 @@
                         <td class="py-3 px-3 text-gray-500 text-xs">{{ emp.created_at.strftime("%Y-%m-%d") if
                             emp.created_at else "—" }}</td>
                         <td class="py-3 px-3 text-right">
-                            {% if emp.id != employee.id %}
                             <div class="flex items-center gap-1 justify-end">
                                 <!-- Edit -->
                                 <button
@@ -202,18 +201,20 @@
                                             d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                     </svg>
                                 </button>
+
+                                {% if emp.id != employee.id %}
                                 <!-- Toggle Active/Inactive -->
                                 <form method="POST" action="/admin/employee/{{ emp.id }}/toggle" class="inline">
                                     <button type="submit"
                                         class="p-1.5 rounded-lg transition-colors
-                                        {% if emp.is_active %}bg-warning-500/10 text-warning-400 hover:bg-warning-500/20
-                                        {% else %}bg-success-500/10 text-success-400 hover:bg-success-500/20{% endif %}"
+                                            {% if emp.is_active %}bg-warning-500/10 text-warning-400 hover:bg-warning-500/20
+                                            {% else %}bg-success-500/10 text-success-400 hover:bg-success-500/20{% endif %}"
                                         title="{{ 'Deactivate' if emp.is_active else 'Reactivate' }}"
                                         id="btn-toggle-{{ emp.id }}">
                                         {% if emp.is_active %}
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                                d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636" />
                                         </svg>
                                         {% else %}
                                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,8 +236,8 @@
                                         </svg>
                                     </button>
                                 </form>
+                                {% endif %}
                             </div>
-                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -280,7 +281,7 @@
                     <label class="block text-xs text-gray-500 mb-1">Reset PIN <span class="text-gray-600">(leave blank
                             to keep current)</span></label>
                     <input type="text" name="reset_pin" id="edit-pin" class="form-input font-mono" placeholder="New PIN"
-                        maxlength="8" pattern="[0-9]*">
+                        maxlength="8" pattern="[0-9]*" autocomplete="off">
                 </div>
             </div>
             <div class="flex gap-3 mt-6">

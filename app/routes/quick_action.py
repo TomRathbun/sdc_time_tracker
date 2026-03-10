@@ -234,3 +234,20 @@ async def verify_pin_endpoint(
 
     return JSONResponse({"valid": True})
 
+
+@router.get("/weapons/random")
+async def get_random_weapon():
+    """Return a random Lockheed weapon system from the static JSON file."""
+    import os
+    import json
+    import random
+    json_path = os.path.join("app", "static", "lockheed_weapons.json")
+    if not os.path.exists(json_path):
+        return JSONResponse({"error": "Weapon data not found"}, status_code=404)
+    
+    with open(json_path, "r", encoding="utf-8") as f:
+        weapons = json.load(f)
+        if not weapons:
+            return JSONResponse({"error": "No weapons available"}, status_code=404)
+        return JSONResponse(random.choice(weapons))
+

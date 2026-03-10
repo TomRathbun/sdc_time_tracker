@@ -11,7 +11,7 @@ from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
     TimeEntry, OffsiteEntry, EntryType, LocationType,
-    RemoteAuthorization, AuthorizationStatus,
+    RemoteAuthorization, AuthorizationStatus, Employee, Role
 )
 from app.services.time_calc import update_daily_summary, get_target_hours
 from app.services.audit import log_action
@@ -28,6 +28,13 @@ async def checkin_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     now = datetime.now()
+    # Get policy threshold
+    from app.services.settings import get_setting
+    try:
+        threshold = int(get_setting(db, "comment_threshold_minutes"))
+    except (ValueError, TypeError):
+        threshold = 30
+
     return templates.TemplateResponse("time_entry.html", {
         "request": request,
         "employee": employee,
@@ -35,6 +42,7 @@ async def checkin_page(request: Request, db: Session = Depends(get_db)):
         "now": now,
         "today": date.today(),
         "error": None,
+        "comment_threshold": threshold,
     })
 
 
@@ -91,6 +99,24 @@ async def checkin_submit(
             })
         authorization_id = auth.id
 
+    # ENFORCE COMMENT POLICY
+    from app.services.settings import get_setting
+    try:
+        threshold = int(get_setting(db, "comment_threshold_minutes"))
+    except (ValueError, TypeError):
+        threshold = 30
+    
+    diff_minutes = abs((now - declared_time).total_seconds()) / 60
+    if diff_minutes > threshold and not comments.strip():
+        return templates.TemplateResponse("time_entry.html", {
+            "request": request,
+            "employee": employee,
+            "entry_type": "check_in",
+            "now": now,
+            "today": today,
+            "error": f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
+        })
+
     entry = TimeEntry(
         employee_id=employee.id,
         date=today,
@@ -119,6 +145,19 @@ async def checkin_submit(
         },
         ip_address=request.client.host if request.client else "",
     )
+
+    # TRIGGER POLICY ALERT EMAIL IF THRESHOLD EXCEEDED
+    from app.services.settings import get_setting
+    if diff_minutes > threshold and get_setting(db, "manager_policy_alert_enabled") == "true":
+        import threading
+        from app.services.email import send_policy_violation_email
+        managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+        mgr_emails = [m.email for m in managers if m.email]
+        threading.Thread(
+            target=send_policy_violation_email,
+            args=(employee.name, employee.email, mgr_emails, "check_in", declared_time, now, threshold, comments),
+            daemon=True,
+        ).start()
 
     # Send check-in confirmation email (non-blocking, if enabled)
     from app.services.settings import get_bool_setting
@@ -183,6 +222,13 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     now = datetime.now()
+    # Get policy threshold
+    from app.services.settings import get_setting
+    try:
+        threshold = int(get_setting(db, "comment_threshold_minutes"))
+    except (ValueError, TypeError):
+        threshold = 30
+
     return templates.TemplateResponse("time_entry.html", {
         "request": request,
         "employee": employee,
@@ -190,6 +236,7 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         "now": now,
         "today": date.today(),
         "error": None,
+        "comment_threshold": threshold,
     })
 
 
@@ -216,6 +263,24 @@ async def checkout_submit(
 
     loc_type = LocationType(location_type) if location_type in [e.value for e in LocationType] else LocationType.office
     is_remote = loc_type in (LocationType.remote, LocationType.offsite)
+
+    # ENFORCE COMMENT POLICY
+    from app.services.settings import get_setting
+    try:
+        threshold = int(get_setting(db, "comment_threshold_minutes"))
+    except (ValueError, TypeError):
+        threshold = 30
+    
+    diff_minutes = abs((now - declared_time).total_seconds()) / 60
+    if diff_minutes > threshold and not comments.strip():
+        return templates.TemplateResponse("time_entry.html", {
+            "request": request,
+            "employee": employee,
+            "entry_type": "check_out",
+            "now": now,
+            "today": today,
+            "error": f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
+        })
 
     entry = TimeEntry(
         employee_id=employee.id,
@@ -244,6 +309,19 @@ async def checkout_submit(
         },
         ip_address=request.client.host if request.client else "",
     )
+
+    # TRIGGER POLICY ALERT EMAIL IF THRESHOLD EXCEEDED
+    from app.services.settings import get_setting
+    if diff_minutes > threshold and get_setting(db, "manager_policy_alert_enabled") == "true":
+        import threading
+        from app.services.email import send_policy_violation_email
+        managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+        mgr_emails = [m.email for m in managers if m.email]
+        threading.Thread(
+            target=send_policy_violation_email,
+            args=(employee.name, employee.email, mgr_emails, "check_out", declared_time, now, threshold, comments),
+            daemon=True,
+        ).start()
 
     return RedirectResponse(url="/", status_code=303)
 
@@ -541,6 +619,25 @@ async def past_day_submit(
             status_code=303,
         )
 
+    # CAPTURE OLD STATE BEFORE DELETING
+    old_entries = db.query(TimeEntry).filter(
+        TimeEntry.employee_id == employee.id,
+        TimeEntry.date == selected_date
+    ).order_by(TimeEntry.declared_time).all()
+    
+    old_ci = "None"
+    old_co = "None"
+    if old_entries:
+        cis = [e.declared_time.strftime("%H:%M") for e in old_entries if e.entry_type == EntryType.check_in]
+        cos = [e.declared_time.strftime("%H:%M") for e in old_entries if e.entry_type == EntryType.check_out]
+        old_ci = ", ".join(cis) if cis else "None"
+        old_co = ", ".join(cos) if cos else "None"
+
+    # DELETE EXISTING ENTRIES FOR THIS DAY (Clean slate for past day entry)
+    db.query(TimeEntry).filter(TimeEntry.employee_id == employee.id, TimeEntry.date == selected_date).delete()
+    db.query(OffsiteEntry).filter(OffsiteEntry.employee_id == employee.id, OffsiteEntry.date == selected_date).delete()
+    db.flush()
+
     # Create check-in entry
     ci = TimeEntry(
         employee_id=employee.id,
@@ -610,6 +707,31 @@ async def past_day_submit(
         },
         ip_address=request.client.host if request.client else "",
     )
+
+    # Notify managers of past day modification
+    import threading
+    from app.services.email import send_past_day_modification_email
+    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+    mgr_emails = [m.email for m in managers if m.email]
+    
+    threading.Thread(
+        target=send_past_day_modification_email,
+        args=(
+            employee.name, 
+            employee.name, 
+            str(selected_date), 
+            "Manual Past Day Entry", 
+            comments, 
+            mgr_emails,
+            [
+                ("Check-In Time", f"{old_ci} → {checkin_hour:02d}:{checkin_minute:02d}"),
+                ("Check-Out Time", f"{old_co} → {checkout_hour:02d}:{checkout_minute:02d}"),
+                ("Lunch EOD", "Enabled" if lunch_end_of_day else "Disabled"),
+                ("Offsite", offsite_location.strip() or "None")
+            ]
+        ),
+        daemon=True,
+    ).start()
 
     return RedirectResponse(url="/", status_code=303)
 
@@ -723,7 +845,10 @@ async def partial_leave_submit(
     if leave_type not in ("vacation", "sick"):
         leave_type = "vacation"
 
-    # Update daily summary with PTO (leave_approved stays False — needs manager approval)
+    # Update daily summary with PTO
+    old_hrs = summary.leave_hours if summary else 0.0
+    old_type = summary.leave_type.value if summary and summary.leave_type else "None"
+
     update_daily_summary(
         db, employee.id, selected_date,
         leave_hours=leave_hours,
@@ -740,5 +865,29 @@ async def partial_leave_submit(
         },
         ip_address=request.client.host if request.client else "",
     )
+
+    # Notify managers of past day PTO adjustment
+    if selected_date < date.today():
+        import threading
+        from app.services.email import send_past_day_modification_email
+        managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+        mgr_emails = [m.email for m in managers if m.email]
+        
+        threading.Thread(
+            target=send_past_day_modification_email,
+            args=(
+                employee.name, 
+                employee.name, 
+                str(selected_date), 
+                f"PTO Adjustment", 
+                "Manual adjustment via PTO form", 
+                mgr_emails,
+                [
+                    ("Leave Type", f"{old_type.capitalize()} → {leave_type.capitalize()}"),
+                    ("Hours Added", f"{old_hrs}h → {leave_hours}h")
+                ]
+            ),
+            daemon=True,
+        ).start()
 
     return RedirectResponse(url="/", status_code=303)

@@ -109,7 +109,74 @@
                         </div>
                     </div>
                 </label>
+
+                <!-- Manager Policy Alert -->
+                <label
+                    class="flex items-center justify-between p-4 rounded-xl bg-surface-900/40 border border-white/5 hover:border-white/10 transition-all cursor-pointer group"
+                    for="manager_policy_alert_enabled">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-10 h-10 rounded-xl bg-danger-500/10 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm group-hover:text-white transition-colors">
+                                Manager Policy Violation Alert</p>
+                            <p class="text-xs text-gray-500">{{ settings.manager_policy_alert_enabled.description }}</p>
+                        </div>
+                    </div>
+                    <div class="relative flex-shrink-0">
+                        <input type="checkbox" id="manager_policy_alert_enabled" name="manager_policy_alert_enabled"
+                            value="on" class="sr-only peer" {% if settings.manager_policy_alert_enabled.enabled
+                            %}checked{% endif %}>
+                        <div
+                            class="w-11 h-6 bg-surface-900/80 border border-white/10 rounded-full peer-checked:bg-primary-600 peer-checked:border-primary-500/30 transition-all">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-5 h-5 bg-gray-500 rounded-full peer-checked:translate-x-5 peer-checked:bg-white transition-all shadow-lg">
+                        </div>
+                    </div>
+                </label>
+
+                <!-- Email Format -->
+                <div
+                    class="flex items-center justify-between p-4 rounded-xl bg-surface-900/40 border border-white/5 group transition-all">
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm group-hover:text-white transition-colors">Email
+                                Content Type</p>
+                            <p class="text-xs text-gray-500">{{ settings.email_format.description }}</p>
+                        </div>
+                    </div>
+                    <div class="flex bg-black/40 p-1.5 rounded-xl border border-white/10 items-center">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="email_format" value="html" class="sr-only peer" {% if
+                                settings.email_format.value=='html' %}checked{% endif %}>
+                            <div
+                                class="px-5 py-2 rounded-lg text-xs font-bold text-gray-400 peer-checked:bg-primary-600 peer-checked:text-white peer-checked:shadow-lg peer-checked:shadow-primary-500/30 transition-all uppercase tracking-wider">
+                                HTML</div>
+                        </label>
+                        <label class="cursor-pointer ml-1">
+                            <input type="radio" name="email_format" value="text" class="sr-only peer" {% if
+                                settings.email_format.value=='text' %}checked{% endif %}>
+                            <div
+                                class="px-5 py-2 rounded-lg text-xs font-bold text-gray-400 peer-checked:bg-primary-600 peer-checked:text-white peer-checked:shadow-lg peer-checked:shadow-primary-500/30 transition-all uppercase tracking-wider">
+                                TEXT</div>
+                        </label>
+                    </div>
+                </div>
             </div>
+
         </div>
 
         <!-- Touchscreen Features -->
@@ -186,18 +253,61 @@
                     </div>
                 </label>
             </div>
-        </div>
+            <!-- Policy Enforcement -->
+            <div class="glass-card p-6 mb-6">
+                <h2 class="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    Policy Enforcement
+                </h2>
+                <p class="text-xs text-gray-500 mb-5">Configure mandatory fields and validation thresholds</p>
 
-        <!-- Save Button -->
-        <button type="submit" id="btn-save-config"
-            class="w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]">
-            <span class="relative z-10 flex items-center justify-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                Save Configuration
-            </span>
-        </button>
+                <div class="space-y-4">
+                    <!-- Comment Threshold -->
+                    <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 012 2h-3l-4 4z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-200 text-sm">Comment Enforcement Threshold</p>
+                                    <p class="text-xs text-gray-500">Require comments if set time and actual time differ
+                                        by more than X minutes</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 pl-13">
+                            <div class="relative flex-1 max-w-[200px]">
+                                <input type="number" name="comment_threshold_minutes" id="comment_threshold_minutes"
+                                    value="{{ settings.comment_threshold_minutes.value }}"
+                                    class="form-input text-lg font-mono py-2 text-center" min="0" max="1440">
+                                <div
+                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
+                                    Minutes</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Button -->
+            <button type="submit" id="btn-save-config"
+                class="w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]">
+                <span class="relative z-10 flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Configuration
+                </span>
+            </button>
     </form>
 </div>
 {% endblock %}

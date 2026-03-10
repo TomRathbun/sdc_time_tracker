@@ -154,11 +154,58 @@
 
             <!-- Comments -->
             <div class="mb-8">
-                <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">Comments <span
-                        class="text-gray-600">(optional)</span></label>
+                <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">
+                    Comments
+                    <span id="comment-optional-hint" class="text-gray-600">(optional)</span>
+                    <span id="comment-required-hint" class="text-danger-500 hidden">(mandatory due to time difference)</span>
+                </label>
                 <textarea name="comments" id="comments" rows="2" class="form-input resize-none"
                     placeholder="Any notes about this entry..."></textarea>
+                <p id="threshold-warning" class="text-xs text-warning-400 mt-2 hidden">
+                    Note: A comment is required because your set time differs from the current time by more than {{ comment_threshold }} minutes.
+                </p>
             </div>
+
+            <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    const hourSelect = document.getElementById('declared_hour');
+                    const minuteSelect = document.getElementById('declared_minute');
+                    const optionalHint = document.getElementById('comment-optional-hint');
+                    const requiredHint = document.getElementById('comment-required-hint');
+                    const warning = document.getElementById('threshold-warning');
+                    const commentsArea = document.getElementById('comments');
+                    const threshold = {{ comment_threshold }};
+                    
+                    const now = new Date();
+                    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+
+                    function updateCommentStatus() {
+                        const selectedHour = parseInt(hourSelect.value);
+                        const selectedMinute = parseInt(minuteSelect.value);
+                        const selectedTotalMinutes = selectedHour * 60 + selectedMinute;
+                        
+                        const diff = Math.abs(currentTotalMinutes - selectedTotalMinutes);
+                        
+                        if (diff > threshold) {
+                            optionalHint.classList.add('hidden');
+                            requiredHint.classList.remove('hidden');
+                            warning.classList.remove('hidden');
+                            commentsArea.setAttribute('required', 'required');
+                            commentsArea.classList.add('border-warning-500/50');
+                        } else {
+                            optionalHint.classList.remove('hidden');
+                            requiredHint.classList.add('hidden');
+                            warning.classList.add('hidden');
+                            commentsArea.removeAttribute('required');
+                            commentsArea.classList.remove('border-warning-500/50');
+                        }
+                    }
+
+                    hourSelect.addEventListener('change', updateCommentStatus);
+                    minuteSelect.addEventListener('change', updateCommentStatus);
+                    updateCommentStatus();
+                });
+            </script>
 
             <!-- Submit -->
             <button type="submit" id="btn-submit-entry" class="w-full btn-primary py-4 text-lg">

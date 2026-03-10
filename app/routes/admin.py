@@ -53,7 +53,7 @@ async def add_employee(
 ):
     """Add a new employee."""
     employee = get_current_employee(request, db)
-    if not employee or employee.role != Role.manager:
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
     new_emp = Employee(
@@ -124,7 +124,7 @@ async def toggle_employee(
 ):
     """Activate/deactivate an employee."""
     employee = get_current_employee(request, db)
-    if not employee or employee.role != Role.manager:
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
     target = db.query(Employee).filter(Employee.id == emp_id).first()
@@ -156,7 +156,7 @@ async def edit_employee(
 ):
     """Edit an employee's details."""
     employee = get_current_employee(request, db)
-    if not employee or employee.role != Role.manager:
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
     target = db.query(Employee).filter(Employee.id == emp_id).first()
@@ -195,7 +195,7 @@ async def delete_employee(
 ):
     """Delete an employee (only if they have no time entries)."""
     employee = get_current_employee(request, db)
-    if not employee or employee.role != Role.manager:
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
     target = db.query(Employee).filter(Employee.id == emp_id).first()
@@ -399,6 +399,9 @@ async def approve_lunch(
     if not summary:
         return RedirectResponse(url=f"/admin/timesheet?week={week}", status_code=303)
 
+    # Capture stats for audit before update
+    old_total = summary.total_hours
+
     # Approve and recalculate (update_daily_summary will add +1h)
     update_daily_summary(
         db, summary.employee_id, summary.date,
@@ -417,6 +420,30 @@ async def approve_lunch(
     )
 
     redirect_url = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
+    
+    # Notify managers of administrative modification
+    import threading
+    from app.services.email import send_past_day_modification_email
+    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+    mgr_emails = [m.email for m in managers if m.email]
+    
+    target_employee = db.query(Employee).filter(Employee.id == summary.employee_id).first()
+    emp_name = target_employee.name if target_employee else "Unknown Employee"
+    
+    threading.Thread(
+        target=send_past_day_modification_email,
+        args=(
+            employee.name, emp_name, str(summary.date), 
+            "Approve Lunch EOD Deviation", "Approved via timesheet", 
+            mgr_emails,
+            [
+                ("Status", "Pending → Approved"),
+                ("Total Worked", f"{old_total}h → {old_total + 1.0}h")
+            ]
+        ),
+        daemon=True,
+    ).start()
+
     return RedirectResponse(url=redirect_url, status_code=303)
 
 
@@ -435,6 +462,11 @@ async def approve_pto(
     summary = db.query(DailySummary).filter(DailySummary.id == summary_id).first()
     if not summary:
         return RedirectResponse(url=f"/admin/timesheet?week={week}", status_code=303)
+
+    # Capture stats for audit
+    old_approved = summary.leave_approved
+    hrs = summary.leave_hours
+    ltype = summary.leave_type.value if summary.leave_type else "PTO"
 
     # Approve PTO and recalculate compliance
     update_daily_summary(
@@ -456,6 +488,30 @@ async def approve_pto(
     )
 
     redirect_url = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
+
+    # Notify managers of administrative modification
+    import threading
+    from app.services.email import send_past_day_modification_email
+    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+    mgr_emails = [m.email for m in managers if m.email]
+    
+    target_employee = db.query(Employee).filter(Employee.id == summary.employee_id).first()
+    emp_name = target_employee.name if target_employee else "Unknown Employee"
+    
+    threading.Thread(
+        target=send_past_day_modification_email,
+        args=(
+            employee.name, emp_name, str(summary.date), 
+            "Approve PTO Request", "Approved via timesheet", 
+            mgr_emails,
+            [
+                ("Adjustment", f"{hrs}h {ltype.capitalize()}"),
+                ("Approval Status", "Pending → Approved")
+            ]
+        ),
+        daemon=True,
+    ).start()
+
     return RedirectResponse(url=redirect_url, status_code=303)
 
 
@@ -490,9 +546,14 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
 
     form = await request.form()
 
-    for key in FEATURE_DEFAULTS:
-        # Checkbox: present in form → true, absent → false
-        value = "true" if form.get(key) else "false"
+    for key, info in FEATURE_DEFAULTS.items():
+        # Check if the existing value is a "boolean" string
+        if info["value"] in ("true", "false"):
+            # Checkbox: present in form → true, absent → false
+            value = "true" if form.get(key) else "false"
+        else:
+            # Regular text/number input
+            value = form.get(key, info["value"])
         set_setting(db, key, value)
 
     log_action(

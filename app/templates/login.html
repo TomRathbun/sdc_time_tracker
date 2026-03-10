@@ -205,7 +205,7 @@
                                     </svg>
                                 </div>
                                 <input type="password" name="pin" id="pin" inputmode="numeric" pattern="[0-9]*"
-                                    autofocus required data-numpad
+                                    autofocus required data-numpad autocomplete="off"
                                     class="w-full bg-surface-900/50 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
                                     placeholder="••••" maxlength="8" oninput="updateRegularLoginButton()">
                             </div>
@@ -259,6 +259,7 @@
 <!-- ═══ Quick Action PIN Modal ═══ -->
 <div id="quick-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm"
     onclick="if(event.target===this) closeQuickModal()">
+
     <div class="bg-surface-800/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl w-full max-w-sm mx-4 transform transition-all duration-200 scale-95 opacity-0"
         id="quick-modal-content">
 
@@ -282,6 +283,7 @@
         <div class="mb-4">
             <label for="modal-pin" class="block text-xs text-gray-500 mb-1.5">Enter your PIN</label>
             <input type="password" id="modal-pin" inputmode="numeric" pattern="[0-9]*" maxlength="8" data-numpad
+                autocomplete="off"
                 class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
                 placeholder="••••"
                 onkeydown="if(event.key==='Enter' && !document.getElementById('modal-submit').disabled) submitQuickAction()"
@@ -316,6 +318,32 @@
             <span id="modal-btn-text">Enter PIN</span>
         </button>
     </div>
+</div>
+<!-- ═══ Global Weapon Spotlight Panel ═══ -->
+<div class="weapon-panel {% if weapon %}visible{% endif %}" id="global-weapon-panel">
+    <div class="osk-header">
+        <span class="osk-title">Innovation Spotlight</span>
+    </div>
+    {% if weapon %}
+    <img id="weapon-image" src="{{ weapon.image }}" alt="{{ weapon.name }}" class="weapon-panel-img">
+    <div class="weapon-panel-tag">🚀 Lockheed Martin Technology</div>
+    <div id="weapon-name" class="weapon-panel-name">{{ weapon.name }}</div>
+    <div id="weapon-summary" class="weapon-panel-summary">{{ weapon.summary }}</div>
+    <div class="weapon-panel-footer">
+        <a id="weapon-link" href="{{ weapon.link }}" target="_blank" class="weapon-panel-link">Explore Technology
+            &rarr;</a>
+        <a href="/innovations" class="weapon-panel-all">View All Innovations</a>
+    </div>
+    {% else %}
+    <img id="weapon-image" src="" alt="Weapon" class="weapon-panel-img hidden">
+    <div class="weapon-panel-tag">🚀 Lockheed Martin Technology</div>
+    <div id="weapon-name" class="weapon-panel-name">Loading...</div>
+    <div id="weapon-summary" class="weapon-panel-summary">Fetching latest updates...</div>
+    <div class="weapon-panel-footer">
+        <a id="weapon-link" href="#" target="_blank" class="weapon-panel-link">Explore Technology &rarr;</a>
+        <a href="/innovations" class="weapon-panel-all">View All Innovations</a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
@@ -400,6 +428,22 @@
             subtitle.textContent = empName;
         }
 
+        // Fetch random weapon for spotlight
+        const weaponPanel = document.getElementById('global-weapon-panel');
+        fetch('/api/weapons/random')
+            .then(r => r.json())
+            .then(w => {
+                if (w.error) return;
+                const img = document.getElementById('weapon-image');
+                img.src = w.image;
+                img.classList.remove('hidden');
+                document.getElementById('weapon-name').textContent = w.name;
+                document.getElementById('weapon-summary').textContent = w.summary;
+                document.getElementById('weapon-link').href = w.link;
+                weaponPanel.classList.add('visible');
+            })
+            .catch(err => console.error('Failed to load weapon:', err));
+
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         requestAnimationFrame(function () {
@@ -413,6 +457,7 @@
     function closeQuickModal() {
         var modal = document.getElementById('quick-modal');
         var content = document.getElementById('quick-modal-content');
+        // We keep the innovation spotlight visible
         content.classList.remove('scale-100', 'opacity-100');
         content.classList.add('scale-95', 'opacity-0');
         setTimeout(function () {

@@ -97,53 +97,70 @@ def _is_on_leave_today(db: Session, emp_id: int) -> bool:
 
 
 def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_hour):
-    """Sort employee list intelligently based on time of day and status.
+    """Sort employee list intelligently.
 
     Tiers (lower = higher in list):
-      0 — Needs action: sort by avg check-in (AM) or check-out (PM) time
-      1 — Already acted today (checked in/out)
-      2 — On leave
-      3 — Supervisors (don't track time, just need login access for reports)
+      0 — Not checked in today: sort by avg check-in time
+      1 — Already checked in today: sort by actual check-in time today (earliest first)
+      2 — Already checked out today: sort by actual check-in time today
+      3 — On leave
+      4 — Supervisors (don't track time)
     """
-    LARGE_VAL = 9999  # push to bottom
+    LARGE_VAL = 9999
 
     def sort_key(emp):
         eid = emp.id
-        status = status_map.get(eid, {}).get("status", "not_started")
+        status_info = status_map.get(eid, {})
+        status = status_info.get("status", "not_started")
         on_leave = on_leave_map.get(eid, False)
         avg = avg_times.get(eid, {})
+        actual_mins = status_info.get("minutes")
 
-        # Supervisors don't track time → always at the very bottom
+        # 1. Supervisors always at the bottom
         if emp.role.value == "supervisor":
+            return (4, LARGE_VAL, emp.name.lower())
+
+        # 2. On leave
+        if on_leave:
             return (3, LARGE_VAL, emp.name.lower())
 
-        # On leave → bottom (but above supervisors)
-        if on_leave:
-            return (2, LARGE_VAL, emp.name.lower())
-
-        if now_hour < 12:
-            # Morning: check-in mode
-            if status == "checked_in" or status == "checked_out":
-                # Already acted today → bottom (but above leave)
-                return (1, LARGE_VAL, emp.name.lower())
-            # Not started yet → sort by avg check-in time
+        # 3. Time-tracking roles
+        if status == "not_started":
+            # Tier 0: Not checked in yet. Sort by their typical (average) start time.
             avg_ci = avg.get("avg_checkin")
             return (0, avg_ci if avg_ci is not None else LARGE_VAL, emp.name.lower())
-        else:
-            # Afternoon: checkout mode
-            if status == "checked_out":
-                # Already done → bottom
-                return (1, LARGE_VAL, emp.name.lower())
-            if status == "not_started":
-                # Never checked in today → bottom (probably absent)
-                return (1, LARGE_VAL, emp.name.lower())
-            
-            # Checked in, needs checkout → sort by actual check-in time today (earliest first)
-            status_info = status_map.get(eid, {})
-            actual_ci = status_info.get("minutes")
-            return (0, actual_ci if actual_ci is not None else LARGE_VAL, emp.name.lower())
+        
+        if status == "checked_in":
+            # Tier 1: Working. Sort by when they started today.
+            return (1, actual_mins if actual_mins is not None else LARGE_VAL, emp.name.lower())
+        
+        if status == "checked_out":
+            # Tier 2: Finished.
+            return (2, actual_mins if actual_mins is not None else LARGE_VAL, emp.name.lower())
+
+        return (5, LARGE_VAL, emp.name.lower())
 
     return sorted(employees, key=sort_key)
+
+
+@router.get("/innovations", response_class=HTMLResponse)
+async def innovations_page(request: Request):
+    """Show all innovations."""
+    import os
+    import json
+    json_path = os.path.join("app", "static", "lockheed_weapons.json")
+    weapons = []
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                weapons = json.load(f)
+        except Exception:
+            pass
+    
+    return templates.TemplateResponse("innovations.html", {
+        "request": request,
+        "weapons": weapons,
+    })
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -169,7 +186,25 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
         "error": None,
         "status_map": status_map,
         "on_leave_map": on_leave_map,
+        "weapon": _get_random_weapon(),
     })
+
+
+def _get_random_weapon():
+    """Pick a random Lockheed weapon system from the static JSON."""
+    import os
+    import json
+    import random
+    json_path = os.path.join("app", "static", "lockheed_weapons.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                weapons = json.load(f)
+                if weapons:
+                    return random.choice(weapons)
+        except Exception:
+            pass
+    return None
 
 
 @router.get("/login/{employee_id}", response_class=HTMLResponse)
@@ -189,6 +224,7 @@ async def login_pin_page(employee_id: int, request: Request, db: Session = Depen
         "employees": employees,
         "selected_employee": selected,
         "error": None,
+        "weapon": _get_random_weapon(),
     })
 
 
@@ -209,6 +245,7 @@ async def login_submit(
             "employees": employees,
             "selected_employee": selected,
             "error": "Invalid PIN. Please try again.",
+            "weapon": _get_random_weapon(),
         })
 
     matched = selected

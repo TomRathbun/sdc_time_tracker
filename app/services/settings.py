@@ -25,6 +25,18 @@ FEATURE_DEFAULTS = {
         "value": "false",
         "description": "Show on-screen keyboard for comment fields (touchscreen mode)",
     },
+    "comment_threshold_minutes": {
+        "value": "30",
+        "description": "Require comments if set time and actual time differ by more than this many minutes",
+    },
+    "manager_policy_alert_enabled": {
+        "value": "false",
+        "description": "Email managers when an employee exceeds the time differential threshold",
+    },
+    "email_format": {
+        "value": "html",
+        "description": "Markup format for emails (html or text)",
+    },
 }
 
 
