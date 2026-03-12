@@ -15,6 +15,8 @@ To minimize scrolling, the login list uses a **Smart Sorting Algorithm**. Employ
 
 *(You can disable this and sort alphabetically by toggling the **A→Z** switch at the top of the list).*
 
+![Login Selection Screen](./login_selection.png)
+
 If you just need to punch in or out without viewing your dashboard, you can use the **Quick Actions** directly from this main login screen.
 1. Locate your name on the login list.
 2. Click the **green Check-In arrow** or the **red Check-Out arrow** next to your name.
