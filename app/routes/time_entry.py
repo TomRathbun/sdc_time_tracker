@@ -142,6 +142,7 @@ async def checkin_submit(
             "declared_time": str(declared_time),
             "submission_time": str(now),
             "location_type": loc_type.value,
+            "comments": comments,
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -306,6 +307,7 @@ async def checkout_submit(
             "submission_time": str(now),
             "location_type": loc_type.value,
             "lunch_end_of_day": lunch_end_of_day,
+            "comments": comments,
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -396,6 +398,7 @@ async def offsite_submit(
             "location": location,
             "start_time": str(start_time),
             "end_time": str(end_time),
+            "comments": comments,
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -497,6 +500,7 @@ async def offsite_gap_submit(
             "start_time": str(start_time),
             "end_time": str(end_time),
             "auto_detected": True,
+            "comments": comments,
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -704,6 +708,7 @@ async def past_day_submit(
             "checkout": str(checkout_time),
             "lunch_end_of_day": lunch_end_of_day,
             "offsite_location": offsite_location.strip() or None,
+            "comments": comments,
         },
         ip_address=request.client.host if request.client else "",
     )

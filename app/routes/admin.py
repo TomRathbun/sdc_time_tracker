@@ -1,6 +1,6 @@
 """Admin routes — user management, remote authorizations."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, time
 
 from fastapi import APIRouter, Request, Depends, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,6 +12,7 @@ from app.auth import get_current_employee, hash_pin
 from app.models import (
     Employee, Role, RemoteAuthorization, AuthorizationStatus,
     DailySummary, TimeEntry, EntryType, LeaveRequest, LeaveStatus,
+    OffsiteEntry,
 )
 from app.services.audit import log_action
 from app.services.time_calc import get_target_hours, update_daily_summary
@@ -271,6 +272,23 @@ async def team_timesheet(
     # Get all active employees
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
 
+    # Pre-fetch all entries for these employees for the week
+    all_emp_ids = [e.id for e in employees]
+    all_week_entries = db.query(TimeEntry).filter(
+        TimeEntry.employee_id.in_(all_emp_ids),
+        TimeEntry.date >= week_start,
+        TimeEntry.date <= week_end
+    ).all()
+    
+    # Organize entries by [employee_id][date]
+    entry_lookup = {}
+    for e in all_week_entries:
+        if e.employee_id not in entry_lookup:
+            entry_lookup[e.employee_id] = {}
+        if e.date not in entry_lookup[e.employee_id]:
+            entry_lookup[e.employee_id][e.date] = []
+        entry_lookup[e.employee_id][e.date].append(e)
+
     # Build grid: employee rows × day columns
     rows = []
     for emp in employees:
@@ -281,19 +299,40 @@ async def team_timesheet(
         ).all()
         summary_map = {s.date: s for s in summaries}
 
-        # Check for approved leave days
+        # Check-in status for "Live" view if week is current
+        today_entry = None
+        if is_current_week or week_start <= today <= week_end:
+            today_entry = db.query(TimeEntry).filter(
+                TimeEntry.employee_id == emp.id,
+                TimeEntry.date == today
+            ).order_by(TimeEntry.declared_time.desc()).first()
+            
+            # Get all entries for today to calculate live hours
+            today_time_entries = db.query(TimeEntry).filter(
+                TimeEntry.employee_id == emp.id,
+                TimeEntry.date == today
+            ).all()
+            today_offsite_entries = db.query(OffsiteEntry).filter(
+                OffsiteEntry.employee_id == emp.id,
+                OffsiteEntry.date == today
+            ).all()
+
+        # Check for approved or pending leave days
         leaves = db.query(LeaveRequest).filter(
             LeaveRequest.employee_id == emp.id,
-            LeaveRequest.status == LeaveStatus.approved,
+            LeaveRequest.status.in_([LeaveStatus.approved, LeaveStatus.pending]),
             LeaveRequest.start_date <= week_end,
             LeaveRequest.end_date >= week_start,
         ).all()
-        leave_dates = set()
-        for leave in leaves:
-            d = max(leave.start_date, week_start)
-            while d <= min(leave.end_date, week_end):
-                leave_dates.add(d)
-                d += timedelta(days=1)
+        
+        leave_map = {} # date -> LeaveRequest
+        for l in leaves:
+            d_curr = max(l.start_date, week_start)
+            while d_curr <= min(l.end_date, week_end):
+                # Approved takes priority in the map
+                if d_curr not in leave_map or l.status == LeaveStatus.approved:
+                    leave_map[d_curr] = l
+                d_curr += timedelta(days=1)
 
         day_cells = []
         week_total = 0.0
@@ -302,23 +341,55 @@ async def team_timesheet(
             d = day_info["date"]
             s = summary_map.get(d)
             target = day_info["target"]
-            is_leave = d in leave_dates
+            l_req = leave_map.get(d)
+            is_leave_approved = (l_req and l_req.status == LeaveStatus.approved)
+            is_leave_pending = (l_req and l_req.status == LeaveStatus.pending)
 
             worked = s.total_hours if s else 0.0
+            
+            # Live tracking for today
+            is_in = False
+            live_worked = worked
+            live_base_hours = worked
+            last_checkin_iso = None
+            if d == today:
+                is_in = (today_entry and today_entry.entry_type == EntryType.check_in)
+                if is_in:
+                    # Calculate live elapsed time
+                    from app.services.time_calc import calculate_daily_hours
+                    # Hours from COMPLETED sessions and offsite entries
+                    live_base_hours = calculate_daily_hours(today_time_entries, today_offsite_entries)
+                    
+                    # Add current session for server-side display fallback
+                    now = datetime.now()
+                    session_delta = (now - today_entry.declared_time).total_seconds() / 3600.0
+                    live_worked = round(live_base_hours + max(0, session_delta), 2)
+                    last_checkin_iso = today_entry.declared_time.isoformat()
+                else:
+                    live_base_hours = worked
+                    last_checkin_iso = None
+            
             leave_hrs = s.leave_hours if s else 0.0
-            leave_approved_flag = s.leave_approved if s else False
-            leave_type_val = s.leave_type.value if s and s.leave_type else None
-            compliant = s.is_compliant if s else False
+            
+            # For full-day leave requests, we treat the whole day as target hours for display/compliance
+            if (is_leave_approved or is_leave_pending) and leave_hrs <= 0.0:
+                leave_hrs = target
+                
+            leave_approved_flag = s.leave_approved if s else is_leave_approved
+            leave_type_val = s.leave_type.value if s and s.leave_type else (l_req.leave_type.value if l_req else None)
+            
+            compliant = s.is_compliant if s else ((is_leave_approved or is_in) and (live_worked + leave_hrs) >= target)
             lunch_pending = (s.lunch_end_of_day and not s.lunch_approved) if s else False
             lunch_approved_flag = (s.lunch_end_of_day and s.lunch_approved) if s else False
-            pto_pending = (leave_hrs > 0 and not leave_approved_flag)
-            pto_approved = (leave_hrs > 0 and leave_approved_flag)
+            
+            pto_pending = (leave_hrs > 0 and not leave_approved_flag) or is_leave_pending
+            pto_approved = (leave_hrs > 0 and leave_approved_flag) or is_leave_approved
 
             # Effective total: only include approved PTO
             approved_leave = leave_hrs if leave_approved_flag else 0.0
-            effective = worked + approved_leave
-            week_total += effective
-            if not is_leave:
+            effective = live_worked + approved_leave
+            week_total = round(week_total + effective, 2)
+            if not is_leave_approved:
                 week_target += target
 
             # PTO type label
@@ -333,7 +404,7 @@ async def team_timesheet(
                 status = "lunch_pending"
             elif pto_pending:
                 status = "pto_pending"
-            elif is_leave:
+            elif is_leave_approved:
                 status = "leave"
             elif d > today:
                 status = "future"
@@ -344,20 +415,44 @@ async def team_timesheet(
             else:
                 status = "partial"
 
+            # Calculate punctuality dots
+            day_entries = entry_lookup.get(emp.id, {}).get(d, [])
+            check_ins = [e for e in day_entries if e.entry_type == EntryType.check_in]
+            check_outs = [e for e in day_entries if e.entry_type == EntryType.check_out]
+
+            ci_dot = "empty"
+            if check_ins:
+                first_ci = min(e.declared_time for e in check_ins)
+                ci_dot = "green" if first_ci.time() <= time(8, 0) else "red"
+            
+            co_dot = "empty"
+            if check_outs:
+                last_co = max(e.declared_time for e in check_outs)
+                co_dot = "green" if last_co.time() <= time(17, 0) else "red"
+
             day_cells.append({
                 "date": d,
                 "worked": worked,
+                "is_in": is_in,
+                "live_worked": live_worked,
+                "live_base_hours": live_base_hours if is_in else None,
+                "last_checkin_iso": last_checkin_iso,
+                "remaining": round(max(0, target - live_worked - approved_leave), 2),
+                "ci_dot": ci_dot,
+                "co_dot": co_dot,
                 "leave_hours": leave_hrs,
+                "display_leave_hours": leave_hrs if pto_pending or pto_approved else 0.0,
                 "leave_type_label": leave_type_label,
                 "pto_pending": pto_pending,
                 "pto_approved": pto_approved,
                 "effective": round(effective, 2),
                 "target": target,
                 "status": status,
-                "is_leave": is_leave,
+                "is_leave": is_leave_approved,
                 "lunch_pending": lunch_pending,
                 "lunch_approved": lunch_approved_flag,
                 "summary_id": s.id if s else None,
+                "leave_request_id": l_req.id if is_leave_pending else None,
             })
 
         rows.append({
@@ -512,6 +607,37 @@ async def approve_pto(
         daemon=True,
     ).start()
 
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.post("/admin/approve-leave-request")
+async def admin_approve_leave_request(
+    request: Request,
+    leave_id: int = Form(...),
+    week: str = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Approve a full-day leave request from the timesheet."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    leave = db.query(LeaveRequest).filter(LeaveRequest.id == leave_id).first()
+    if leave and leave.status == LeaveStatus.pending:
+        old_status = leave.status.value
+        leave.status = LeaveStatus.approved
+        leave.approved_by = employee.id
+        db.commit()
+
+        log_action(
+            db, action="approve_leave_admin", entity_type="LeaveRequest",
+            entity_id=leave.id, employee_id=employee.id,
+            old_values={"status": old_status},
+            new_values={"status": "approved"},
+            ip_address=request.client.host if request.client else "",
+        )
+
+    redirect_url = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
     return RedirectResponse(url=redirect_url, status_code=303)
 
 

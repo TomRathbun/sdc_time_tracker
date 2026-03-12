@@ -40,7 +40,7 @@ async def reports_page(request: Request, db: Session = Depends(get_db)):
 @router.get("/reports/compliance", response_class=HTMLResponse)
 async def compliance_report(
     request: Request,
-    employee_id: int = Query(None),
+    employee_id: str = Query(None),
     start_date: str = Query(None),
     end_date: str = Query(None),
     db: Session = Depends(get_db),
@@ -53,36 +53,44 @@ async def compliance_report(
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
 
     report_data = None
-    if employee_id and start_date and end_date:
+    if employee_id and employee_id.isdigit():
+        # Default handling
+        if not end_date:
+            end_date = date.today().isoformat()
+        if not start_date:
+            # Default to 1 week ago if no start date provided
+            start_dt = date.fromisoformat(end_date) - timedelta(days=7)
+            start_date = start_dt.isoformat()
+
         s_date = date.fromisoformat(start_date)
         e_date = date.fromisoformat(end_date)
-        target_emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        target_emp = db.query(Employee).filter(Employee.id == int(employee_id)).first()
 
         if target_emp:
             # Get daily summaries for the period
             summaries = db.query(DailySummary).filter(
-                DailySummary.employee_id == employee_id,
+                DailySummary.employee_id == int(employee_id),
                 DailySummary.date >= s_date,
                 DailySummary.date <= e_date,
             ).order_by(DailySummary.date).all()
 
             # Get time entries for the period
             entries = db.query(TimeEntry).filter(
-                TimeEntry.employee_id == employee_id,
+                TimeEntry.employee_id == int(employee_id),
                 TimeEntry.date >= s_date,
                 TimeEntry.date <= e_date,
             ).order_by(TimeEntry.date, TimeEntry.declared_time).all()
 
             # Get offsite entries
             offsite = db.query(OffsiteEntry).filter(
-                OffsiteEntry.employee_id == employee_id,
+                OffsiteEntry.employee_id == int(employee_id),
                 OffsiteEntry.date >= s_date,
                 OffsiteEntry.date <= e_date,
             ).order_by(OffsiteEntry.date, OffsiteEntry.start_time).all()
 
             # Get leave days
             leaves = db.query(LeaveRequest).filter(
-                LeaveRequest.employee_id == employee_id,
+                LeaveRequest.employee_id == int(employee_id),
                 LeaveRequest.status == LeaveStatus.approved,
                 LeaveRequest.start_date <= e_date,
                 LeaveRequest.end_date >= s_date,
@@ -243,7 +251,7 @@ async def export_excel(
 @router.get("/audit", response_class=HTMLResponse)
 async def audit_page(
     request: Request,
-    employee_id: int = Query(None),
+    employee_id: str = Query(None),
     start_date: str = Query(None),
     end_date: str = Query(None),
     db: Session = Depends(get_db),
@@ -257,8 +265,8 @@ async def audit_page(
 
     query = db.query(AuditLog).order_by(AuditLog.timestamp.desc())
 
-    if employee_id:
-        query = query.filter(AuditLog.employee_id == employee_id)
+    if employee_id and employee_id.isdigit():
+        query = query.filter(AuditLog.employee_id == int(employee_id))
     if start_date:
         s = datetime.fromisoformat(start_date)
         query = query.filter(AuditLog.timestamp >= s)

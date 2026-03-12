@@ -1,5 +1,52 @@
 {% extends "base.html" %}
 {% block title %}Audit Trail — SDC Time Tracker{% endblock %}
+{% block head %}
+<!-- Flatpickr for premium Date/Time pickers -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<style>
+    .flatpickr-input {
+        background: rgba(2, 6, 23, 0.5) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 0.75rem !important;
+        color: white !important;
+    }
+
+    .flatpickr-calendar {
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .flatpickr-day.selected {
+        background: #6366f1 !important;
+    }
+
+    /* Hover Bubble Styles */
+    #hover-bubble {
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        z-index: 1000;
+        filter: drop-shadow(0 20px 50px rgba(0, 0, 0, 0.5));
+    }
+
+    #hover-bubble.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    .comment-highlight {
+        color: #38bdf8;
+        font-weight: 700;
+        border-left: 2px solid #38bdf8;
+        padding-left: 8px;
+        margin: 4px 0;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto">
@@ -10,10 +57,11 @@
 
     <!-- Filter -->
     <div class="glass-card p-6 mb-6">
-        <form method="GET" action="/audit" id="audit-filter-form" class="flex flex-wrap items-end gap-4">
-            <div class="flex-1 min-w-[180px]">
-                <label for="audit-employee" class="block text-xs text-gray-500 mb-1">Employee</label>
-                <select name="employee_id" id="audit-employee" class="form-select">
+        <form method="GET" action="/audit" id="audit-filter-form" class="flex flex-wrap items-end gap-6">
+            <div class="flex-1 min-w-[200px]">
+                <label for="audit-employee"
+                    class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Employee</label>
+                <select name="employee_id" id="audit-employee" class="form-select border-white/10 bg-surface-900/50">
                     <option value="">All employees</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if selected_employee_id and selected_employee_id|int==emp.id
@@ -21,21 +69,30 @@
                     {% endfor %}
                 </select>
             </div>
-            <div>
-                <label for="audit-start" class="block text-xs text-gray-500 mb-1">From</label>
-                <input type="date" name="start_date" id="audit-start" class="form-input"
-                    value="{{ selected_start or '' }}">
+            <div class="w-48">
+                <label for="audit-start"
+                    class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">From</label>
+                <div class="relative">
+                    <input type="text" name="start_date" id="audit-start" data-osk-ignore readonly
+                        class="form-input border-white/10 bg-surface-900/50 cursor-pointer" placeholder="Start Date"
+                        value="{{ selected_start or '' }}">
+                </div>
             </div>
-            <div>
-                <label for="audit-end" class="block text-xs text-gray-500 mb-1">To</label>
-                <input type="date" name="end_date" id="audit-end" class="form-input" value="{{ selected_end or '' }}">
+            <div class="w-48">
+                <label for="audit-end"
+                    class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">To</label>
+                <div class="relative">
+                    <input type="text" name="end_date" id="audit-end" data-osk-ignore readonly
+                        class="form-input border-white/10 bg-surface-900/50 cursor-pointer" placeholder="End Date"
+                        value="{{ selected_end or '' }}">
+                </div>
             </div>
-            <button type="submit" id="btn-filter-audit" class="btn-primary">
+            <button type="submit" id="btn-filter-audit" class="btn-primary px-8">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                 </svg>
-                Filter
+                Filter Results
             </button>
         </form>
     </div>
@@ -56,7 +113,7 @@
                 </thead>
                 <tbody>
                     {% for log in logs %}
-                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                    <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors audit-row">
                         <td class="py-3 px-3 font-mono text-xs text-gray-300 whitespace-nowrap">{{
                             log.timestamp.strftime("%Y-%m-%d %H:%M:%S") }}</td>
                         <td class="py-3 px-3 text-gray-300">{{ log.employee.name if log.employee else "System" }}</td>
@@ -73,16 +130,19 @@
                         </td>
                         <td class="py-3 px-3 text-gray-400 text-xs">{{ log.entity_type }}{% if log.entity_id %} #{{
                             log.entity_id }}{% endif %}</td>
-                        <td class="py-3 px-3 text-xs text-gray-500 max-w-xs truncate">
-                            {% if log.new_values %}
-                            <span class="cursor-help" title="{{ log.new_values }}">{{ log.new_values | tojson |
-                                truncate(60) }}</span>
-                            {% elif log.old_values %}
-                            <span class="cursor-help" title="{{ log.old_values }}">{{ log.old_values | tojson |
-                                truncate(60) }}</span>
+                        <td class="py-3 px-3">
+                            {% if log.new_values or log.old_values %}
+                            <button onmouseenter="showBubble(this)" onmouseleave="hideBubble()"
+                                onclick="viewAuditDetails(this)"
+                                data-new='{{ log.new_values | tojson | safe if log.new_values else "{}" }}'
+                                data-old='{{ log.old_values | tojson | safe if log.old_values else "{}" }}'
+                                class="text-[10px] uppercase font-black text-primary-400 hover:text-white bg-primary-500/10 hover:bg-primary-500/30 px-3 py-1.5 rounded-lg border border-primary-500/20 transition-all hover:scale-105 active:scale-95">
+                                Metadata
+                            </button>
                             {% else %}—{% endif %}
                         </td>
-                        <td class="py-3 px-3 font-mono text-xs text-gray-600">{{ log.ip_address or "—" }}</td>
+                        <td class="py-3 px-3 font-mono text-[10px] text-gray-600 tracking-tighter">{{ log.ip_address or
+                            "—" }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -96,4 +156,189 @@
         {% endif %}
     </div>
 </div>
+
+<!-- Hover Bubble Tooltip -->
+<div id="hover-bubble"
+    class="fixed hidden max-w-sm w-max bg-surface-800/95 backdrop-blur-xl border border-white/10 rounded-xl p-4 shadow-2xl">
+    <div id="bubble-content"></div>
+</div>
+
+{% endblock %}
+
+{% block modals %}
+<!-- Audit Details Modal -->
+<div id="details-modal" class="fixed inset-0 z-[110] hidden items-center justify-center bg-black/60 backdrop-blur-sm"
+    onclick="if(event.target===this) closeDetailsModal()">
+    <div class="bg-surface-800 border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-lg mx-4">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-bold text-white uppercase tracking-widest flex items-center gap-2">
+                <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Action Metadata
+            </h3>
+            <button onclick="closeDetailsModal()" class="text-gray-500 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div id="modal-content" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            <!-- Populated by JS -->
+        </div>
+        <div class="mt-8">
+            <button onclick="closeDetailsModal()" class="w-full btn-secondary">Close</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialize Premium Date-Time Pickers
+        const auditStart = flatpickr("#audit-start", {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            time_24hr: true,
+            theme: "dark",
+            disableMobile: "true",
+            onChange: function (selectedDates, dateStr, instance) {
+                auditEnd.set("minDate", dateStr);
+            }
+        });
+        const auditEnd = flatpickr("#audit-end", {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            time_24hr: true,
+            theme: "dark",
+            disableMobile: "true"
+        });
+    });
+
+    const bubble = document.getElementById('hover-bubble');
+    const bubbleContent = document.getElementById('bubble-content');
+
+    function showBubble(btn) {
+        const rect = btn.getBoundingClientRect();
+
+        let newValues = {};
+        try {
+            newValues = JSON.parse(btn.getAttribute('data-new'));
+        } catch (e) { }
+
+        if (Object.keys(newValues).length === 0) return;
+
+        bubbleContent.innerHTML = '';
+        const miniTable = formatAuditTable(newValues, true);
+        bubbleContent.appendChild(miniTable);
+
+        bubble.classList.remove('hidden');
+
+        // Position the bubble above the button
+        const bubbleRect = bubble.getBoundingClientRect();
+        bubble.style.top = `${rect.top - bubbleRect.height - 10}px`;
+        bubble.style.left = `${rect.left + (rect.width / 2) - (bubbleRect.width / 2)}px`;
+
+        // Final adjustment if off-screen
+        const finalRect = bubble.getBoundingClientRect();
+        if (finalRect.left < 10) bubble.style.left = '10px';
+        if (finalRect.right > window.innerWidth) bubble.style.left = `${window.innerWidth - finalRect.width - 10}px`;
+
+        requestAnimationFrame(() => {
+            bubble.classList.add('visible');
+        });
+    }
+
+    function hideBubble() {
+        bubble.classList.remove('visible');
+        setTimeout(() => {
+            if (!bubble.classList.contains('visible')) {
+                bubble.classList.add('hidden');
+            }
+        }, 200);
+    }
+
+    function viewAuditDetails(btn) {
+        let newValues = {};
+        let oldValues = {};
+
+        try {
+            newValues = JSON.parse(btn.getAttribute('data-new'));
+            oldValues = JSON.parse(btn.getAttribute('data-old'));
+        } catch (e) {
+            console.error("Error parsing audit data:", e);
+        }
+
+        const modal = document.getElementById('details-modal');
+        const container = document.getElementById('modal-content');
+        container.innerHTML = '';
+
+        if (Object.keys(newValues).length > 0) {
+            const h4 = document.createElement('h4');
+            h4.className = 'text-[11px] font-bold text-primary-400 uppercase tracking-widest mb-2';
+            h4.textContent = 'Current / New State';
+            container.appendChild(h4);
+            container.appendChild(formatAuditTable(newValues));
+        }
+
+        if (Object.keys(oldValues).length > 0) {
+            const h4 = document.createElement('h4');
+            h4.className = 'text-[11px] font-bold text-amber-500/80 uppercase tracking-widest mt-6 mb-2';
+            h4.textContent = 'Previous State';
+            container.appendChild(h4);
+            container.appendChild(formatAuditTable(oldValues));
+        }
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function formatAuditTable(data, isMini = false) {
+        const table = document.createElement('table');
+        table.className = isMini
+            ? 'w-full text-[11px] border-collapse'
+            : 'w-full text-[13px] border-collapse bg-surface-900/60 rounded-xl overflow-hidden border border-white/5';
+
+        for (const [key, value] of Object.entries(data)) {
+            const tr = document.createElement('tr');
+            tr.className = isMini ? 'border-b border-white/5 last:border-0' : 'border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors';
+
+            const tdKey = document.createElement('td');
+            tdKey.className = isMini
+                ? 'py-1 pr-3 font-bold text-primary-400 uppercase tracking-tighter text-[9px]'
+                : 'py-3 px-4 font-bold text-gray-400 uppercase tracking-tighter w-1/3 text-[10px] bg-white/[0.03]';
+            tdKey.textContent = key.replace(/_/g, ' ');
+
+            const tdVal = document.createElement('td');
+            tdVal.className = isMini
+                ? 'py-1 text-gray-200 font-medium'
+                : 'py-3 px-4 text-gray-200 font-mono break-all';
+
+            // Highlight comments
+            if (key.toLowerCase() === 'comments') {
+                tdVal.classList.add('comment-highlight');
+                tdVal.textContent = value || '—';
+            } else if (value === null || value === undefined) {
+                tdVal.innerHTML = '<span class="text-gray-600 italic">null</span>';
+            } else if (typeof value === 'object') {
+                tdVal.textContent = isMini ? '{...}' : JSON.stringify(value, null, 2);
+            } else {
+                tdVal.textContent = value;
+            }
+
+            tr.appendChild(tdKey);
+            tr.appendChild(tdVal);
+            table.appendChild(tr);
+        }
+        return table;
+    }
+
+    function closeDetailsModal() {
+        const modal = document.getElementById('details-modal');
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+</script>
 {% endblock %}

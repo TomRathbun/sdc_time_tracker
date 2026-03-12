@@ -33,6 +33,7 @@
     /** Check if an element is a numeric/PIN input */
     function isNumericInput(el) {
         if (el.tagName !== 'INPUT') return false;
+        if (el.dataset.oskIgnore !== undefined) return false;
         if (el.dataset.numpad !== undefined) return true;
         if (el.classList.contains('numpad-target')) return true;
         if (el.type === 'password') return true;
@@ -44,8 +45,11 @@
 
     /** Check if an element is a text/comment input */
     function isTextInput(el) {
-        if (el.tagName === 'TEXTAREA') return true;
+        if (el.tagName === 'TEXTAREA') {
+            return el.dataset.oskIgnore === undefined;
+        }
         if (el.tagName === 'INPUT') {
+            if (el.dataset.oskIgnore !== undefined) return false;
             if (el.type === 'text' || el.type === 'search' || el.type === 'email' || el.type === 'url') {
                 // Exclude numeric inputs
                 if (isNumericInput(el)) return false;

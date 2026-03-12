@@ -241,8 +241,13 @@ async def get_random_weapon():
     import os
     import json
     import random
-    json_path = os.path.join("app", "static", "lockheed_weapons.json")
-    if not os.path.exists(json_path):
+    from pathlib import Path
+
+    # Get path relative to this file's location
+    base_dir = Path(__file__).resolve().parent.parent # app/
+    json_path = base_dir / "static" / "lockheed_weapons.json"
+
+    if not json_path.exists():
         return JSONResponse({"error": "Weapon data not found"}, status_code=404)
     
     with open(json_path, "r", encoding="utf-8") as f:

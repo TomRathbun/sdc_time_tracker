@@ -94,10 +94,9 @@ async def submit_sick_leave(
     start_date: str = Form(...),
     end_date: str = Form(...),
     comments: str = Form(""),
-    doctor_note: UploadFile = File(None),
     db: Session = Depends(get_db),
 ):
-    """Submit sick leave with optional doctor's note upload."""
+    """Submit sick leave request."""
     employee = get_current_employee(request, db)
     if not employee:
         return RedirectResponse(url="/login", status_code=303)
@@ -105,18 +104,8 @@ async def submit_sick_leave(
     s_date = date.fromisoformat(start_date)
     e_date = date.fromisoformat(end_date)
 
-    note_path = None
-    if doctor_note and doctor_note.filename:
-        # Save uploaded file
-        emp_dir = UPLOAD_DIR / str(employee.id)
-        emp_dir.mkdir(exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"sick_note_{ts}_{doctor_note.filename}"
-        file_path = emp_dir / filename
-        with open(file_path, "wb") as f:
-            content = await doctor_note.read()
-            f.write(content)
-        note_path = str(file_path)
+    if e_date < s_date:
+        return RedirectResponse(url="/leave", status_code=303)
 
     leave = LeaveRequest(
         employee_id=employee.id,
@@ -124,7 +113,6 @@ async def submit_sick_leave(
         start_date=s_date,
         end_date=e_date,
         status=LeaveStatus.pending,
-        doctor_note_path=note_path,
         comments=comments,
     )
     db.add(leave)
@@ -136,7 +124,6 @@ async def submit_sick_leave(
         new_values={
             "start_date": start_date,
             "end_date": end_date,
-            "has_doctor_note": note_path is not None,
         },
         ip_address=request.client.host if request.client else "",
     )

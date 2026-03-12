@@ -1,6 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Leave Management — SDC Time Tracker{% endblock %}
 
+{% block head %}
+<!-- Flatpickr for premium Date/Time pickers -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<style>
+    .flatpickr-input {
+        background: rgba(2, 6, 23, 0.5) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 0.75rem !important;
+        color: white !important;
+    }
+
+    .flatpickr-calendar {
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .flatpickr-day.selected {
+        background: #6366f1 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-4xl mx-auto">
     <div class="mb-8">
@@ -25,11 +50,13 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label for="vac-start" class="block text-xs text-gray-500 mb-1">Start Date</label>
-                            <input type="date" name="start_date" id="vac-start" required class="form-input">
+                            <input type="text" name="start_date" id="vac-start" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
                         </div>
                         <div>
                             <label for="vac-end" class="block text-xs text-gray-500 mb-1">End Date</label>
-                            <input type="date" name="end_date" id="vac-end" required class="form-input">
+                            <input type="text" name="end_date" id="vac-end" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
                         </div>
                     </div>
                     <div>
@@ -55,25 +82,19 @@
                 </div>
                 Record Sick Leave
             </h2>
-            <form method="POST" action="/leave/sick" enctype="multipart/form-data" id="sick-form">
+            <form method="POST" action="/leave/sick" id="sick-form">
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label for="sick-start" class="block text-xs text-gray-500 mb-1">Start Date</label>
-                            <input type="date" name="start_date" id="sick-start" required class="form-input">
+                            <input type="text" name="start_date" id="sick-start" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
                         </div>
                         <div>
                             <label for="sick-end" class="block text-xs text-gray-500 mb-1">End Date</label>
-                            <input type="date" name="end_date" id="sick-end" required class="form-input">
+                            <input type="text" name="end_date" id="sick-end" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
                         </div>
-                    </div>
-                    <div>
-                        <label for="doctor-note" class="block text-xs text-gray-500 mb-1">Doctor's Note</label>
-                        <div class="relative">
-                            <input type="file" name="doctor_note" id="doctor-note" accept=".pdf,.jpg,.jpeg,.png"
-                                class="form-input file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-500/10 file:text-primary-300 hover:file:bg-primary-500/20 file:cursor-pointer">
-                        </div>
-                        <p class="text-xs text-gray-600 mt-1">PDF, JPG, or PNG accepted</p>
                     </div>
                     <div>
                         <label for="sick-comments" class="block text-xs text-gray-500 mb-1">Comments</label>
@@ -107,9 +128,6 @@
                     <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                         <td class="py-3 px-3">
                             <span class="capitalize font-medium text-white">{{ req.leave_type.value }}</span>
-                            {% if req.doctor_note_path %}
-                            <span class="ml-1 text-xs text-accent-400" title="Doctor's note attached">📎</span>
-                            {% endif %}
                         </td>
                         <td class="py-3 px-3 text-gray-300 font-mono text-xs">{{ req.start_date }} → {{ req.end_date }}
                         </td>
@@ -171,4 +189,32 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const config = {
+            dateFormat: "Y-m-d",
+            theme: "dark",
+            disableMobile: "true"
+        };
+
+        const vacStart = flatpickr("#vac-start", {
+            ...config,
+            onChange: function (selectedDates, dateStr, instance) {
+                vacEnd.set("minDate", dateStr);
+            }
+        });
+        const vacEnd = flatpickr("#vac-end", config);
+
+        const sickStart = flatpickr("#sick-start", {
+            ...config,
+            onChange: function (selectedDates, dateStr, instance) {
+                sickEnd.set("minDate", dateStr);
+            }
+        });
+        const sickEnd = flatpickr("#sick-end", config);
+    });
+</script>
 {% endblock %}

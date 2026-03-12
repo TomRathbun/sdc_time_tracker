@@ -1,6 +1,31 @@
 {% extends "base.html" %}
 {% block title %}Reports — SDC Time Tracker{% endblock %}
 
+{% block head %}
+<!-- Flatpickr for premium Date/Time pickers -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<style>
+    .flatpickr-input {
+        background: rgba(2, 6, 23, 0.5) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 0.75rem !important;
+        color: white !important;
+    }
+
+    .flatpickr-calendar {
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .flatpickr-day.selected {
+        background: #6366f1 !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-6xl mx-auto">
     <div class="mb-8">
@@ -10,10 +35,12 @@
 
     <!-- Filter Form -->
     <div class="glass-card p-6 mb-8">
-        <form method="GET" action="/reports/compliance" id="report-filter-form" class="flex flex-wrap items-end gap-4">
-            <div class="flex-1 min-w-[180px]">
-                <label for="rpt-employee" class="block text-xs text-gray-500 mb-1">Employee</label>
-                <select name="employee_id" id="rpt-employee" required class="form-select">
+        <form method="GET" action="/reports/compliance" id="report-filter-form" class="flex flex-wrap items-end gap-6">
+            <div class="flex-1 min-w-[200px]">
+                <label for="rpt-employee"
+                    class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Employee</label>
+                <select name="employee_id" id="rpt-employee" required
+                    class="form-select border-white/10 bg-surface-900/50">
                     <option value="">Select employee...</option>
                     {% for emp in employees %}
                     <option value="{{ emp.id }}" {% if selected_employee_id and selected_employee_id|int==emp.id
@@ -21,22 +48,30 @@
                     {% endfor %}
                 </select>
             </div>
-            <div>
-                <label for="rpt-start" class="block text-xs text-gray-500 mb-1">Start Date</label>
-                <input type="date" name="start_date" id="rpt-start" required class="form-input"
-                    value="{{ selected_start or '' }}">
+            <div class="w-48">
+                <label for="rpt-start"
+                    class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Start Date</label>
+                <div class="relative">
+                    <input type="text" name="start_date" id="rpt-start" data-osk-ignore readonly
+                        class="form-input border-white/10 bg-surface-900/50 cursor-pointer" placeholder="Select Date"
+                        value="{{ selected_start or '' }}">
+                </div>
             </div>
-            <div>
-                <label for="rpt-end" class="block text-xs text-gray-500 mb-1">End Date</label>
-                <input type="date" name="end_date" id="rpt-end" required class="form-input"
-                    value="{{ selected_end or '' }}">
+            <div class="w-48">
+                <label for="rpt-end" class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">End
+                    Date</label>
+                <div class="relative">
+                    <input type="text" name="end_date" id="rpt-end" data-osk-ignore readonly
+                        class="form-input border-white/10 bg-surface-900/50 cursor-pointer" placeholder="Select Date"
+                        value="{{ selected_end or '' }}">
+                </div>
             </div>
-            <button type="submit" id="btn-generate-report" class="btn-primary">
+            <button type="submit" id="btn-generate-report" class="btn-primary px-8">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Generate
+                Generate Report
             </button>
         </form>
     </div>
@@ -69,18 +104,24 @@
     <!-- Export Button -->
     <div class="flex justify-end mb-4">
         <a href="/reports/export/excel?employee_id={{ selected_employee_id }}&start_date={{ selected_start }}&end_date={{ selected_end }}"
-            class="btn-secondary" id="btn-export-excel">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            class="btn-secondary px-6" id="btn-export-excel">
+            <svg class="w-4 h-4 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            Export Excel
+            Export to Excel
         </a>
     </div>
 
     <!-- Daily Summary Table -->
     <div class="glass-card p-6 mb-6">
-        <h2 class="text-lg font-semibold text-white mb-4">Daily Summary — {{ report_data.target_employee.name }}</h2>
+        <h2 class="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Daily Summary — {{ report_data.target_employee.name }}
+        </h2>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
@@ -102,12 +143,14 @@
                         <td class="py-3 px-3 text-center">
                             {% if s.is_compliant %}
                             <span
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-500/10 text-success-400">✓
-                                Met</span>
+                                class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter bg-success-500/10 text-success-400 border border-success-500/20">
+                                COMPLIANT
+                            </span>
                             {% else %}
                             <span
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-danger-500/10 text-danger-400">✗
-                                Below</span>
+                                class="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter bg-danger-500/10 text-danger-400 border border-danger-500/20">
+                                DEVIATION
+                            </span>
                             {% endif %}
                         </td>
                     </tr>
@@ -119,7 +162,13 @@
 
     <!-- Detailed Entries Table -->
     <div class="glass-card p-6 mb-6">
-        <h2 class="text-lg font-semibold text-white mb-4">Detailed Time Entries</h2>
+        <h2 class="text-lg font-bold text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+            <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Detailed Time Entries
+        </h2>
         <div class="overflow-x-auto">
             <table class="w-full text-sm">
                 <thead>
@@ -140,9 +189,9 @@
                         <td class="py-3 px-3 font-mono text-xs text-gray-300">{{ entry.date }}</td>
                         <td class="py-3 px-3">
                             <span
-                                class="px-2 py-0.5 rounded text-xs font-medium
+                                class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
                                 {% if entry.entry_type.value == 'check_in' %}bg-success-500/10 text-success-400{% else %}bg-danger-500/10 text-danger-400{% endif %}">
-                                {{ entry.entry_type.value.replace('_', ' ').title() }}
+                                {{ entry.entry_type.value.replace('_', ' ') }}
                             </span>
                         </td>
                         <td class="py-3 px-3 font-mono text-white">{{ entry.declared_time.strftime("%H:%M") }}</td>
@@ -150,12 +199,13 @@
                         </td>
                         <td class="py-3 px-3">
                             {% if delta_minutes > 15 %}
-                            <span class="text-warning-400 text-xs font-mono">{{ delta_minutes }}m</span>
+                            <span class="text-warning-400 text-xs font-mono font-bold">{{ delta_minutes }}m</span>
                             {% else %}
                             <span class="text-gray-600 text-xs font-mono">{{ delta_minutes }}m</span>
                             {% endif %}
                         </td>
-                        <td class="py-3 px-3 text-gray-400 text-xs capitalize">{{ entry.location_type.value }}</td>
+                        <td class="py-3 px-3 text-gray-400 text-[11px] font-bold uppercase tracking-tighter">{{
+                            entry.location_type.value }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -166,15 +216,18 @@
     <!-- Leave Days -->
     {% if report_data.leaves %}
     <div class="glass-card p-6">
-        <h2 class="text-lg font-semibold text-white mb-4">Approved Leave</h2>
+        <h2 class="text-lg font-bold text-white uppercase tracking-widest mb-4">Approved Leave</h2>
         <div class="space-y-2">
             {% for leave in report_data.leaves %}
-            <div class="flex items-center justify-between p-3 rounded-lg bg-surface-900/50 border border-white/5">
+            <div class="flex items-center justify-between p-4 rounded-xl bg-surface-900/50 border border-white/5">
                 <div>
-                    <span class="text-sm font-medium text-white capitalize">{{ leave.leave_type.value }}</span>
-                    <span class="text-xs text-gray-500 ml-2">{{ leave.start_date }} → {{ leave.end_date }}</span>
+                    <span class="text-sm font-bold text-white uppercase tracking-widest">{{ leave.leave_type.value
+                        }}</span>
+                    <span class="text-xs text-gray-500 ml-3 font-mono">{{ leave.start_date }} → {{ leave.end_date
+                        }}</span>
                 </div>
-                <span class="px-2 py-0.5 rounded-full text-xs bg-success-500/10 text-success-400">Approved</span>
+                <span
+                    class="px-3 py-1 rounded-lg text-[10px] font-black uppercase bg-success-500/10 text-success-400 border border-success-500/20">Approved</span>
             </div>
             {% endfor %}
         </div>
@@ -182,4 +235,25 @@
     {% endif %}
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialize Premium Date Pickers
+        const rptStart = flatpickr("#rpt-start", {
+            dateFormat: "Y-m-d",
+            theme: "dark",
+            disableMobile: "true",
+            onChange: function (selectedDates, dateStr, instance) {
+                rptEnd.set("minDate", dateStr);
+            }
+        });
+        const rptEnd = flatpickr("#rpt-end", {
+            dateFormat: "Y-m-d",
+            theme: "dark",
+            disableMobile: "true"
+        });
+    });
+</script>
 {% endblock %}

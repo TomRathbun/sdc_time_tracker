@@ -26,6 +26,9 @@
                         sans: ['Inter', 'system-ui', 'sans-serif'],
                         mono: ['JetBrains Mono', 'monospace'],
                     },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
                 }
             }
         }
@@ -42,7 +45,14 @@
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/css/app.css?v=8">
+    <link rel="stylesheet" href="/static/css/app.css?v=9">
+
+    <style>
+        :root {
+            /* Login page uses 'wide', all other pages use 'halo' */
+            --bg-image: url('/static/images/{% if not employee or employee.pin_needs_reset %}lm_bg_wide.jpg{% else %}lm_bg_halo.jpg{% endif %}?v=11');
+        }
+    </style>
 
     {% block head %}{% endblock %}
 </head>
@@ -246,7 +256,7 @@
     {% block modals %}{% endblock %}
 
     <script src="/static/js/app.js?v=7"></script>
-    <script src="/static/js/onscreen_input.js?v=4"></script>
+    <script src="/static/js/onscreen_input.js?v=5"></script>
 
     <!-- Tab Session Sync — Prevents "confused" tabs when multiple users log in -->
     <script>

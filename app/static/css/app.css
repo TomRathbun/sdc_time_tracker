@@ -5,7 +5,7 @@
     position: fixed;
     inset: 0;
     z-index: 0;
-    background: url('/static/images/lm_bg_wide.jpg?v=3') center center / contain no-repeat;
+    background: var(--bg-image, url('/static/images/lm_bg_halo.jpg')) center center / cover no-repeat;
     background-color: #020617;
     opacity: 0.65;
     filter: blur(0px);
@@ -633,6 +633,23 @@
     /* Perfectly mirrored with Numpad */
 }
 
+/* Mobile/Tablet: Move to bottom if screen is too narrow for side panels */
+@media (max-width: 1250px) {
+    .weapon-panel {
+        top: auto;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        max-width: 480px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .weapon-panel.visible {
+        left: 50%;
+    }
+}
+
 .weapon-panel-img {
     width: 100%;
     height: 180px;
@@ -707,10 +724,9 @@
 
 /* Hide side panels on smaller screens to avoid overlap with center card */
 /* Hide spotlight on tablets to prevent overlap; keep Numpad if possible or hide it separately */
+/* Keep spotlight on tablets but ensure it doesn't overlap */
 @media (max-width: 1250px) {
-    .weapon-panel {
-        display: none !important;
-    }
+    /* Side panel behavior removed; handled in the block above */
 }
 
 /* Hide Numpad side-view when it would overlap; at 900px it switches to bottom view */
