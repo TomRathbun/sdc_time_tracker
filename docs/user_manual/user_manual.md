@@ -31,10 +31,12 @@ If you just need to punch in or out without viewing your dashboard, you can use 
 ### 1.2 Dashboard: Alternative Check-In/Out Times & Mandatory Comments
 Sometimes you may forget to punch in or out at the exact time you arrived or left. You can adjust the time directly when punching in or out via the Dashboard.
 
-1. Log into your dashboard.
+1. Log into your dashboard by clicking your name.
 2. Click the large **Check In** or **Check Out** buttons.
 3. You will be presented with a time selector. If the time you select differs from the current time beyond the system's threshold (typically 30 minutes), **you are required to enter a comment** explaining the discrepancy.
 4. Provide the comment and submit. 
+
+![Dashboard Login View](./login_pin.png)
 
 ![Dashboard View](./dashboard.png)
 *(Top: Main dashboard panel)*
@@ -73,6 +75,15 @@ You can log expected absences via the Leave pages.
 
 ![Partial Leave Form](./partial_leave.png)
 *(Above: Partial Leave Request)*
+
+
+### 1.6 Automated Email Notifications
+The system automatically sends confirmation and reminder emails to keep you informed of your status.
+- **Check-In Confirmations:** Every time you punch in (via Quick Action or Dashboard), you will receive an email confirming your start time and providing your **Expected Checkout Time** based on your daily target hours.
+- **Checkout Reminders:** If enabled by your manager, you will receive a reminder email shortly before your expected checkout time to ensure you don't forget to punch out.
+- **Innovation Spotlight:** Each email features a "Lockheed Martin Innovation Spotlight," showcasing advanced technologies and historical milestones from across the company.
+
+![Example Check-In Email](./checkin_email.png)
 
 
 ---
