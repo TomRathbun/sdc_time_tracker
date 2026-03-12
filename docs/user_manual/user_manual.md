@@ -122,6 +122,15 @@ The **Manager Timesheet** is your primary dashboard for tracking team compliance
 Keeping comprehensive records is crucial for an Electronic Time and Attendance System (ETAS). 
 - **Reports:** The Reports page allows you to generate PDF or Excel compliance reports for individual employees across a date range. It tracks total hours worked against their mandatory targets.
 - **Audits:** The Audit Log securely records every action taken in the system. Check-ins, manual modifications, PTO approvals, and configuration changes are logged with IP addresses, timestamps, and the exact "old value" vs "new value". This ensures total transparency for administrators.
+- **Manager Alerts:** The system proactively notifies managers via email when specific events occur:
+    - **Time Differential Alerts:** Sent when an employee's manual time entry exceeds the configured policy threshold (e.g., more than 30 minutes offset).
+    - **Audit Alerts:** Sent whenever a historical record is modified or a "Past Day" entry is submitted, ensuring immediate visibility into manual adjustments.
+
+![Time Differential Alert](./time_differential.png)
+*(Above: Email notification for a policy threshold violation)*
+
+![Audit Alert](./audit_alert.png)
+*(Above: Email notification for a manual record adjustment)*
 
 ![Reports Generator](./reports.png)
 *(Above: Compliance reporting tool)*
