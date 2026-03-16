@@ -37,6 +37,10 @@ FEATURE_DEFAULTS = {
         "value": "html",
         "description": "Markup format for emails (html or text)",
     },
+    "login_names_display_count": {
+        "value": "10",
+        "description": "Number of names to show in the login list before scrolling (approximate)",
+    },
 }
 
 

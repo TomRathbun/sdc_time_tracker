@@ -79,6 +79,8 @@
                         <span
                             class="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
                             Time Tracker</span>
+                        <img src="/static/images/lm_star.png" alt="LM Star"
+                            class="w-12 h-12 object-contain brightness-200 opacity-60 mix-blend-screen">
                     </a>
 
                     <!-- Nav Links -->
@@ -248,7 +250,7 @@
         {% block content %}{% endblock %}
     </main>
     {% else %}
-    <main class="min-h-screen flex items-center justify-center px-4 relative z-10">
+    <main class="min-h-screen flex flex-col items-center pt-4 px-4 relative z-10">
         {% block public_content %}{% endblock %}
     </main>
     {% endif %}

@@ -85,16 +85,15 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: str = ""
         from datetime import datetime as dt
         os.makedirs("dev_emails", exist_ok=True)
         
-        # In dev mode, we convert CID images to Data URIs for local previewing
+        # In dev mode, we convert CID images to file:// URIs for local previewing
         dev_html = html_body
         if images:
             for cid, path in images:
                 if os.path.exists(path):
-                    with open(path, "rb") as f:
-                        ext = path.split(".")[-1]
-                        b64 = base64.b64encode(f.read()).decode()
-                        data_uri = f"data:image/{ext};base64,{b64}"
-                        dev_html = dev_html.replace(f"cid:{cid}", data_uri)
+                    # Use absolute file:// path for local preview instead of massive data URIs
+                    abs_path = os.path.abspath(path).replace('\\', '/')
+                    file_uri = f"file:///{abs_path}"
+                    dev_html = dev_html.replace(f"cid:{cid}", file_uri)
 
         safe_subject = "".join(c if c.isalnum() or c in " -_" else "" for c in subject)
         filename = f"dev_emails/{dt.now().strftime('%H%M%S')}_{safe_subject[:40]}.html"

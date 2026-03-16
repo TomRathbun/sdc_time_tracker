@@ -295,6 +295,36 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Login Display Count -->
+                    <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 6h16M4 10h16m-7 4h7M4 14h4m-4 4h16" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-200 text-sm">Login List Display Count</p>
+                                    <p class="text-xs text-gray-500">{{ settings.login_names_display_count.description }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-3 pl-13">
+                            <div class="relative flex-1 max-w-[200px]">
+                                <input type="number" name="login_names_display_count" id="login_names_display_count"
+                                    value="{{ settings.login_names_display_count.value }}"
+                                    class="form-input text-lg font-mono py-2 text-center" min="1" max="100">
+                                <div
+                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
+                                    Names</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

@@ -13,6 +13,7 @@ from app.auth import verify_pin, create_session_token, get_current_employee
 from app.config import SESSION_COOKIE_NAME
 from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
 from app.services.audit import log_action
+from app.services.settings import get_setting
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -179,6 +180,8 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
 
     sorted_employees = _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_hour)
 
+    display_count = int(get_setting(db, "login_names_display_count"))
+
     return templates.TemplateResponse("login.html", {
         "request": request,
         "employees": sorted_employees,
@@ -187,6 +190,7 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
         "status_map": status_map,
         "on_leave_map": on_leave_map,
         "weapon": _get_random_weapon(),
+        "display_count": display_count,
     })
 
 
@@ -219,12 +223,14 @@ async def login_pin_page(employee_id: int, request: Request, db: Session = Depen
         return RedirectResponse(url="/login", status_code=303)
 
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    display_count = int(get_setting(db, "login_names_display_count"))
     return templates.TemplateResponse("login.html", {
         "request": request,
         "employees": employees,
         "selected_employee": selected,
         "error": None,
         "weapon": _get_random_weapon(),
+        "display_count": display_count,
     })
 
 
@@ -240,12 +246,14 @@ async def login_submit(
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
 
     if not selected or not verify_pin(pin, selected.pin_hash):
+        display_count = int(get_setting(db, "login_names_display_count"))
         return templates.TemplateResponse("login.html", {
             "request": request,
             "employees": employees,
             "selected_employee": selected,
             "error": "Invalid PIN. Please try again.",
             "weapon": _get_random_weapon(),
+            "display_count": display_count,
         })
 
     matched = selected

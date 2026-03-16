@@ -181,36 +181,7 @@
     }
 }
 
-/* ── LM Logo ── */
-.lm-logo-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 0.75rem;
-    overflow: hidden;
-    max-width: 400px;
-    /* Matched to the approximate width of 'SDC Time Tracker' text */
-    height: 45px;
-    margin-left: auto;
-    margin-right: auto;
-    border-radius: 4px;
-}
 
-.lm-logo-container img {
-    height: 100%;
-    /* Scaled up to fill the 510px width */
-    width: 100%;
-    object-fit: cover;
-    opacity: 0.75;
-    filter: brightness(1.2) drop-shadow(0 4px 12px rgba(99, 102, 241, 0.2));
-    transition: opacity 0.3s ease, filter 0.3s ease;
-    /* Centers the 'LOCKHEED MARTIN' text line precisely in the crop window */
-    margin-top: -8px;
-}
-
-.lm-logo-container img:hover {
-    opacity: 1;
-}
 
 /* Glass card effect */
 .glass-card {
@@ -629,8 +600,8 @@
 .weapon-panel.visible {
     opacity: 1;
     pointer-events: auto;
-    left: calc(50% - 620px);
-    /* Perfectly mirrored with Numpad */
+    left: calc(50% - 700px);
+    /* Shifted further left per user request */
 }
 
 /* Mobile/Tablet: Move to bottom if screen is too narrow for side panels */

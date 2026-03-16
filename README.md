@@ -26,9 +26,8 @@ A modern, high-performance Electronic Time and Attendance System (ETAS) designed
 
 ## 🛠️ Installation & Setup
 
-1. **Clone the repository**:
+1. **Copy the repository**:
    ```bash
-   git clone https://github.com/TomRathbun/sdc_time_tracker.git
    cd sdc_time_tracker
    ```
 
@@ -44,7 +43,7 @@ A modern, high-performance Electronic Time and Attendance System (ETAS) designed
 
 3. **Run the server**:
    ```bash
-   uv run python run.py
+   uv run python run.py --no-ssl
    ```
    The application will be available at [http://localhost:8888](http://localhost:8888).
 

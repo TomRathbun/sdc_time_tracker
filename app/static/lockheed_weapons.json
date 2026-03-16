@@ -189,7 +189,7 @@
         "name": "Trident II D5 Missile",
         "summary": "The Trident II D5 is a submarine-launched ballistic missile providing strategic nuclear deterrence for the U.S. Navy.",
         "link": "https://www.lockheedmartin.com/en-us/products/trident-ii-d5.html",
-        "image": "/static/images/weapons/pac3.png"
+        "image": "/static/images/weapons/trident_ii_d5_launch.png"
     },
     {
         "name": "LONGBOW Fire Control",

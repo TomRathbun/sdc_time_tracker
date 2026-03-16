@@ -11,23 +11,20 @@
     </div>
 
     <div class="relative">
-        <!-- Lockheed Martin Logo -->
-        <div class="lm-logo-container">
-            <img src="/static/images/lm_logo.png" alt="Lockheed Martin" id="lm-logo">
-        </div>
-
         <!-- App Branding -->
-        <div class="text-center mb-6">
-            <div class="flex items-center justify-center gap-4 mb-2">
+        <div class="text-center mb-2">
+            <div class="flex items-center justify-center gap-3 mb-2">
                 <div
-                    class="w-24 h-24 rounded-2xl overflow-hidden shadow-2xl shadow-primary-500/40 border border-white/10 ring-1 ring-white/5 transition-transform duration-500 hover:scale-110">
+                    class="w-20 h-20 rounded-2xl overflow-hidden shadow-2xl shadow-primary-500/40 border border-white/10 ring-1 ring-white/5 transition-transform duration-500 hover:scale-110">
                     <img src="/static/images/app_icon.png?v=6" alt="SDC Time Logo"
                         class="w-full h-full object-cover shadow-inner">
                 </div>
                 <h1
-                    class="text-4xl font-extrabold bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent tracking-tight">
+                    class="text-3xl font-extrabold bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent tracking-tight">
                     SDC Time Tracker
                 </h1>
+                <img src="/static/images/lm_star.png" alt="LM Star"
+                    class="w-20 h-20 object-contain brightness-200 contrast-125 opacity-80 mix-blend-screen">
             </div>
             <p class="text-gray-400 text-sm">
                 {% if selected_employee %}
@@ -85,7 +82,7 @@
                 </label>
             </div>
 
-            <div class="space-y-2 max-h-[300px] overflow-y-auto pr-1" id="employee-list">
+            <div class="space-y-2 overflow-y-auto pr-1 custom-scrollbar" id="employee-list" style="max-height: {{ display_count * 74 }}px;">
                 {% for emp in employees %}
                 {% set emp_info = status_map.get(emp.id, {"status": "not_started", "time": None}) %}
                 {% set emp_status = emp_info.status %}
