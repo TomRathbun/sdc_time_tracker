@@ -1,0 +1,785 @@
+<div class="w-full max-w-6xl py-10 px-4">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-6 mb-10">
+        <div>
+            <p class="text-[11px] font-bold tracking-widest text-primary-400 uppercase mb-2">
+                Training artifact · derived from live design
+            </p>
+            <h1 class="text-4xl font-extrabold bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent tracking-tight mb-2">
+                Systems Engineering
+            </h1>
+            <p class="text-gray-400 max-w-2xl leading-relaxed">
+                How {{ app_name }} (v{{ app_version }}) was designed as an Electronic Time &amp; Attendance
+                System for the FOSC contract — requirements, architecture, states, sequences, and
+                verification. Built so new engineers can learn SE using a real product.
+            </p>
+        </div>
+        <div class="flex flex-col gap-2 shrink-0">
+            {% if employee %}
+            <a href="/" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white hover:bg-white/10 transition-all">
+                ← Dashboard
+            </a>
+            {% else %}
+            <a href="/login" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white hover:bg-white/10 transition-all">
+                ← Back to Sign In
+            </a>
+            {% endif %}
+            <a href="/innovations" class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary-600/20 border border-primary-500/30 text-sm text-primary-300 hover:bg-primary-600/30 transition-all">
+                Tactical Library
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- Sticky TOC -->
+        <aside class="lg:col-span-3">
+            <nav class="se-toc lg:sticky lg:top-24 space-y-1 text-sm bg-surface-800/40 border border-white/5 rounded-2xl p-4">
+                <p class="text-[10px] font-bold tracking-widest text-gray-500 uppercase mb-3">Contents</p>
+                <a href="#objectives" class="block py-1">1. Learning objectives</a>
+                <a href="#context" class="block py-1">2. Need &amp; context</a>
+                <a href="#stakeholders" class="block py-1">3. Stakeholders</a>
+                <a href="#architecture" class="block py-1">4. System architecture</a>
+                <a href="#domain" class="block py-1">5. Domain model</a>
+                <a href="#requirements" class="block py-1">6. Requirements</a>
+                <a href="#acceptance" class="block py-1">7. Acceptance criteria</a>
+                <a href="#usecases" class="block py-1">8. Use cases</a>
+                <a href="#sequences" class="block py-1">9. Sequence diagrams</a>
+                <a href="#states" class="block py-1">10. State charts</a>
+                <a href="#beod" class="block py-1">11. BEOD decision logic</a>
+                <a href="#export" class="block py-1">12. FOSC export interface</a>
+                <a href="#traceability" class="block py-1">13. Traceability</a>
+                <a href="#vv" class="block py-1">14. V&amp;V approach</a>
+                <a href="#teaching" class="block py-1">15. Teaching exercises</a>
+            </nav>
+        </aside>
+
+        <main class="lg:col-span-9 space-y-16">
+
+            <!-- 1 -->
+            <section id="objectives" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">1. Learning objectives</h2>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4">
+                    After studying this page and walking the live app, a new systems engineer should be able to:
+                </p>
+                <ul class="list-disc list-inside text-gray-300 text-sm space-y-2">
+                    <li>Translate a contract operational need into stakeholder and system requirements.</li>
+                    <li>Separate <em>what</em> the system must do (requirements) from <em>how</em> it is built (design).</li>
+                    <li>Write testable acceptance criteria (Given / When / Then or measurable shall statements).</li>
+                    <li>Model dynamic behavior with state machines and sequence diagrams.</li>
+                    <li>Trace a requirement → design element → verification method.</li>
+                    <li>Identify external interfaces (users, TEMPO, email, Excel contract package).</li>
+                </ul>
+                <div class="se-callout">
+                    <strong>Teaching note:</strong> Artifacts below are reverse-engineered from the running
+                    implementation (<code class="text-primary-300">app/</code> services, models, routes).
+                    In a greenfield program you would produce many of these <em>before</em> coding.
+                </div>
+            </section>
+
+            <!-- 2 -->
+            <section id="context" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">2. Operational need &amp; system context</h2>
+                <p class="text-gray-400 text-sm leading-relaxed mb-4">
+                    <strong class="text-gray-200">Need:</strong> SDC staff supporting the FOSC must record
+                    attendance that is auditable, matches FOSC schedule rules (9/9/9/9/4 week, paid lunch, BEOD),
+                    supports leave, and can be exported in the Lockheed weekly/quarterly time-record format
+                    with TEMPO discrepancy analysis.
+                </p>
+                <div class="mermaid">
+flowchart LR
+    Emp[Employee]
+    Mgr[Manager / Supervisor]
+    STT[SDC Time Tracker]
+    TEMPO[Lockheed TEMPO]
+    SMTP[Email SMTP]
+    FOSC[FOSC Excel package]
+    Emp -->|PIN punches leave| STT
+    Mgr -->|Approve import export| STT
+    STT -->|Import weekly hours| TEMPO
+    STT -->|Notifications| SMTP
+    STT -->|Generate xlsx| FOSC
+                </div>
+                <div class="se-callout">
+                    <strong>SE concept — system boundary:</strong> Everything inside the box is in scope.
+                    TEMPO and the Excel package are <em>external interfaces</em>; we import/export but do not own them.
+                </div>
+            </section>
+
+            <!-- 3 -->
+            <section id="stakeholders" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">3. Stakeholders &amp; concerns</h2>
+                <div class="overflow-x-auto rounded-xl border border-white/5">
+                    <table class="se-table">
+                        <thead>
+                            <tr>
+                                <th>Stakeholder</th>
+                                <th>Primary concerns</th>
+                                <th>Key requirements</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Employee</td>
+                                <td>Fast punch, clear status, leave balance, mobile-friendly PIN login</td>
+                                <td>FR-AUTH, FR-CI, FR-CO, FR-LEAVE</td>
+                            </tr>
+                            <tr>
+                                <td>Manager / Supervisor</td>
+                                <td>Approve leave/offsets/BEOD, visibility of declared vs submitted time</td>
+                                <td>FR-APPR, FR-TS, FR-AUDIT</td>
+                            </tr>
+                            <tr>
+                                <td>Program / FOSC admin</td>
+                                <td>Contract-compliant weekly sheets, TEMPO shortfall visibility</td>
+                                <td>FR-FOSC, FR-TEMPO, FR-DISC</td>
+                            </tr>
+                            <tr>
+                                <td>IT / Security</td>
+                                <td>Session control, PIN not stored in cleartext, audit trail</td>
+                                <td>NFR-SEC, FR-AUDIT</td>
+                            </tr>
+                            <tr>
+                                <td>Systems engineer (you)</td>
+                                <td>Traceability, testability, maintainable architecture</td>
+                                <td>NFR-MAINT, this page</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 4 -->
+            <section id="architecture" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">4. Logical system architecture</h2>
+                <p class="text-gray-400 text-sm mb-4">
+                    Classic layered web architecture: presentation → application services → domain models → persistence.
+                    Cross-cutting: auth session, audit log, pending-approval middleware, background scheduler.
+                </p>
+                <div class="mermaid">
+flowchart TB
+    subgraph Presentation
+        UI[Jinja2 templates + Tailwind + HTMX]
+        API[FastAPI routes]
+    end
+    subgraph Application
+        AUTH[Auth / session]
+        TS[Time state machine]
+        TC[Time calculation / BEOD]
+        LB[Leave balance]
+        LS[Leave sync]
+        TO[Time offset policy]
+        PE[Pending approvals]
+        EX[FOSC export]
+        EM[Email service]
+        SCH[Checkout reminder scheduler]
+    end
+    subgraph Domain
+        M[(ORM models)]
+    end
+    subgraph Persistence
+        DB[(SQLite)]
+        UP[Uploads / doctor notes]
+    end
+    UI --> API
+    API --> AUTH & TS & TC & LB & LS & TO & PE & EX
+    TC --> M
+    TS --> M
+    EX --> M
+    M --> DB
+    EM --> SMTP[SMTP]
+    SCH --> EM
+                </div>
+                <div class="overflow-x-auto rounded-xl border border-white/5 mt-4">
+                    <table class="se-table">
+                        <thead>
+                            <tr><th>Layer</th><th>Location</th><th>Responsibility</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Routes</td><td><code>app/routes/*</code></td><td>HTTP use-case entry points, validation of request shape</td></tr>
+                            <tr><td>Services</td><td><code>app/services/*</code></td><td>Business rules (single source of truth)</td></tr>
+                            <tr><td>Models</td><td><code>app/models.py</code></td><td>Entities, enums, relationships</td></tr>
+                            <tr><td>Config</td><td><code>app/config.py</code></td><td>Schedule targets, BEOD min, session, SMTP</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 5 -->
+            <section id="domain" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">5. Domain model (conceptual)</h2>
+                <div class="mermaid">
+erDiagram
+    EMPLOYEE ||--o{ TIME_ENTRY : punches
+    EMPLOYEE ||--o{ OFFSITE_ENTRY : logs
+    EMPLOYEE ||--o{ PHONE_SUPPORT : logs
+    EMPLOYEE ||--o{ DAILY_SUMMARY : has
+    EMPLOYEE ||--o{ LEAVE_REQUEST : requests
+    EMPLOYEE ||--o{ TEMPO_WEEKLY : charged
+    EMPLOYEE ||--o{ AUDIT_LOG : actions
+    LEAVE_REQUEST }o--|| EMPLOYEE : approved_by
+
+    EMPLOYEE {
+        int id
+        string name
+        string pin_hash
+        enum role
+        float vacation_days
+        float sick_days
+    }
+    TIME_ENTRY {
+        date date
+        datetime declared_time
+        datetime submission_time
+        enum entry_type
+        bool offset_approved
+    }
+    DAILY_SUMMARY {
+        float clock_hours
+        float offsite_hours
+        float phone_hours
+        float beod_hours
+        float total_hours
+        float leave_hours
+        bool is_compliant
+    }
+    LEAVE_REQUEST {
+        enum leave_type
+        date start_date
+        date end_date
+        enum status
+    }
+    TEMPO_WEEKLY {
+        date week_start
+        float hours
+    }
+                </div>
+                <div class="se-callout">
+                    <strong>Design decision:</strong> <code>DailySummary</code> is a derived snapshot recalculated
+                    by <code>time_calc.update_daily_summary</code> after punches, leave sync, phone, or offsite changes.
+                    That keeps compliance and export deterministic.
+                </div>
+            </section>
+
+            <!-- 6 -->
+            <section id="requirements" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">6. System requirements</h2>
+                <p class="text-gray-400 text-sm mb-4">
+                    Requirements use “shall” language. IDs enable traceability.
+                    <span class="se-badge se-badge-shall">SHALL</span> = mandatory ·
+                    <span class="se-badge se-badge-nfr">NFR</span> = non-functional.
+                </p>
+
+                <h3 class="text-lg font-semibold text-gray-200 mt-6 mb-2">6.1 Functional requirements</h3>
+                <div class="overflow-x-auto rounded-xl border border-white/5">
+                    <table class="se-table">
+                        <thead>
+                            <tr><th>ID</th><th>Requirement</th><th>Priority</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="se-req-id">FR-AUTH-01</td>
+                                <td>The system shall authenticate employees using a personal PIN and signed session cookie (max age configurable; default 8 hours).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-AUTH-02</td>
+                                <td>The system shall force PIN reset when <code>pin_needs_reset</code> is true (first login / admin reset).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CI-01</td>
+                                <td>The system shall record check-in with declared time, submission time, and location type (office / remote / offsite).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CI-02</td>
+                                <td>The system shall reject check-in when the employee is already in the <em>checked_in</em> state for that work date.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CO-01</td>
+                                <td>The system shall reject check-out unless the employee is in the <em>checked_in</em> state and declared check-out ≥ check-in.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-OFF-01</td>
+                                <td>The system shall accept offsite intervals that do not overlap existing clock or offsite intervals for the same day.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-PH-01</td>
+                                <td>The system shall allow phone-support hours that are additive to FOSC Normal Time.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CALC-01</td>
+                                <td>FOSC Normal Time shall equal clock + offsite + phone + BEOD credit (when earned).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CALC-02</td>
+                                <td>Target hours shall be 9h Mon–Thu, 4h Fri, 0h weekend (configurable schedule map).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-BEOD-01</td>
+                                <td>BEOD credit (+1h) shall apply only if claimed/approved and raw work hours before credit ≥ configured minimum (default 6.0h).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-OFFS-01</td>
+                                <td>When |declared − submission| exceeds the comment threshold, the entry shall require manager offset approval.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-LEAVE-01</td>
+                                <td>Employees shall request leave (vacation, sick, COVID sick, UAE holiday) spanning one or more days.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-LEAVE-02</td>
+                                <td>Pending leave shall reserve balance days; approved full-day leave shall credit target hours for each workday.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-APPR-01</td>
+                                <td>Managers/supervisors shall approve or reject leave, BEOD (when not blanket), and time offsets.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-TEMPO-01</td>
+                                <td>Authorized users shall import TEMPO weekly hours per employee (form or CSV).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-FOSC-01</td>
+                                <td>The system shall export weekly and quarterly Excel packages with Time Keeping sheets matching FOSC attendance structure.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-DISC-01</td>
+                                <td>Discrepancy Tracker shall show only shortfalls where base hours &lt; TEMPO (hours-to-reduce), using INDEX/MATCH into week sheets col M.</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-AUDIT-01</td>
+                                <td>Security-relevant actions shall be written to an immutable audit log (actor, entity, old/new values, timestamp).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-PAST-01</td>
+                                <td>Past-day entry shall be limited to prior workdays within the configured lookback window (default 14 days).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-200 mt-8 mb-2">6.2 Non-functional requirements</h3>
+                <div class="overflow-x-auto rounded-xl border border-white/5">
+                    <table class="se-table">
+                        <thead>
+                            <tr><th>ID</th><th>Requirement</th><th>Type</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="se-req-id">NFR-SEC-01</td>
+                                <td>PINs shall be stored only as one-way hashes; session tokens shall be signed.</td>
+                                <td><span class="se-badge se-badge-nfr">security</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">NFR-USA-01</td>
+                                <td>Primary punch flows shall be completable in ≤ 3 user interactions from login list (quick check-in/out).</td>
+                                <td><span class="se-badge se-badge-nfr">usability</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">NFR-REL-01</td>
+                                <td>Business rules for punch legality shall live in one service module to prevent divergent UI logic.</td>
+                                <td><span class="se-badge se-badge-nfr">reliability</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">NFR-MAINT-01</td>
+                                <td>Export, leave, and time-calc logic shall be unit-testable without the browser (pure services + DB session).</td>
+                                <td><span class="se-badge se-badge-nfr">maintainability</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">NFR-PORT-01</td>
+                                <td>Deployment shall support local SQLite with optional TLS and Tailscale remote access.</td>
+                                <td><span class="se-badge se-badge-nfr">portability</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 7 -->
+            <section id="acceptance" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">7. Acceptance criteria (selected)</h2>
+                <p class="text-gray-400 text-sm mb-4">
+                    Acceptance criteria make requirements testable. Format: <em>Given / When / Then</em>.
+                </p>
+                <div class="space-y-4">
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
+                        <p class="se-req-id mb-2">AC-CI-02 · FR-CI-02</p>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> employee E is checked in today<br>
+                        <strong class="text-gray-100">When</strong> E submits another check-in for today<br>
+                        <strong class="text-gray-100">Then</strong> the system rejects with a message that check-out is required first, and no new TimeEntry is stored.</p>
+                    </div>
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
+                        <p class="se-req-id mb-2">AC-BEOD-01 · FR-BEOD-01</p>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> BEOD is claimed and approved, and clock+offsite+phone = 5.5h<br>
+                        <strong class="text-gray-100">When</strong> daily summary is recalculated<br>
+                        <strong class="text-gray-100">Then</strong> beod_hours = 0 and total_hours = 5.5 (minimum not met).<br>
+                        <strong class="text-gray-100">Given</strong> the same flags and hours = 6.0<br>
+                        <strong class="text-gray-100">Then</strong> beod_hours = 1.0 and total_hours = 7.0.</p>
+                    </div>
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
+                        <p class="se-req-id mb-2">AC-LEAVE-02 · FR-LEAVE-02</p>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> a Friday with target 4h and approved full-day vacation<br>
+                        <strong class="text-gray-100">When</strong> leave is synced to DailySummary<br>
+                        <strong class="text-gray-100">Then</strong> leave_hours = 4.0, leave_approved = true, and compliance uses leave toward the daily target.</p>
+                    </div>
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
+                        <p class="se-req-id mb-2">AC-DISC-01 · FR-DISC-01</p>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> week SDC total = 40 and TEMPO = 38<br>
+                        <strong class="text-gray-100">When</strong> Hours to Reduce is evaluated<br>
+                        <strong class="text-gray-100">Then</strong> result = 0 (base above TEMPO is not reported).<br>
+                        <strong class="text-gray-100">Given</strong> SDC = 36 and TEMPO = 40<br>
+                        <strong class="text-gray-100">Then</strong> result = −4 (shortfall only).</p>
+                    </div>
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
+                        <p class="se-req-id mb-2">AC-OFFS-01 · FR-OFFS-01</p>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> comment threshold = 15 minutes<br>
+                        <strong class="text-gray-100">When</strong> declared time is 20 minutes earlier than submission<br>
+                        <strong class="text-gray-100">Then</strong> offset_approved is false until a manager approves the entry.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 8 -->
+            <section id="usecases" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">8. Use-case diagram</h2>
+                <div class="mermaid">
+flowchart LR
+    subgraph Actors
+        E[Employee]
+        M[Manager]
+    end
+    subgraph Employee_UCs
+        UC1[Check in / out]
+        UC2[Log offsite]
+        UC3[Phone support]
+        UC4[Request leave]
+        UC5[Past-day entry]
+    end
+    subgraph Manager_UCs
+        UC6[Approve leave]
+        UC7[Approve offset / BEOD]
+        UC8[Import TEMPO]
+        UC9[Export FOSC package]
+        UC10[Audit / admin]
+    end
+    E --> UC1 & UC2 & UC3 & UC4 & UC5
+    M --> UC6 & UC7 & UC8 & UC9 & UC10
+    M -.-> UC1
+                </div>
+            </section>
+
+            <!-- 9 -->
+            <section id="sequences" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">9. Sequence diagrams</h2>
+
+                <h3 class="text-lg font-semibold text-gray-200 mb-2">9.1 Quick check-in (happy path)</h3>
+                <div class="mermaid">
+sequenceDiagram
+    actor Emp as Employee
+    participant UI as Login / Quick UI
+    participant API as FastAPI routes
+    participant TS as time_state
+    participant TC as time_calc
+    participant DB as SQLite
+    participant EM as Email
+
+    Emp->>UI: Select name + PIN + Check in
+    UI->>API: POST /quick-checkin
+    API->>API: Verify PIN
+    API->>TS: can_check_in(emp, today)
+    TS->>DB: latest TimeEntry
+    TS-->>API: OK (not already checked in)
+    API->>DB: Insert TimeEntry(check_in)
+    API->>TC: update_daily_summary
+    TC->>DB: Upsert DailySummary
+    API->>EM: Check-in notification (optional)
+    API-->>UI: Success + redirect / status
+    UI-->>Emp: Confirmed checked in
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-200 mb-2">9.2 Leave request → approval → summary sync</h3>
+                <div class="mermaid">
+sequenceDiagram
+    actor Emp as Employee
+    actor Mgr as Manager
+    participant Leave as leave routes
+    participant LB as leave_balance
+    participant LS as leave_sync
+    participant DB as SQLite
+
+    Emp->>Leave: POST leave request (range + type)
+    Leave->>LB: Check remaining days
+    LB-->>Leave: OK / insufficient
+    Leave->>DB: LeaveRequest(status=pending)
+    Note over DB: Pending reserves balance
+    Mgr->>Leave: Approve request
+    Leave->>DB: status=approved, approved_by
+    Leave->>LS: Sync each day in range
+    LS->>DB: DailySummary leave_hours = target
+    LS->>DB: leave_approved = true
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-200 mb-2">9.3 FOSC quarterly export with TEMPO discrepancy</h3>
+                <div class="mermaid">
+sequenceDiagram
+    actor Mgr as Manager
+    participant R as reports routes
+    participant EX as fosc_export
+    participant DB as SQLite
+
+    Mgr->>R: Import TEMPO weekly hours
+    R->>DB: Upsert TempoWeekly
+    Mgr->>R: GET export FOSC quarterly
+    R->>EX: build_fosc_quarterly_workbook
+    loop Each Monday in quarter
+        EX->>DB: Read entries / summaries / TEMPO
+        EX->>EX: Write Time Keeping Sheet (WkN)
+        EX->>EX: Col M = Hours to Reduce formula
+    end
+    EX->>EX: Write Discrepancy Tracker INDEX/MATCH
+    EX-->>R: BytesIO .xlsx
+    R-->>Mgr: Download package
+                </div>
+            </section>
+
+            <!-- 10 -->
+            <section id="states" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">10. State charts</h2>
+
+                <h3 class="text-lg font-semibold text-gray-200 mb-2">10.1 Daily punch state (per employee · per date)</h3>
+                <p class="text-gray-400 text-sm mb-2">
+                    Implemented in <code class="text-primary-300">app/services/time_state.py</code>
+                    (<code>not_started</code> | <code>checked_in</code> | <code>checked_out</code>).
+                </p>
+                <div class="mermaid">
+stateDiagram-v2
+    [*] --> NotStarted: No entries for day
+    NotStarted --> CheckedIn: check_in
+    CheckedIn --> CheckedOut: check_out\n(declared ≥ check-in)
+    CheckedOut --> CheckedIn: check_in again\n(split shift)
+    CheckedIn --> CheckedIn: reject double check-in
+    NotStarted --> NotStarted: reject check-out
+    CheckedOut --> CheckedOut: reject double check-out
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-200 mb-2">10.2 Leave request lifecycle</h3>
+                <div class="mermaid">
+stateDiagram-v2
+    [*] --> Pending: Employee submits
+    Pending --> Approved: Manager approves
+    Pending --> Rejected: Manager rejects
+    Approved --> [*]: Days written to DailySummary
+    Rejected --> [*]: Balance released
+    note right of Pending
+      Reserves vacation/sick days
+      via leave_balance service
+    end note
+                </div>
+
+                <h3 class="text-lg font-semibold text-gray-200 mb-2">10.3 Time-offset approval (declared vs submission)</h3>
+                <div class="mermaid">
+stateDiagram-v2
+    [*] --> AutoApproved: |Δt| ≤ threshold
+    [*] --> NeedsApproval: |Δt| > threshold
+    NeedsApproval --> Approved: Manager approves offset
+    AutoApproved --> [*]
+    Approved --> [*]
+                </div>
+            </section>
+
+            <!-- 11 -->
+            <section id="beod" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">11. BEOD decision logic (activity)</h2>
+                <p class="text-gray-400 text-sm mb-2">
+                    Break at End of Day: optional +1 hour paid lunch credit when policy conditions hold.
+                </p>
+                <div class="mermaid">
+flowchart TD
+    A[Start daily summary calc] --> B[clock + offsite + phone = raw]
+    B --> C{BEOD claimed?}
+    C -->|No| Z[beod_hours = 0]
+    C -->|Yes| D{Approved?\nblanket OR manager}
+    D -->|No| Z
+    D -->|Yes| E{raw ≥ BEOD_MINIMUM?\ndefault 6.0h}
+    E -->|No| Z
+    E -->|Yes| F[beod_hours = 1.0]
+    Z --> G[total = raw + beod]
+    F --> G
+    G --> H[is_compliant = total ≥ target]
+                </div>
+            </section>
+
+            <!-- 12 -->
+            <section id="export" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">12. External interface — FOSC Excel package</h2>
+                <div class="overflow-x-auto rounded-xl border border-white/5">
+                    <table class="se-table">
+                        <thead>
+                            <tr><th>Interface item</th><th>Specification</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>Format</td><td>Office Open XML (.xlsx) via openpyxl</td></tr>
+                            <tr><td>Week tabs</td><td><code>Time Keeping Sheet (WkN)</code> — In/Out/Phone/Offsite/FOSC/leave/Totals/TEMPO</td></tr>
+                            <tr><td>Variance cell</td><td>Column M on TEMPO row: <code>IF(SUM(Jtot−Jtmp)&gt;0,0,SUM(Jtot−Jtmp))</code></td></tr>
+                            <tr><td>Discrepancy Tracker</td><td>Employee × Wk1–Wk14 matrix; INDEX/MATCH + offset into col 13</td></tr>
+                            <tr><td>TEMPO input</td><td><code>TempoWeekly(employee_id, week_start=Monday, hours)</code></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="se-callout">
+                    <strong>ICD teaching point:</strong> The Excel formulas are part of the
+                    <em>interface control document</em> with the contract workbook. Changing row layout
+                    requires changing the INDEX offset (name → TEMPO row).
+                </div>
+            </section>
+
+            <!-- 13 -->
+            <section id="traceability" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">13. Requirements ↔ design traceability</h2>
+                <div class="overflow-x-auto rounded-xl border border-white/5">
+                    <table class="se-table">
+                        <thead>
+                            <tr>
+                                <th>Requirement</th>
+                                <th>Design element</th>
+                                <th>Verification</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="se-req-id">FR-CI-02 / FR-CO-01</td>
+                                <td><code>time_state.can_check_in/out</code></td>
+                                <td>Test: double check-in rejected; checkout without check-in rejected</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CALC-01</td>
+                                <td><code>time_calc.calculate_daily_hours</code> + BEOD</td>
+                                <td>Unit: known fixtures → expected total</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-BEOD-01</td>
+                                <td><code>time_calc.update_daily_summary</code> + config BEOD_MINIMUM</td>
+                                <td>AC-BEOD-01 boundary tests at 5.99 / 6.0</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-LEAVE-02</td>
+                                <td><code>leave_balance</code> + <code>leave_sync</code></td>
+                                <td>Approve multi-day leave; verify each DailySummary</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-OFFS-01</td>
+                                <td><code>time_offset</code> + TimeEntry.offset_approved</td>
+                                <td>Entry with large Δt appears in manager pending</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-DISC-01</td>
+                                <td><code>fosc_export.write_discrepancy_sheet</code></td>
+                                <td>Open export in Excel; confirm shortfall-only values</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-AUDIT-01</td>
+                                <td><code>services/audit.log_action</code></td>
+                                <td>Audit page shows before/after for admin edits</td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">NFR-SEC-01</td>
+                                <td><code>auth.hash_pin</code> / signed session cookie</td>
+                                <td>DB inspection: no plaintext PINs; forged cookie rejected</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- 14 -->
+            <section id="vv" class="se-section">
+                <h2 class="text-2xl font-bold text-white mb-3">14. Verification &amp; validation (V&amp;V)</h2>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-5">
+                        <h3 class="font-semibold text-primary-300 mb-2">Verification — “Did we build it right?”</h3>
+                        <ul class="text-sm text-gray-400 space-y-2 list-disc list-inside">
+                            <li>Unit tests on pure services (time_state, time_calc, leave_balance)</li>
+                            <li>Integration: route + DB session for check-in / leave approve</li>
+                            <li>Excel smoke: open generated package, evaluate formulas</li>
+                            <li>Trace matrix: each FR has at least one test or demo script</li>
+                        </ul>
+                    </div>
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-5">
+                        <h3 class="font-semibold text-accent-400 mb-2">Validation — “Did we build the right thing?”</h3>
+                        <ul class="text-sm text-gray-400 space-y-2 list-disc list-inside">
+                            <li>Stakeholder walkthrough of weekly FOSC sheet vs contract template</li>
+                            <li>Manager dry-run: leave + offset + export for one quarter</li>
+                            <li>Employee usability: quick check-in from login under 10 seconds</li>
+                            <li>Discrepancy Tracker matches “base &lt; TEMPO only” policy</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="se-callout mt-4">
+                    <strong>SE vocabulary:</strong> Verification checks against requirements/design.
+                    Validation checks against operational need and stakeholder acceptance.
+                    Both are required for a credible baseline.
+                </div>
+            </section>
+
+            <!-- 15 -->
+            <section id="teaching" class="se-section mb-20">
+                <h2 class="text-2xl font-bold text-white mb-3">15. Exercises for new engineers</h2>
+                <ol class="list-decimal list-inside text-sm text-gray-300 space-y-3">
+                    <li>
+                        <strong class="text-white">Write a new FR</strong> for “manager comments required on rejected leave.”
+                        Add acceptance criteria and point to where you would implement it.
+                    </li>
+                    <li>
+                        <strong class="text-white">Extend the state chart:</strong> what happens if leave is approved
+                        for a day the employee already punched? Propose a rule and update FR-LEAVE.
+                    </li>
+                    <li>
+                        <strong class="text-white">Interface change impact:</strong> if the contract moves TEMPO variance
+                        from column M to column N, list every artifact that must change (export code, discrepancy formulas, ICD, AC-DISC-01).
+                    </li>
+                    <li>
+                        <strong class="text-white">Hazard analysis (lightweight):</strong> identify three ways incorrect hours
+                        could reach the quarterly package and a mitigation for each (process or design).
+                    </li>
+                    <li>
+                        <strong class="text-white">Demo V&amp;V:</strong> execute AC-BEOD-01 and AC-DISC-01 on a local instance;
+                        record evidence (screenshots + export file).
+                    </li>
+                </ol>
+
+                <div class="mt-10 p-6 rounded-2xl border border-primary-500/20 bg-primary-500/5">
+                    <h3 class="text-lg font-bold text-white mb-2">Further reading in this repo</h3>
+                    <ul class="text-sm text-gray-400 space-y-1">
+                        <li><code class="text-primary-300">app/services/time_state.py</code> — punch state machine</li>
+                        <li><code class="text-primary-300">app/services/time_calc.py</code> — FOSC hours &amp; BEOD</li>
+                        <li><code class="text-primary-300">app/services/fosc_export.py</code> — external Excel ICD</li>
+                        <li><code class="text-primary-300">app/models.py</code> — domain entities</li>
+                        <li><code class="text-primary-300">README.md</code> — operator overview</li>
+                    </ul>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <footer class="text-center text-xs text-gray-600 pb-8">
+        {{ app_name }} · Systems Engineering training pack · Artifacts derived from implementation baseline
+    </footer>
+</div>

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Systems Engineering — SDC Time Tracker{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'dark',
+        securityLevel: 'loose',
+        flowchart: { curve: 'basis', htmlLabels: true },
+        sequence: { mirrorActors: false, messageMargin: 40 },
+        themeVariables: {
+            primaryColor: '#4338ca',
+            primaryTextColor: '#e2e8f0',
+            primaryBorderColor: '#818cf8',
+            lineColor: '#94a3b8',
+            secondaryColor: '#1e293b',
+            tertiaryColor: '#0f172a',
+            background: '#020617',
+            mainBkg: '#1e293b',
+            nodeBorder: '#6366f1',
+            clusterBkg: '#0f172a',
+            titleColor: '#f8fafc',
+            edgeLabelBackground: '#0f172a',
+            actorBkg: '#312e81',
+            actorBorder: '#818cf8',
+            actorTextColor: '#e2e8f0',
+            signalColor: '#cbd5e1',
+            signalTextColor: '#e2e8f0',
+            labelBoxBkgColor: '#1e293b',
+            labelTextColor: '#e2e8f0',
+            noteBkgColor: '#1e3a5f',
+            noteTextColor: '#e2e8f0',
+        }
+    });
+</script>
+<style>
+    .se-toc a { color: #94a3b8; }
+    .se-toc a:hover { color: #a5b4fc; }
+    .se-toc a.active { color: #818cf8; }
+    .se-section { scroll-margin-top: 5rem; }
+    .se-callout {
+        border-left: 3px solid #6366f1;
+        background: rgba(99, 102, 241, 0.08);
+        padding: 0.75rem 1rem;
+        border-radius: 0 0.75rem 0.75rem 0;
+        font-size: 0.875rem;
+        color: #cbd5e1;
+        margin: 1rem 0;
+    }
+    .se-callout strong { color: #a5b4fc; }
+    .se-req-id {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        color: #818cf8;
+        font-weight: 600;
+    }
+    .se-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .se-table th {
+        text-align: left; padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        color: #94a3b8; font-weight: 600; font-size: 0.7rem;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .se-table td {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+        color: #cbd5e1; vertical-align: top;
+    }
+    .se-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .mermaid {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 1rem;
+        padding: 1.25rem;
+        margin: 1rem 0 1.5rem;
+        overflow-x: auto;
+    }
+    .se-badge {
+        display: inline-block;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .se-badge-shall { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .se-badge-should { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .se-badge-nfr { background: rgba(56,189,248,0.15); color: #38bdf8; }
+</style>
+{% endblock %}
+
+{# Render for both logged-in (content) and guest (public_content) layouts #}
+{% block content %}
+{% include "_systems_engineering_body.html" %}
+{% endblock %}
+
+{% block public_content %}
+{% include "_systems_engineering_body.html" %}
+{% endblock %}
+
+{% block scripts %}
+{% include "_se_scripts.html" %}
+{% endblock %}

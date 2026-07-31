@@ -40,6 +40,13 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - Random **innovation spotlight** in notification emails
 - Curated image + summary pairs (fighters, rotary wing, missiles, space, history)
 
+### Systems engineering (training)
+- **`/systems-engineering`** — public teaching page derived from this app’s real design
+- Context &amp; architecture diagrams, functional/NFR requirements with IDs
+- Acceptance criteria (Given/When/Then), sequence diagrams, state charts (punch, leave, offset)
+- BEOD decision logic, FOSC Excel interface notes, requirements traceability, V&amp;V, exercises
+- Linked from the login page and main navigation (for mentoring new engineers)
+
 ## Tech stack
 
 | Layer | Choice |
@@ -80,6 +87,12 @@ uv run python run.py
 4. Import **TEMPO** weekly hours on **Reports**  
 5. Export **FOSC weekly** or **quarterly** package for contract submission  
 6. Open **Discrepancy Tracker** for base vs TEMPO shortfalls  
+
+## Training new engineers
+
+Open **[Systems Engineering](http://localhost:8888/systems-engineering)** (also linked from the login page).
+
+That page is a living SE pack for this product: stakeholders, architecture, shall-requirements with acceptance criteria, sequence diagrams, state charts, BEOD logic, export ICD notes, traceability, and practice exercises.
 
 ## Remote access (Tailscale)
 

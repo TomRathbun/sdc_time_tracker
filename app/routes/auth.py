@@ -164,6 +164,20 @@ async def innovations_page(request: Request):
     })
 
 
+@router.get("/systems-engineering", response_class=HTMLResponse)
+async def systems_engineering_page(request: Request, db: Session = Depends(get_db)):
+    """Public teaching page: SE artifacts derived from this system's design."""
+    from app.config import APP_NAME, APP_VERSION
+
+    employee = get_current_employee(request, db)
+    return templates.TemplateResponse("systems_engineering.html", {
+        "request": request,
+        "employee": employee,
+        "app_name": APP_NAME,
+        "app_version": APP_VERSION,
+    })
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, db: Session = Depends(get_db)):
     """Show employee list for login."""
