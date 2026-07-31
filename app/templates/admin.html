@@ -8,17 +8,24 @@
             <h1 class="text-2xl font-bold text-white">Administration</h1>
             <p class="text-gray-400 mt-1">Manage employees and remote work authorizations</p>
         </div>
-        <a href="/admin/config"
-            class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 hover:border-primary-500/30 hover:bg-primary-500/5 text-gray-300 hover:text-white text-sm font-medium transition-all"
-            id="btn-config">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Feature Config
-        </a>
+        <div class="flex flex-wrap gap-2">
+            <a href="/admin/data-reset"
+                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-danger-500/10 border border-danger-500/20 hover:bg-danger-500/20 text-danger-300 text-sm font-medium transition-all"
+                id="btn-data-reset">
+                Data reset
+            </a>
+            <a href="/admin/config"
+                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 hover:border-primary-500/30 hover:bg-primary-500/5 text-gray-300 hover:text-white text-sm font-medium transition-all"
+                id="btn-config">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Feature Config
+            </a>
+        </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -193,7 +200,7 @@
                             <div class="flex items-center gap-1 justify-end">
                                 <!-- Edit -->
                                 <button
-                                    onclick="openEditModal({{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}')"
+                                    onclick="openEditModal({{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 30 }}, {{ emp.sick_days_per_year or 10 }})"
                                     class="p-1.5 rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 transition-colors"
                                     title="Edit" id="btn-edit-{{ emp.id }}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,6 +284,16 @@
                         <option value="manager">Manager</option>
                     </select>
                 </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Vacation days / year</label>
+                        <input type="number" name="vacation_days" id="edit-vacation" class="form-input" min="0" step="1" value="30">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">Sick days / year</label>
+                        <input type="number" name="sick_days" id="edit-sick" class="form-input" min="0" step="1" value="10">
+                    </div>
+                </div>
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">Reset PIN <span class="text-gray-600">(leave blank
                             to keep current)</span></label>
@@ -299,9 +316,11 @@
 
 {% block scripts %}
 <script>
-    function openEditModal(id, name, email, role) {
+    function openEditModal(id, name, email, role, vacationDays, sickDays) {
         document.getElementById('edit-form').action = '/admin/employee/' + id + '/edit';
         document.getElementById('edit-name').value = name;
+        document.getElementById('edit-vacation').value = vacationDays != null ? vacationDays : 30;
+        document.getElementById('edit-sick').value = sickDays != null ? sickDays : 10;
         document.getElementById('edit-email').value = email;
         document.getElementById('edit-role').value = role;
         document.getElementById('edit-pin').value = '';

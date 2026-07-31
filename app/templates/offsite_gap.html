@@ -50,6 +50,12 @@
         </div>
     </div>
 
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Quick form -->
     <div class="glass-card p-6">
         <form method="POST" action="/time/offsite-gap" id="offsite-gap-form">

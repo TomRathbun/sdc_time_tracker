@@ -28,6 +28,16 @@ WEEKDAY_HOURS = {
     6: 0,  # Sunday
 }
 
+# Past-day entry: only allow strictly prior workdays within this lookback window
+PAST_DAY_MAX_LOOKBACK_DAYS = 14
+
+# FOSC leave entitlements (defaults; overridable per employee)
+DEFAULT_VACATION_DAYS_PER_YEAR = 30.0
+DEFAULT_SICK_DAYS_PER_YEAR = 10.0
+
+# BEOD (Break at End of Day): minimum real work hours before +1h paid lunch credit
+BEOD_MINIMUM_HOURS = 6.0
+
 # Application info
 APP_NAME = "SDC Time Tracker"
 APP_VERSION = "1.0.0"

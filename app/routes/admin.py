@@ -12,10 +12,11 @@ from app.auth import get_current_employee, hash_pin
 from app.models import (
     Employee, Role, RemoteAuthorization, AuthorizationStatus,
     DailySummary, TimeEntry, EntryType, LeaveRequest, LeaveStatus,
-    OffsiteEntry,
+    OffsiteEntry, PhoneSupportEntry, AuditLog,
 )
 from app.services.audit import log_action
 from app.services.time_calc import get_target_hours, update_daily_summary
+from app.services.leave_sync import apply_leave_approval
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -153,6 +154,8 @@ async def edit_employee(
     email: str = Form(""),
     role: str = Form("employee"),
     reset_pin: str = Form(""),
+    vacation_days: float = Form(30.0),
+    sick_days: float = Form(10.0),
     db: Session = Depends(get_db),
 ):
     """Edit an employee's details."""
@@ -164,11 +167,19 @@ async def edit_employee(
     if not target:
         return RedirectResponse(url="/admin", status_code=303)
 
-    old_values = {"name": target.name, "email": target.email, "role": target.role.value}
+    old_values = {
+        "name": target.name,
+        "email": target.email,
+        "role": target.role.value,
+        "vacation_days": target.vacation_days_per_year,
+        "sick_days": target.sick_days_per_year,
+    }
 
     target.name = name.strip()
     target.email = email.strip() or None
     target.role = Role(role)
+    target.vacation_days_per_year = max(0.0, float(vacation_days))
+    target.sick_days_per_year = max(0.0, float(sick_days))
 
     # Optionally reset PIN
     if reset_pin.strip():
@@ -181,7 +192,13 @@ async def edit_employee(
         db, action="edit_employee", entity_type="Employee",
         entity_id=target.id, employee_id=employee.id,
         old_values=old_values,
-        new_values={"name": target.name, "email": target.email, "role": target.role.value},
+        new_values={
+            "name": target.name,
+            "email": target.email,
+            "role": target.role.value,
+            "vacation_days": target.vacation_days_per_year,
+            "sick_days": target.sick_days_per_year,
+        },
         ip_address=request.client.host if request.client else "",
     )
 
@@ -255,6 +272,7 @@ async def team_timesheet(
     prev_week = week_start - timedelta(days=7)
     next_week = week_start + timedelta(days=7)
     is_current_week = week_start == _monday_of_week(today)
+    # Future weeks allowed (e.g. advance vacation approvals)
     is_future = week_start > _monday_of_week(today)
 
     # Build day headers (Mon-Fri)
@@ -392,21 +410,62 @@ async def team_timesheet(
             if not is_leave_approved:
                 week_target += target
 
-            # PTO type label
+            # Leave type labels (FOSC spreadsheet buckets)
             leave_type_label = None
             if leave_type_val == "vacation":
-                leave_type_label = "PTO (VAC)"
+                leave_type_label = "Vacation"
             elif leave_type_val == "sick":
-                leave_type_label = "PTO (SIC)"
+                leave_type_label = "Sick"
+            elif leave_type_val == "covid_sick":
+                leave_type_label = "COVID Sick"
+            elif leave_type_val == "uae_holiday":
+                leave_type_label = "UAE Holiday"
+
+            # Punch detail: declared vs submission (actual punch time)
+            day_entries = entry_lookup.get(emp.id, {}).get(d, [])
+            check_ins = sorted(
+                [e for e in day_entries if e.entry_type == EntryType.check_in],
+                key=lambda e: e.declared_time,
+            )
+            check_outs = sorted(
+                [e for e in day_entries if e.entry_type == EntryType.check_out],
+                key=lambda e: e.declared_time,
+            )
+
+            def _punch_info(entries):
+                punches = []
+                for e in entries:
+                    dec = e.declared_time
+                    sub = e.submission_time
+                    diff = abs((sub - dec).total_seconds()) / 60.0
+                    over = not bool(getattr(e, "offset_approved", True))
+                    punches.append({
+                        "id": e.id,
+                        "declared": dec.strftime("%H:%M"),
+                        "submitted": sub.strftime("%H:%M") if sub else "—",
+                        "diff_min": int(round(diff)),
+                        "needs_approval": over,
+                        "comments": (e.comments or "")[:80],
+                    })
+                return punches
+
+            ci_punches = _punch_info(check_ins)
+            co_punches = _punch_info(check_outs)
+            offset_pending = any(p["needs_approval"] for p in ci_punches + co_punches)
+            pending_offset_ids = [
+                p["id"] for p in ci_punches + co_punches if p["needs_approval"]
+            ]
 
             # Determine cell status — pending items take priority
-            if lunch_pending:
+            if offset_pending:
+                status = "offset_pending"
+            elif lunch_pending:
                 status = "lunch_pending"
             elif pto_pending:
                 status = "pto_pending"
             elif is_leave_approved:
                 status = "leave"
-            elif d > today:
+            elif d > today and not check_ins and not check_outs and leave_hrs <= 0:
                 status = "future"
             elif worked <= 0 and leave_hrs <= 0 and d < today:
                 status = "missing"
@@ -415,16 +474,12 @@ async def team_timesheet(
             else:
                 status = "partial"
 
-            # Calculate punctuality dots
-            day_entries = entry_lookup.get(emp.id, {}).get(d, [])
-            check_ins = [e for e in day_entries if e.entry_type == EntryType.check_in]
-            check_outs = [e for e in day_entries if e.entry_type == EntryType.check_out]
-
+            # Punctuality dots (declared times)
             ci_dot = "empty"
             if check_ins:
                 first_ci = min(e.declared_time for e in check_ins)
                 ci_dot = "green" if first_ci.time() <= time(8, 0) else "red"
-            
+
             co_dot = "empty"
             if check_outs:
                 last_co = max(e.declared_time for e in check_outs)
@@ -440,6 +495,10 @@ async def team_timesheet(
                 "remaining": round(max(0, target - live_worked - approved_leave), 2),
                 "ci_dot": ci_dot,
                 "co_dot": co_dot,
+                "ci_punches": ci_punches,
+                "co_punches": co_punches,
+                "offset_pending": offset_pending,
+                "pending_offset_ids": pending_offset_ids,
                 "leave_hours": leave_hrs,
                 "display_leave_hours": leave_hrs if pto_pending or pto_approved else 0.0,
                 "leave_type_label": leave_type_label,
@@ -453,6 +512,10 @@ async def team_timesheet(
                 "lunch_approved": lunch_approved_flag,
                 "summary_id": s.id if s else None,
                 "leave_request_id": l_req.id if is_leave_pending else None,
+                "clock_hours": s.clock_hours if s else 0.0,
+                "phone_hours": s.phone_hours if s else 0.0,
+                "offsite_hours": s.offsite_hours if s else 0.0,
+                "beod_hours": s.beod_hours if s else 0.0,
             })
 
         rows.append({
@@ -462,6 +525,20 @@ async def team_timesheet(
             "week_target": week_target,
             "week_compliant": week_total >= (week_target - 0.01),
         })
+
+    from app.services.time_offset import get_comment_threshold_minutes
+    threshold = get_comment_threshold_minutes(db)
+
+    # Week-level pending counts for banner
+    week_pending_offset = sum(
+        1 for r in rows for c in r["days"] if c.get("offset_pending")
+    )
+    week_pending_beod = sum(
+        1 for r in rows for c in r["days"] if c.get("lunch_pending")
+    )
+    week_pending_leave = sum(
+        1 for r in rows for c in r["days"] if c.get("pto_pending")
+    )
 
     return templates.TemplateResponse("admin_timesheet.html", {
         "request": request,
@@ -475,7 +552,58 @@ async def team_timesheet(
         "is_current_week": is_current_week,
         "is_future": is_future,
         "today": today,
+        "comment_threshold": threshold,
+        "week_pending_offset": week_pending_offset,
+        "week_pending_beod": week_pending_beod,
+        "week_pending_leave": week_pending_leave,
     })
+
+
+@router.post("/admin/approve-offset", response_class=HTMLResponse)
+async def approve_time_offset(
+    request: Request,
+    week: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Approve declared-vs-submission time offsets for one or more punches."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    form = await request.form()
+    # Support entry_id single or entry_ids multi
+    ids = form.getlist("entry_id") if hasattr(form, "getlist") else []
+    if not ids:
+        single = form.get("entry_id")
+        if single:
+            ids = [single]
+    # Also accept comma-separated entry_ids
+    bulk = form.get("entry_ids", "")
+    if bulk:
+        ids = [x.strip() for x in str(bulk).split(",") if x.strip()]
+
+    approved_ids = []
+    for raw in ids:
+        try:
+            eid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        entry = db.query(TimeEntry).filter(TimeEntry.id == eid).first()
+        if entry and not entry.offset_approved:
+            entry.offset_approved = True
+            approved_ids.append(eid)
+
+    if approved_ids:
+        db.commit()
+        log_action(
+            db, action="approve_time_offset", entity_type="TimeEntry",
+            entity_id=approved_ids[0], employee_id=employee.id,
+            new_values={"entry_ids": approved_ids},
+            ip_address=request.client.host if request.client else "",
+        )
+
+    redirect_url = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 @router.post("/admin/approve-lunch", response_class=HTMLResponse)
@@ -485,7 +613,7 @@ async def approve_lunch(
     week: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """Approve a lunch-at-end-of-day deviation. Adds +1h to worked hours."""
+    """Approve BEOD (break at end of day). Adds +1h to worked hours when eligible."""
     employee = get_current_employee(request, db)
     if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
@@ -629,6 +757,8 @@ async def admin_approve_leave_request(
         leave.approved_by = employee.id
         db.commit()
 
+        apply_leave_approval(db, leave)
+
         log_action(
             db, action="approve_leave_admin", entity_type="LeaveRequest",
             entity_id=leave.id, employee_id=employee.id,
@@ -690,4 +820,124 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
     )
 
     return RedirectResponse(url="/admin/config?saved=1", status_code=303)
+
+
+# ── Production cutover / cleanup ──────────────────────────────────────
+
+@router.get("/admin/data-reset", response_class=HTMLResponse)
+async def data_reset_page(request: Request, db: Session = Depends(get_db)):
+    """Manager-only page to clear audit log and demo data before go-live."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role != Role.manager:
+        return RedirectResponse(url="/login", status_code=303)
+
+    counts = {
+        "employees": db.query(Employee).count(),
+        "time_entries": db.query(TimeEntry).count(),
+        "offsite": db.query(OffsiteEntry).count(),
+        "phone": db.query(PhoneSupportEntry).count(),
+        "summaries": db.query(DailySummary).count(),
+        "leave": db.query(LeaveRequest).count(),
+        "audit": db.query(AuditLog).count(),
+        "remote_auth": db.query(RemoteAuthorization).count(),
+    }
+    return templates.TemplateResponse("admin_data_reset.html", {
+        "request": request,
+        "employee": employee,
+        "counts": counts,
+        "message": request.query_params.get("msg"),
+        "error": request.query_params.get("err"),
+    })
+
+
+@router.post("/admin/data-reset", response_class=HTMLResponse)
+async def data_reset_submit(
+    request: Request,
+    confirm: str = Form(""),
+    clear_audit: str = Form(""),
+    clear_time_data: str = Form(""),
+    remove_other_employees: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """
+    Destructive cleanup for production cutover.
+
+    - clear_audit: wipe AuditLog
+    - clear_time_data: wipe punches, offsite, phone, summaries, leave, remote auth
+    - remove_other_employees: delete all employees except the logged-in manager
+    """
+    employee = get_current_employee(request, db)
+    if not employee or employee.role != Role.manager:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if confirm.strip().upper() != "RESET":
+        return RedirectResponse(
+            url="/admin/data-reset?err=Type+RESET+to+confirm",
+            status_code=303,
+        )
+
+    do_audit = clear_audit.lower() in ("true", "on", "1", "yes")
+    do_time = clear_time_data.lower() in ("true", "on", "1", "yes")
+    do_emps = remove_other_employees.lower() in ("true", "on", "1", "yes")
+
+    if not (do_audit or do_time or do_emps):
+        return RedirectResponse(
+            url="/admin/data-reset?err=Select+at+least+one+option",
+            status_code=303,
+        )
+
+    actions = []
+    try:
+        if do_time or do_emps:
+            # Order matters for FKs
+            n = db.query(TimeEntry).delete()
+            actions.append(f"time_entries={n}")
+            n = db.query(OffsiteEntry).delete()
+            actions.append(f"offsite={n}")
+            n = db.query(PhoneSupportEntry).delete()
+            actions.append(f"phone={n}")
+            n = db.query(DailySummary).delete()
+            actions.append(f"summaries={n}")
+            n = db.query(LeaveRequest).delete()
+            actions.append(f"leave={n}")
+            n = db.query(RemoteAuthorization).delete()
+            actions.append(f"remote_auth={n}")
+
+        if do_emps:
+            # Keep current manager only
+            others = (
+                db.query(Employee)
+                .filter(Employee.id != employee.id)
+                .all()
+            )
+            for o in others:
+                db.delete(o)
+            actions.append(f"employees_removed={len(others)}")
+
+        if do_audit:
+            n = db.query(AuditLog).delete()
+            actions.append(f"audit={n}")
+
+        db.commit()
+
+        # Log a single post-reset breadcrumb (only if we didn't just wipe audit
+        # and then have nothing — still write one entry for accountability)
+        log_action(
+            db,
+            action="data_reset",
+            entity_type="System",
+            entity_id=None,
+            employee_id=employee.id,
+            new_values={"actions": actions},
+            ip_address=request.client.host if request.client else "",
+        )
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(
+            url=f"/admin/data-reset?err={str(exc)[:120]}",
+            status_code=303,
+        )
+
+    msg = "Completed:+" + "+".join(actions)
+    return RedirectResponse(url=f"/admin/data-reset?msg={msg}", status_code=303)
 

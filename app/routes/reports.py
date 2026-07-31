@@ -10,14 +10,21 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import get_current_employee
+from fastapi import Form, File, UploadFile
+
 from app.models import (
     Employee, Role, TimeEntry, OffsiteEntry, DailySummary,
-    AuditLog, LeaveRequest, LeaveStatus,
+    AuditLog, LeaveRequest, LeaveStatus, TempoWeekly,
 )
 from app.services.time_calc import get_target_hours
+from app.services.audit import log_action
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _monday(d: date) -> date:
+    return d - timedelta(days=d.weekday())
 
 
 @router.get("/reports", response_class=HTMLResponse)
@@ -28,13 +35,264 @@ async def reports_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    week_start = _monday(date.today())
+    today = date.today()
+    current_quarter = (today.month - 1) // 3 + 1
 
     return templates.TemplateResponse("reports.html", {
         "request": request,
         "employee": employee,
         "employees": employees,
         "report_data": None,
+        "fosc_week_start": week_start.isoformat(),
+        "fosc_year": today.year,
+        "fosc_quarter": current_quarter,
     })
+
+
+@router.get("/reports/export/fosc-weekly")
+async def export_fosc_weekly(
+    request: Request,
+    week: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Export one week of FOSC attendance (all active employees)."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    if week:
+        try:
+            week_start = _monday(date.fromisoformat(week))
+        except ValueError:
+            week_start = _monday(date.today())
+    else:
+        week_start = _monday(date.today())
+
+    from app.services.fosc_export import build_fosc_weekly_workbook
+
+    buf = build_fosc_weekly_workbook(db, week_start)
+    filename = f"FOSC_Weekly_Attendance_{week_start.isoformat()}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports/export/fosc-quarterly")
+async def export_fosc_quarterly(
+    request: Request,
+    year: int = Query(None),
+    quarter: int = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Export full quarter: one lean weekly sheet per week (no bulk history dumps)."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    if year is None:
+        year = today.year
+    if quarter is None:
+        quarter = (today.month - 1) // 3 + 1
+    if quarter < 1 or quarter > 4:
+        quarter = 1
+
+    from app.services.fosc_export import build_fosc_quarterly_workbook
+
+    buf = build_fosc_quarterly_workbook(db, year, quarter)
+    filename = f"FOSC_Q{quarter}_{year}_Attendance.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports/tempo", response_class=HTMLResponse)
+async def tempo_import_page(
+    request: Request,
+    week: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Manage TEMPO weekly hours for discrepancy comparison."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    if week:
+        try:
+            week_start = _monday(date.fromisoformat(week))
+        except ValueError:
+            week_start = _monday(date.today())
+    else:
+        week_start = _monday(date.today())
+    rows = (
+        db.query(TempoWeekly)
+        .filter(TempoWeekly.week_start == week_start)
+        .all()
+    )
+    by_emp = {r.employee_id: r for r in rows}
+
+    return templates.TemplateResponse("tempo_import.html", {
+        "request": request,
+        "employee": employee,
+        "employees": employees,
+        "week_start": week_start,
+        "by_emp": by_emp,
+        "message": request.query_params.get("msg"),
+        "error": request.query_params.get("err"),
+    })
+
+
+@router.post("/reports/tempo")
+async def tempo_import_submit(
+    request: Request,
+    week: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Save TEMPO weekly hours from form fields tempo_{employee_id}."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        week_start = _monday(date.fromisoformat(week))
+    except ValueError:
+        return RedirectResponse(url="/reports/tempo?err=Invalid+week", status_code=303)
+
+    form = await request.form()
+    saved = 0
+    for key, val in form.items():
+        if not str(key).startswith("tempo_"):
+            continue
+        try:
+            emp_id = int(str(key).replace("tempo_", ""))
+        except ValueError:
+            continue
+        raw = str(val).strip()
+        if raw == "":
+            # clear existing
+            existing = (
+                db.query(TempoWeekly)
+                .filter(TempoWeekly.employee_id == emp_id, TempoWeekly.week_start == week_start)
+                .first()
+            )
+            if existing:
+                db.delete(existing)
+                saved += 1
+            continue
+        try:
+            hours = float(raw)
+        except ValueError:
+            continue
+        existing = (
+            db.query(TempoWeekly)
+            .filter(TempoWeekly.employee_id == emp_id, TempoWeekly.week_start == week_start)
+            .first()
+        )
+        if existing:
+            existing.hours = hours
+            existing.updated_at = datetime.utcnow()
+        else:
+            db.add(TempoWeekly(
+                employee_id=emp_id,
+                week_start=week_start,
+                hours=hours,
+                updated_at=datetime.utcnow(),
+            ))
+        saved += 1
+
+    db.commit()
+    log_action(
+        db, action="import_tempo", entity_type="TempoWeekly",
+        entity_id=None, employee_id=employee.id,
+        new_values={"week_start": str(week_start), "rows_touched": saved},
+        ip_address=request.client.host if request.client else "",
+    )
+    return RedirectResponse(
+        url=f"/reports/tempo?msg=Saved+{saved}+TEMPO+row(s)+for+week+{week_start.isoformat()}",
+        status_code=303,
+    )
+
+
+@router.post("/reports/tempo/csv")
+async def tempo_import_csv(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    CSV import: employee_name,week_start,hours
+    week_start = any date in the week (normalized to Monday).
+    """
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    import csv
+    import io
+
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    # Allow flexible headers
+    saved = 0
+    errors = 0
+    emps = {e.name.strip().lower(): e for e in db.query(Employee).filter(Employee.is_active == True).all()}
+
+    for row in reader:
+        # normalize keys
+        keys = {k.strip().lower().replace(" ", "_"): v for k, v in row.items() if k}
+        name = (keys.get("employee_name") or keys.get("name") or keys.get("employee") or "").strip()
+        week_raw = (keys.get("week_start") or keys.get("week") or keys.get("monday") or "").strip()
+        hours_raw = (keys.get("hours") or keys.get("tempo_hours") or keys.get("tempo") or "").strip()
+        if not name or not week_raw or not hours_raw:
+            errors += 1
+            continue
+        emp = emps.get(name.lower())
+        if not emp:
+            # try partial match last name
+            matches = [e for n, e in emps.items() if name.lower() in n or n in name.lower()]
+            emp = matches[0] if len(matches) == 1 else None
+        if not emp:
+            errors += 1
+            continue
+        try:
+            week_start = _monday(date.fromisoformat(week_raw[:10]))
+            hours = float(hours_raw)
+        except ValueError:
+            errors += 1
+            continue
+        existing = (
+            db.query(TempoWeekly)
+            .filter(TempoWeekly.employee_id == emp.id, TempoWeekly.week_start == week_start)
+            .first()
+        )
+        if existing:
+            existing.hours = hours
+            existing.updated_at = datetime.utcnow()
+        else:
+            db.add(TempoWeekly(
+                employee_id=emp.id,
+                week_start=week_start,
+                hours=hours,
+                updated_at=datetime.utcnow(),
+            ))
+        saved += 1
+
+    db.commit()
+    return RedirectResponse(
+        url=f"/reports/tempo?msg=CSV+import:+{saved}+saved,+{errors}+skipped",
+        status_code=303,
+    )
 
 
 @router.get("/reports/compliance", response_class=HTMLResponse)
@@ -96,7 +354,12 @@ async def compliance_report(
                 LeaveRequest.end_date >= s_date,
             ).all()
 
-            total_worked = sum(s.total_hours for s in summaries)
+            # Effective hours include approved leave (same rule as DailySummary compliance)
+            def _effective(s):
+                leave = s.leave_hours if (s.leave_approved and s.leave_hours) else 0.0
+                return (s.total_hours or 0.0) + leave
+
+            total_worked = sum(_effective(s) for s in summaries)
             total_target = sum(s.target_hours for s in summaries)
             deviation_days = [s for s in summaries if not s.is_compliant]
 

@@ -41,6 +41,10 @@ FEATURE_DEFAULTS = {
         "value": "10",
         "description": "Number of names to show in the login list before scrolling (approximate)",
     },
+    "beod_blanket_approval": {
+        "value": "true",
+        "description": "BEOD (break end of day): auto-approve when employee checks the box (no manager step). Off = individual approval after checkout.",
+    },
 }
 
 

@@ -1,59 +1,114 @@
 # SDC Time Tracker
 
-A modern, high-performance Electronic Time and Attendance System (ETAS) designed for SDC employees. Features a premium, dark-themed interface with real-time status tracking and compliance monitoring.
+Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-On Support Contract). Dark-themed FastAPI app with check-in/out, leave, manager approvals, TEMPO variance, and quarterly FOSC Excel export.
 
-![Aesthetic Dashboard Preview](https://github.com/TomRathbun/sdc_time_tracker/raw/main/app/static/img/dashboard_preview.png) *(Placeholder if you add images later)*
+## Key features
 
-## ✨ Key Features
+### Timekeeping
+- **Quick check-in / check-out** — one-tap entry from login or dashboard (office, remote, offsite)
+- **Past-day entry** — log or correct previous workdays (manager rules apply)
+- **Offsite / remote work** — dedicated offsite logging with gap detection
+- **Phone support hours** — additive hours that roll into FOSC totals
+- **Live dashboard progress** — daily/weekly targets (default **9h Mon–Thu, 4h Fri**), including in-progress open shifts
 
-- **Quick Check-In/Out**: One-tap entry with location tracking (Office, Remote, Offsite).
-- **Past Day Entry**: Log full timelines for previous workdays (up to 14 days back).
-- **Remote Site Work**: Dedicated flow for logging offsite client visits and gap detection.
-- **PTO & Leave Management**: Request partial or full-day leave with manager approval flow.
-- **Compliance Monitoring**: Real-time progress tracking against daily/weekly targets (e.g., 9h Mon-Thu, 4h Fri).
-- **Admin Dashboard**: Comprehensive employee management, timesheet approvals, and audit trails.
-- **Security First**: 
-  - PIN-based authentication.
-  - Forced PIN reset for first-time users.
-  - Signed session tokens.
+### FOSC rules
+- **Paid lunch** inside the scheduled work window
+- **BEOD** (end-of-day credit) — optional blanket or per-request, with minimum raw hours (default ≥6h)
+- **FOSC day total** = clock + phone + offsite + BEOD credit
+- **Leave types** — vacation, sick, COVID sick, UAE national holiday  
+  Full leave day = target hours for that weekday (9h or 4h Friday)
+- **Leave balances** — defaults (e.g. 30 vacation / 10 sick) with pending requests reserving days
+- **Declared vs submission** — when declared time differs from device submission beyond a threshold, manager **offset approval** is required
 
-## 🚀 Tech Stack
+### Manager / admin
+- **Admin timesheet** — declared vs submitted, offsets, BEOD, leave, and future weeks
+- **Leave approvals** — dedicated `/leave/approvals` page (separate from request UI)
+- **Config** — BEOD, schedule, thresholds, and related settings
+- **Audit trail** — change history and policy alerts
+- **Production data reset** — clear demo/audit data before real staff go live
 
-- **Backend**: Python 3.11+, FastAPI
-- **Database**: SQLite (SQLAlchemy ORM)
-- **Frontend**: Jinja2 Templates, Tailwind CSS, HTMX
-- **Environment**: Managed with `uv`
+### Reports & FOSC export
+- **TEMPO import** — weekly hours charged in Lockheed TEMPO (CSV / form)
+- **FOSC weekly workbook** — `Time Keeping Sheet (Wk1)` + **Discrepancy Tracker**
+- **FOSC quarterly package** — one week sheet per Monday in the quarter + Discrepancy Tracker
+- **Discrepancy Tracker** — contract-style matrix (Wk1–Wk14):  
+  `INDEX`/`MATCH` into each week sheet column **M** (*Hours to Reduce*)  
+  Formula: only **shortfalls** where base hours &lt; TEMPO (`IF(SDC−TEMPO>0, 0, SDC−TEMPO)`)
 
-## 🛠️ Installation & Setup
+### Tactical Library
+- **Lockheed Martin innovations gallery** — products and heritage milestones on login / `/innovations`
+- Random **innovation spotlight** in notification emails
+- Curated image + summary pairs (fighters, rotary wing, missiles, space, history)
 
-1. **Copy the repository**:
-   ```bash
-   cd sdc_time_tracker
-   ```
+## Tech stack
 
-2. **Install dependencies**:
-   Using `uv` (recommended):
-   ```bash
-   uv sync
-   ```
-   Or using pip:
-   ```bash
-   pip install -r requirements.txt
-   ```
+| Layer | Choice |
+|--------|--------|
+| Backend | Python 3.11+, FastAPI |
+| Database | SQLite + SQLAlchemy |
+| Frontend | Jinja2, Tailwind CSS, HTMX |
+| Excel export | openpyxl |
+| Tooling | `uv` (recommended) |
 
-3. **Run the server**:
-   ```bash
-   uv run python run.py --no-ssl
-   ```
-   The application will be available at [http://localhost:8888](http://localhost:8888).
+## Installation
 
-## 🌍 Remote Access (Tailscale)
+```bash
+cd sdc_time_tracker
+uv sync
+# or: pip install -r requirements.txt
+```
 
-This system is configured to accept connections over Tailscale. 
-1. Install Tailscale on your host and remote device.
-2. Find your host's Tailscale IP: `tailscale ip -4`.
-3. Access via `http://[TAILSCALE-IP]:8888`.
+## Run
 
-## 📄 License
+```bash
+uv run python run.py --no-ssl
+```
 
-Distributed under the MIT License. See `LICENSE` for more information.
+App: [http://localhost:8888](http://localhost:8888)
+
+With TLS (certs under `certs/`):
+
+```bash
+uv run python run.py
+```
+
+## Typical production flow
+
+1. Reset demo data (admin) and create real employees  
+2. Staff check in/out; log phone support, offsite, and leave as needed  
+3. Managers approve leave, offsets, and review timesheets  
+4. Import **TEMPO** weekly hours on **Reports**  
+5. Export **FOSC weekly** or **quarterly** package for contract submission  
+6. Open **Discrepancy Tracker** for base vs TEMPO shortfalls  
+
+## Remote access (Tailscale)
+
+1. Install Tailscale on host and client  
+2. Host IP: `tailscale ip -4`  
+3. Browse `http://[TAILSCALE-IP]:8888`  
+
+## Project layout (high level)
+
+```
+app/
+  models.py              # employees, entries, leave, TEMPO, summaries
+  routes/                # auth, dashboard, time, leave, admin, reports
+  services/
+    fosc_export.py       # weekly/quarterly Excel + Discrepancy Tracker
+    time_state.py        # check-in state machine
+    leave_balance.py     # entitlements & pending
+    leave_sync.py        # leave → DailySummary
+    time_offset.py       # declared vs submission
+    pending.py           # manager pending work
+  static/
+    lockheed_weapons.json
+    images/weapons/      # Tactical Library art
+  templates/             # UI pages
+```
+
+Reference FOSC template (optional):  
+`2025-Q3 In Country - Weekly Time Record Worksheet Validation Template.xlsx`
+
+## License
+
+MIT — see `LICENSE`.

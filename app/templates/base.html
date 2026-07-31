@@ -114,12 +114,26 @@
                             </svg>
                             Audit
                         </a>
-                        <a href="/admin/timesheet" class="nav-link" id="nav-timesheet">
+                        <a href="/admin/timesheet" class="nav-link relative" id="nav-timesheet">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                             Timesheet
+                            {% set pa = request.state.pending_approvals if request.state is defined and request.state.pending_approvals is defined else none %}
+                            {% if pa and pa.total > 0 %}
+                            <span class="absolute -top-1 -right-1 min-w-[1.1rem] h-4 px-1 rounded-full bg-warning-500 text-[10px] font-bold text-surface-900 flex items-center justify-center">{{ pa.total if pa.total < 100 else '99+' }}</span>
+                            {% endif %}
+                        </a>
+                        <a href="/leave/approvals" class="nav-link relative" id="nav-leave-approvals" title="Pending leave approvals">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Approvals
+                            {% if pa and pa.pending_leave > 0 %}
+                            <span class="absolute -top-1 -right-1 min-w-[1.1rem] h-4 px-1 rounded-full bg-warning-500 text-[10px] font-bold text-surface-900 flex items-center justify-center">{{ pa.pending_leave }}</span>
+                            {% endif %}
                         </a>
                         <a href="/admin" class="nav-link" id="nav-admin">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,7 +188,8 @@
                     {% if employee.role.value in ['manager', 'supervisor'] %}
                     <a href="/reports" class="mobile-nav-link">Reports</a>
                     <a href="/audit" class="mobile-nav-link">Audit Trail</a>
-                    <a href="/admin/timesheet" class="mobile-nav-link">Team Timesheet</a>
+                    <a href="/admin/timesheet" class="mobile-nav-link">Team Timesheet{% if request.state.pending_approvals is defined and request.state.pending_approvals.total > 0 %} ({{ request.state.pending_approvals.total }}){% endif %}</a>
+                    <a href="/leave/approvals" class="mobile-nav-link">Approvals{% if request.state.pending_approvals is defined and request.state.pending_approvals.pending_leave > 0 %} ({{ request.state.pending_approvals.pending_leave }}){% endif %}</a>
                     <a href="/admin" class="mobile-nav-link">Admin</a>
                     {% endif %}
                 </div>

@@ -1,9 +1,9 @@
 """Main FastAPI application."""
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from pathlib import Path
+
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 
 from app.config import APP_NAME, APP_VERSION
 from app.database import init_db
@@ -26,6 +26,48 @@ app.include_router(leave.router)
 app.include_router(admin.router)
 app.include_router(reports.router)
 app.include_router(quick_action.router)
+
+
+@app.middleware("http")
+async def attach_pending_approvals(request: Request, call_next):
+    """Load pending approval counts for manager/supervisor nav badges."""
+    request.state.pending_approvals = {
+        "pending_leave": 0,
+        "pending_beod": 0,
+        "pending_pto": 0,
+        "pending_offset": 0,
+        "total": 0,
+    }
+    path = request.url.path or ""
+    if path.startswith("/static") or path.startswith("/api/"):
+        return await call_next(request)
+    try:
+        from app.database import SessionLocal
+        from app.auth import decode_session_token
+        from app.config import SESSION_COOKIE_NAME
+        from app.models import Employee
+        from app.services.pending import get_pending_approvals, is_approver
+
+        token = request.cookies.get(SESSION_COOKIE_NAME)
+        if not token:
+            return await call_next(request)
+        data = decode_session_token(token)
+        if not data:
+            return await call_next(request)
+
+        db = SessionLocal()
+        try:
+            emp = db.query(Employee).filter(
+                Employee.id == data["employee_id"],
+                Employee.is_active == True,  # noqa: E712
+            ).first()
+            if is_approver(emp):
+                request.state.pending_approvals = get_pending_approvals(db, emp.id)
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return await call_next(request)
 
 
 @app.on_event("startup")

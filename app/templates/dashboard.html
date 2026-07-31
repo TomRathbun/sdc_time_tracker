@@ -3,17 +3,46 @@
 
 {% block content %}
 <!-- Greeting & Date -->
-<div class="mb-8">
+<div class="mb-6">
     <h1 class="text-2xl sm:text-3xl font-bold text-white">
-        Good {{ "morning" if now.strftime("%H")|int < 12 else ("afternoon" if now.strftime("%H")|int < 17 else "evening"
-            ) }}, {{ employee.name.split()[0] }} </h1>
-            <p class="text-gray-400 mt-1">{{ today.strftime("%A, %B %d, %Y") }}</p>
+        Good {{ "morning" if now.strftime("%H")|int < 12 else ("afternoon" if now.strftime("%H")|int < 17 else "evening") }},
+        {{ employee.name.split()[0] }}
+    </h1>
+    <p class="text-gray-400 mt-1">{{ today.strftime("%A, %B %d, %Y") }}</p>
 </div>
 
+{% if employee.role.value in ['manager', 'supervisor'] %}
+{% set pa = request.state.pending_approvals if request.state is defined and request.state.pending_approvals is defined else none %}
+{% if pa and pa.total > 0 %}
+<div class="mb-6 glass-card p-4 border-l-4 border-warning-400 flex flex-wrap items-center justify-between gap-3">
+    <div>
+        <p class="font-semibold text-white text-sm">Pending approvals need attention</p>
+        <p class="text-xs text-gray-400 mt-0.5">
+            {% if pa.pending_leave %}{{ pa.pending_leave }} leave{% endif %}
+            {% if pa.pending_leave and (pa.pending_beod or pa.pending_pto or pa.pending_offset) %} · {% endif %}
+            {% if pa.pending_beod %}{{ pa.pending_beod }} BEOD{% endif %}
+            {% if pa.pending_beod and (pa.pending_pto or pa.pending_offset) %} · {% endif %}
+            {% if pa.pending_pto %}{{ pa.pending_pto }} PTO{% endif %}
+            {% if pa.pending_pto and pa.pending_offset %} · {% endif %}
+            {% if pa.pending_offset %}{{ pa.pending_offset }} time offset{% endif %}
+        </p>
+    </div>
+    <div class="flex gap-2">
+        {% if pa.pending_leave %}
+        <a href="/leave/approvals" class="btn-secondary text-sm py-2 px-3">Review leave</a>
+        {% endif %}
+        {% if pa.pending_beod or pa.pending_pto or pa.pending_offset %}
+        <a href="/admin/timesheet" class="btn-primary text-sm py-2 px-3">Open timesheet</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
 <!-- Status Banner -->
-<div class="mb-8">
+<div class="mb-6">
     {% if not is_workday %}
-    <div class="glass-card p-6 border-l-4 border-accent-400">
+    <div class="glass-card p-5 border-l-4 border-accent-400">
         <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center">
                 <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -28,7 +57,7 @@
         </div>
     </div>
     {% elif status == "not_started" %}
-    <div class="glass-card p-6 border-l-4 border-warning-400">
+    <div class="glass-card p-5 border-l-4 border-warning-400">
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-warning-500/10 flex items-center justify-center">
@@ -42,17 +71,11 @@
                     <p class="text-sm text-gray-400">Target: {{ target_hours }}h today</p>
                 </div>
             </div>
-            <a href="/time/checkin" class="btn-primary" id="btn-checkin-banner">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                </svg>
-                Check In
-            </a>
+            <a href="/time/checkin" class="btn-primary" id="btn-checkin-banner">Check In</a>
         </div>
     </div>
     {% elif status == "checked_in" %}
-    <div class="glass-card p-6 border-l-4 border-success-400">
+    <div class="glass-card p-5 border-l-4 border-success-400">
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-success-500/10 flex items-center justify-center">
@@ -61,31 +84,19 @@
                 <div>
                     <p class="font-semibold text-white">Currently working</p>
                     <p class="text-sm text-gray-400">
-                        {% if daily_summary %}{{ daily_summary.total_hours }}h logged{% endif %}
-                        • Target: {{ target_hours }}h
+                        {{ fosc_hours }}h FOSC so far · Target: {{ target_hours }}h
+                        {% if live_session_hours %} · session {{ live_session_hours }}h{% endif %}
                     </p>
                 </div>
             </div>
             <div class="flex gap-2">
-                <a href="/time/checkin" class="btn-secondary" id="btn-checkin-again">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    New Check-In
-                </a>
-                <a href="/time/checkout" class="btn-primary" id="btn-checkout-banner">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    Check Out
-                </a>
+                <a href="/time/checkin" class="btn-secondary" id="btn-checkin-again">New Check-In</a>
+                <a href="/time/checkout" class="btn-primary" id="btn-checkout-banner">Check Out</a>
             </div>
         </div>
     </div>
     {% else %}
-    <div class="glass-card p-6 border-l-4 border-primary-400">
+    <div class="glass-card p-5 border-l-4 border-primary-400">
         <div class="flex items-center justify-between flex-wrap gap-4">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center">
@@ -96,286 +107,273 @@
                 <div>
                     <p class="font-semibold text-white">Checked out</p>
                     <p class="text-sm text-gray-400">
-                        {% if daily_summary %}
-                        {{ daily_summary.total_hours }}h worked
-                        {% if daily_summary.is_compliant %}
-                        <span class="text-success-400">✓ Target met</span>
-                        {% else %}
-                        <span class="text-warning-400">⚠ Below target ({{ target_hours }}h)</span>
-                        {% endif %}
+                        {{ fosc_hours }}h FOSC
+                        {% if effective_hours >= target_hours and target_hours > 0 %}
+                        <span class="text-success-400">· Target met</span>
+                        {% elif target_hours > 0 %}
+                        <span class="text-warning-400">· Below target ({{ target_hours }}h)</span>
                         {% endif %}
                     </p>
                 </div>
             </div>
-            <a href="/time/checkin" class="btn-secondary" id="btn-checkin-return">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Check In Again
-            </a>
+            <a href="/time/checkin" class="btn-secondary" id="btn-checkin-return">Check In Again</a>
         </div>
     </div>
     {% endif %}
 </div>
 
-<!-- Quick Actions Grid -->
-{% if is_workday %}
-<div class="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-8">
-    <a href="/time/checkin" class="quick-action-card group" id="quick-checkin">
-        <div
-            class="w-10 h-10 rounded-xl bg-success-500/10 flex items-center justify-center mb-2 group-hover:bg-success-500/20 transition-colors">
-            <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-            </svg>
+<!-- Compact balances + quick actions row -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-6">
+    {% if leave_balance %}
+    <div class="xl:col-span-4 grid grid-cols-2 gap-3">
+        <div class="glass-card p-4 border-l-4 border-primary-400">
+            <p class="text-[10px] uppercase tracking-wider text-gray-500">Vacation</p>
+            <p class="text-xl font-bold text-white font-mono mt-0.5">
+                {{ leave_balance.vacation.remaining|int }}
+                <span class="text-xs font-normal text-gray-400">/ {{ leave_balance.vacation.entitlement|int }}d</span>
+            </p>
+            <p class="text-[11px] text-gray-500 mt-0.5">
+                {{ leave_balance.vacation.used|int }} used{% if leave_balance.vacation.pending %} · {{ leave_balance.vacation.pending|int }} pend.{% endif %}
+            </p>
         </div>
-        <span class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Check In</span>
-    </a>
-    <a href="/time/checkout" class="quick-action-card group" id="quick-checkout">
-        <div
-            class="w-10 h-10 rounded-xl bg-danger-500/10 flex items-center justify-center mb-2 group-hover:bg-danger-500/20 transition-colors">
-            <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-        </div>
-        <span class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Check Out</span>
-    </a>
-    <a href="/time/offsite" class="quick-action-card group" id="quick-offsite">
-        <div
-            class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center mb-2 group-hover:bg-accent-500/20 transition-colors">
-            <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-        </div>
-        <span class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Log Offsite</span>
-    </a>
-    <a href="/time/past-day" class="quick-action-card group" id="quick-past-day">
-        <div
-            class="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-2 group-hover:bg-cyan-500/20 transition-colors">
-            <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        </div>
-        <span class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Past Day</span>
-    </a>
-    <a href="/time/partial-leave" class="quick-action-card group" id="quick-partial-leave">
-        <div
-            class="w-10 h-10 rounded-xl bg-warning-500/10 flex items-center justify-center mb-2 group-hover:bg-warning-500/20 transition-colors">
-            <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-        </div>
-        <span class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Partial Leave</span>
-    </a>
-    <a href="/leave" class="quick-action-card group" id="quick-leave">
-        <div
-            class="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center mb-2 group-hover:bg-primary-500/20 transition-colors">
-            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-        </div>
-        <span class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Full Day Leave</span>
-    </a>
-</div>
-{% endif %}
-
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Today's Timeline (Left Column) -->
-    <div class="lg:col-span-2">
-        <div class="glass-card p-6">
-            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Today's Timeline
-            </h2>
-
-            {% if todays_entries %}
-            <div class="space-y-3">
-                {% for entry in todays_entries %}
-                <div
-                    class="flex items-center gap-4 p-3 rounded-xl bg-surface-900/50 border border-white/5 hover:border-white/10 transition-colors">
-                    <div
-                        class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
-                        {% if entry.entry_type.value == 'check_in' %}bg-success-500/10{% else %}bg-danger-500/10{% endif %}">
-                        {% if entry.entry_type.value == 'check_in' %}
-                        <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M11 16l-4-4m0 0l4-4m-4 4h14" />
-                        </svg>
-                        {% else %}
-                        <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17 16l4-4m0 0l-4-4m4 4H7" />
-                        </svg>
-                        {% endif %}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium text-white">{{ entry.entry_type.value.replace('_', ' ').title()
-                                }}</span>
-                            <span class="px-2 py-0.5 rounded-full text-xs font-medium
-                                {% if entry.location_type.value == 'office' %}bg-primary-500/10 text-primary-300
-                                {% elif entry.location_type.value == 'remote' %}bg-accent-500/10 text-accent-300
-                                {% else %}bg-warning-500/10 text-warning-300{% endif %}">
-                                {{ entry.location_type.value.title() }}
-                            </span>
-                        </div>
-                        {% if entry.comments %}
-                        <p class="text-xs text-gray-500 mt-0.5 truncate">{{ entry.comments }}</p>
-                        {% endif %}
-                    </div>
-                    <div class="text-right flex-shrink-0">
-                        <p class="text-sm font-mono font-medium text-white">{{ entry.declared_time.strftime("%H:%M") }}
-                        </p>
-                        <p class="text-xs text-gray-500 font-mono">submitted {{
-                            entry.submission_time.strftime("%H:%M:%S") }}</p>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="text-center py-12">
-                <div class="w-16 h-16 rounded-2xl bg-surface-700/50 flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                </div>
-                <p class="text-gray-500">No entries yet today</p>
-                {% if is_workday %}
-                <a href="/time/checkin" class="text-primary-400 hover:text-primary-300 text-sm mt-2 inline-block">Start
-                    your day →</a>
-                {% endif %}
-            </div>
-            {% endif %}
-
-            <!-- Offsite Entries -->
-            {% if todays_offsite %}
-            <div class="mt-4 pt-4 border-t border-white/5">
-                <h3 class="text-sm font-medium text-gray-400 mb-3">Offsite Work</h3>
-                {% for entry in todays_offsite %}
-                <div class="flex items-center gap-4 p-3 rounded-xl bg-accent-500/5 border border-accent-500/10">
-                    <div class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center flex-shrink-0">
-                        <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        </svg>
-                    </div>
-                    <div class="flex-1">
-                        <p class="font-medium text-white text-sm">{{ entry.location }}</p>
-                        <p class="text-xs text-gray-500">{{ entry.comments }}</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-sm font-mono text-white">{{ entry.start_time.strftime("%H:%M") }} – {{
-                            entry.end_time.strftime("%H:%M") }}</p>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
+        <div class="glass-card p-4 border-l-4 border-danger-400">
+            <p class="text-[10px] uppercase tracking-wider text-gray-500">Sick</p>
+            <p class="text-xl font-bold text-white font-mono mt-0.5">
+                {{ leave_balance.sick.remaining|int }}
+                <span class="text-xs font-normal text-gray-400">/ {{ leave_balance.sick.entitlement|int }}d</span>
+            </p>
+            <p class="text-[11px] text-gray-500 mt-0.5">
+                {{ leave_balance.sick.used|int }} used{% if leave_balance.sick.pending %} · {{ leave_balance.sick.pending|int }} pend.{% endif %}
+            </p>
         </div>
     </div>
+    {% endif %}
 
-    <!-- Weekly Summary (Right Column) -->
-    <div class="space-y-6">
-        <!-- Daily Progress -->
-        {% if daily_summary %}
-        <div class="glass-card p-6">
-            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+    {% if is_workday %}
+    <div class="{% if leave_balance %}xl:col-span-8{% else %}xl:col-span-12{% endif %} grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        <a href="/time/checkin" class="quick-action-card group py-3" id="quick-checkin">
+            <div class="w-8 h-8 rounded-lg bg-success-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-success-500/20">
+                <svg class="w-4 h-4 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Check In</span>
+        </a>
+        <a href="/time/checkout" class="quick-action-card group py-3" id="quick-checkout">
+            <div class="w-8 h-8 rounded-lg bg-danger-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-danger-500/20">
+                <svg class="w-4 h-4 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Check Out</span>
+        </a>
+        <a href="/time/offsite" class="quick-action-card group py-3" id="quick-offsite">
+            <div class="w-8 h-8 rounded-lg bg-accent-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-accent-500/20">
+                <svg class="w-4 h-4 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Offsite</span>
+        </a>
+        <a href="/time/phone-support" class="quick-action-card group py-3" id="quick-phone">
+            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-cyan-500/20">
+                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Phone</span>
+        </a>
+        <a href="/time/past-day" class="quick-action-card group py-3" id="quick-past-day">
+            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-cyan-500/20">
+                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Past Day</span>
+        </a>
+        <a href="/time/partial-leave" class="quick-action-card group py-3" id="quick-partial-leave">
+            <div class="w-8 h-8 rounded-lg bg-warning-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-warning-500/20">
+                <svg class="w-4 h-4 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Partial Leave</span>
+        </a>
+        <a href="/leave" class="quick-action-card group py-3" id="quick-leave">
+            <div class="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-primary-500/20">
+                <svg class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Full Leave</span>
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Main: equal columns — Progress + Week left, Timeline right (narrower) -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+
+    <!-- Left: FOSC progress + week (always visible, above the fold) -->
+    <div class="space-y-5">
+        <div class="glass-card p-5">
+            <h2 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
                 <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
                 Today's Progress
+                {% if status == "checked_in" %}
+                <span class="ml-auto text-[10px] uppercase tracking-wider text-success-400 font-medium">Live</span>
+                {% endif %}
             </h2>
-            <div class="text-center mb-4">
-                {% set approved_leave = daily_summary.leave_hours if daily_summary.leave_approved else 0 %}
-                {% set effective = daily_summary.total_hours + approved_leave %}
-                <p class="text-4xl font-bold text-white">{{ daily_summary.total_hours }}<span
-                        class="text-lg text-gray-500">h</span></p>
-                {% if daily_summary.leave_hours > 0 %}
-                <p class="text-sm mt-1
-                    {% if daily_summary.leave_approved %}text-accent-400{% else %}text-warning-400{% endif %}">
-                    + {{ daily_summary.leave_hours }}h
-                    {% if daily_summary.leave_type %}
-                    {% if daily_summary.leave_type.value == 'vacation' %}PTO (VAC){% else %}PTO (SIC){% endif %}
-                    {% else %}PTO{% endif %}
-                    {% if daily_summary.leave_approved %}
-                    ✓ Approved
-                    {% else %}
-                    ⏳ Pending approval
-                    {% endif %}
+            <div class="text-center mb-3">
+                <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Normal Time – FOSC</p>
+                <p class="text-4xl font-bold text-white">{{ fosc_hours }}<span class="text-lg text-gray-500">h</span></p>
+                <p class="text-xs text-gray-500 mt-2">
+                    clock {{ clock_hours }}h
+                    · offsite {{ offsite_hours }}h
+                    · phone {{ phone_hours }}h
+                    {% if beod_hours %} · BEOD +{{ beod_hours }}h{% endif %}
+                </p>
+                {% if leave_hours > 0 %}
+                <p class="text-sm mt-1 {% if leave_approved %}text-accent-400{% else %}text-warning-400{% endif %}">
+                    + {{ leave_hours }}h {{ leave_type_label or "Leave" }}
+                    {% if leave_approved %}✓{% else %}(pending){% endif %}
                 </p>
                 {% endif %}
-                <p class="text-sm text-gray-400">of {{ daily_summary.target_hours }}h target</p>
+                <p class="text-sm text-gray-400 mt-1">of {{ target_hours }}h target
+                    {% if leave_approved and leave_hours %}
+                    <span class="text-gray-500">({{ effective_hours }}h effective)</span>
+                    {% endif %}
+                </p>
             </div>
             <div class="w-full bg-surface-900/50 rounded-full h-3 overflow-hidden">
-                {% set pct = ((effective / daily_summary.target_hours) * 100) if
-                daily_summary.target_hours > 0 else 0 %}
                 <div class="h-full rounded-full transition-all duration-500
-                    {% if pct >= 100 %}bg-gradient-to-r from-success-500 to-success-400
-                    {% elif pct >= 75 %}bg-gradient-to-r from-accent-500 to-accent-400
-                    {% elif pct >= 50 %}bg-gradient-to-r from-warning-500 to-warning-400
-                    {% else %}bg-gradient-to-r from-danger-500 to-danger-400{% endif %}"
-                    style="width: {{ [pct, 100] | min }}%"></div>
+                    {% if progress_pct >= 100 %}bg-gradient-to-r from-success-500 to-success-400
+                    {% elif progress_pct >= 75 %}bg-gradient-to-r from-accent-500 to-accent-400
+                    {% elif progress_pct >= 50 %}bg-gradient-to-r from-warning-500 to-warning-400
+                    {% elif progress_pct > 0 %}bg-gradient-to-r from-primary-500 to-primary-400
+                    {% else %}bg-transparent{% endif %}"
+                    style="width: {{ progress_pct }}%"></div>
             </div>
-            <p class="text-xs text-gray-500 text-right mt-1">{{ pct | round(0) }}%</p>
+            <p class="text-xs text-gray-500 text-right mt-1">{{ progress_pct }}%</p>
         </div>
-        {% endif %}
 
-        <!-- Weekly Overview -->
-        <div class="glass-card p-6">
-            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <div class="glass-card p-5">
+            <h2 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
                 <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 This Week
             </h2>
-            <div class="space-y-2">
+            <div class="space-y-2.5">
                 {% for day in weekly.days %}
                 <div class="flex items-center gap-3">
-                    <span class="text-xs text-gray-500 w-8 flex-shrink-0">{{ day.day_name[:3] }}</span>
+                    <span class="text-xs text-gray-500 w-8 flex-shrink-0 {% if day.date == today %}text-primary-300 font-semibold{% endif %}">{{ day.day_name[:3] }}</span>
                     <div class="flex-1 bg-surface-900/50 rounded-full h-2.5 overflow-hidden">
-                        {% set day_pct = ((day.worked / day.target) * 100) if day.target > 0 else 0 %}
+                        {% set day_pct = ((day.effective / day.target) * 100) if day.target > 0 else 0 %}
                         <div class="h-full rounded-full transition-all duration-500
                             {% if day.date == today %}bg-gradient-to-r from-primary-500 to-accent-400
                             {% elif day.compliant %}bg-success-500/70
-                            {% elif day.worked > 0 %}bg-warning-500/70
-                            {% else %}bg-transparent{% endif %}" style="width: {{ [day_pct, 100] | min }}%"></div>
+                            {% elif day.effective > 0 %}bg-warning-500/70
+                            {% else %}bg-transparent{% endif %}"
+                            style="width: {{ [day_pct, 100] | min }}%"></div>
                     </div>
-                    <span class="text-xs font-mono text-gray-400 w-12 text-right flex-shrink-0">{{ day.worked }}/{{
-                        day.target | int }}h</span>
+                    <span class="text-xs font-mono text-gray-400 w-14 text-right flex-shrink-0">{{ day.effective }}/{{ day.target | int }}h</span>
                 </div>
                 {% endfor %}
             </div>
             <div class="mt-4 pt-3 border-t border-white/5 flex justify-between">
                 <span class="text-sm text-gray-400">Weekly Total</span>
-                <span
-                    class="text-sm font-semibold {% if weekly.week_compliant %}text-success-400{% else %}text-white{% endif %}">
+                <span class="text-sm font-semibold {% if weekly.week_compliant %}text-success-400{% else %}text-white{% endif %}">
                     {{ weekly.total_worked }}h / {{ weekly.total_target | int }}h
                 </span>
             </div>
         </div>
 
-        <!-- Pending Leaves -->
         {% if pending_leaves %}
-        <div class="glass-card p-6">
-            <h2 class="text-sm font-semibold text-gray-400 mb-3">Pending Leave Requests</h2>
-            {% for leave in pending_leaves %}
-            <div class="p-3 rounded-xl bg-warning-500/5 border border-warning-500/10 text-sm">
-                <p class="text-white font-medium">{{ leave.leave_type.value.title() }}</p>
-                <p class="text-xs text-gray-500">{{ leave.start_date }} → {{ leave.end_date }}</p>
+        <div class="glass-card p-5">
+            <h2 class="text-sm font-semibold text-gray-400 mb-3">Pending Leave</h2>
+            <div class="space-y-2">
+                {% for leave in pending_leaves %}
+                <div class="p-3 rounded-xl bg-warning-500/5 border border-warning-500/10 text-sm">
+                    <p class="text-white font-medium">{{ leave.leave_type.value.replace('_', ' ').title() }}</p>
+                    <p class="text-xs text-gray-500">{{ leave.start_date }} → {{ leave.end_date }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right: Timeline (not oversized) -->
+    <div class="glass-card p-5">
+        <h2 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Today's Timeline
+        </h2>
+
+        {% if todays_entries %}
+        <div class="space-y-2">
+            {% for entry in todays_entries %}
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-surface-900/50 border border-white/5">
+                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+                    {% if entry.entry_type.value == 'check_in' %}bg-success-500/10{% else %}bg-danger-500/10{% endif %}">
+                    {% if entry.entry_type.value == 'check_in' %}
+                    <svg class="w-4 h-4 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                    </svg>
+                    {% else %}
+                    <svg class="w-4 h-4 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                    </svg>
+                    {% endif %}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="font-medium text-white text-sm">{{ entry.entry_type.value.replace('_', ' ').title() }}</span>
+                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium
+                            {% if entry.location_type.value == 'office' %}bg-primary-500/10 text-primary-300
+                            {% elif entry.location_type.value == 'remote' %}bg-accent-500/10 text-accent-300
+                            {% else %}bg-warning-500/10 text-warning-300{% endif %}">
+                            {{ entry.location_type.value.title() }}
+                        </span>
+                    </div>
+                    {% if entry.comments %}
+                    <p class="text-xs text-gray-500 mt-0.5 truncate">{{ entry.comments }}</p>
+                    {% endif %}
+                </div>
+                <div class="text-right flex-shrink-0">
+                    <p class="text-sm font-mono font-medium text-white">{{ entry.declared_time.strftime("%H:%M") }}</p>
+                    <p class="text-[10px] text-gray-500 font-mono">{{ entry.submission_time.strftime("%H:%M") }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8">
+            <p class="text-gray-500 text-sm">No punches yet today</p>
+            {% if is_workday %}
+            <a href="/time/checkin" class="text-primary-400 hover:text-primary-300 text-sm mt-2 inline-block">Start your day →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if todays_offsite %}
+        <div class="mt-4 pt-3 border-t border-white/5">
+            <h3 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Offsite</h3>
+            {% for entry in todays_offsite %}
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-accent-500/5 border border-accent-500/10 mb-2">
+                <div class="flex-1 min-w-0">
+                    <p class="font-medium text-white text-sm truncate">{{ entry.location }}</p>
+                    {% if entry.comments %}<p class="text-xs text-gray-500 truncate">{{ entry.comments }}</p>{% endif %}
+                </div>
+                <p class="text-xs font-mono text-white flex-shrink-0">{{ entry.start_time.strftime("%H:%M") }}–{{ entry.end_time.strftime("%H:%M") }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if todays_phone %}
+        <div class="mt-4 pt-3 border-t border-white/5">
+            <h3 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">Phone support</h3>
+            {% for entry in todays_phone %}
+            <div class="flex items-center gap-3 p-2.5 rounded-xl bg-cyan-500/5 border border-cyan-500/10 mb-2">
+                <div class="flex-1 min-w-0">
+                    <p class="font-medium text-white text-sm">Phone support</p>
+                    <p class="text-xs text-gray-500 truncate">{{ entry.comments or "—" }}</p>
+                </div>
+                <p class="text-sm font-mono text-cyan-300">{{ entry.hours }}h</p>
             </div>
             {% endfor %}
         </div>

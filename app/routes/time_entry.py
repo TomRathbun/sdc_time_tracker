@@ -10,14 +10,52 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
-    TimeEntry, OffsiteEntry, EntryType, LocationType,
+    TimeEntry, OffsiteEntry, PhoneSupportEntry, EntryType, LocationType,
     RemoteAuthorization, AuthorizationStatus, Employee, Role
 )
+from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import update_daily_summary, get_target_hours
+from app.services.time_state import can_check_in, can_check_out, validate_offsite_range
+from app.services.time_offset import offset_approved_default
 from app.services.audit import log_action
+from app.services.settings import get_bool_setting
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _comment_threshold(db: Session) -> int:
+    from app.services.settings import get_setting
+    try:
+        return int(get_setting(db, "comment_threshold_minutes"))
+    except (ValueError, TypeError):
+        return 30
+
+
+def _beod_blanket(db: Session) -> bool:
+    return get_bool_setting(db, "beod_blanket_approval")
+
+
+def _time_entry_error(request, employee, entry_type, now, today, error, threshold=None, db=None, **extra):
+    beod_blanket = _beod_blanket(db) if db is not None else True
+    ctx = {
+        "request": request,
+        "employee": employee,
+        "entry_type": entry_type,
+        "now": now,
+        "today": today,
+        "error": error,
+        "comment_threshold": threshold if threshold is not None else 30,
+        "beod_blanket": beod_blanket,
+        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "target_hours": get_target_hours(today) if today else 0,
+        "open_checkin_iso": None,
+        "completed_clock_hours": 0,
+        "offsite_hours": 0,
+        "phone_hours": 0,
+    }
+    ctx.update(extra)
+    return templates.TemplateResponse("time_entry.html", ctx)
 
 
 @router.get("/time/checkin", response_class=HTMLResponse)
@@ -43,6 +81,8 @@ async def checkin_page(request: Request, db: Session = Depends(get_db)):
         "today": date.today(),
         "error": None,
         "comment_threshold": threshold,
+        "beod_blanket": _beod_blanket(db),
+        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
     })
 
 
@@ -62,6 +102,14 @@ async def checkin_submit(
 
     today = date.today()
     now = datetime.now()
+    threshold = _comment_threshold(db)
+
+    # State machine: reject double check-in
+    state_err = can_check_in(db, employee.id, today)
+    if state_err:
+        return _time_entry_error(
+            request, employee, "check_in", now, today, state_err, threshold, db=db,
+        )
 
     # Build declared time
     declared_time = datetime(today.year, today.month, today.day, declared_hour, declared_minute)
@@ -89,33 +137,21 @@ async def checkin_submit(
             RemoteAuthorization.status == AuthorizationStatus.active,
         ).first()
         if not auth:
-            return templates.TemplateResponse("time_entry.html", {
-                "request": request,
-                "employee": employee,
-                "entry_type": "check_in",
-                "now": now,
-                "today": today,
-                "error": "No active remote work authorization found for today. Please contact your Engineering Manager.",
-            })
+            return _time_entry_error(
+                request, employee, "check_in", now, today,
+                "No active remote work authorization found for today. Please contact your Engineering Manager.",
+                threshold, db=db,
+            )
         authorization_id = auth.id
 
     # ENFORCE COMMENT POLICY
-    from app.services.settings import get_setting
-    try:
-        threshold = int(get_setting(db, "comment_threshold_minutes"))
-    except (ValueError, TypeError):
-        threshold = 30
-    
     diff_minutes = abs((now - declared_time).total_seconds()) / 60
     if diff_minutes > threshold and not comments.strip():
-        return templates.TemplateResponse("time_entry.html", {
-            "request": request,
-            "employee": employee,
-            "entry_type": "check_in",
-            "now": now,
-            "today": today,
-            "error": f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
-        })
+        return _time_entry_error(
+            request, employee, "check_in", now, today,
+            f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
+            threshold, db=db,
+        )
 
     entry = TimeEntry(
         employee_id=employee.id,
@@ -127,6 +163,7 @@ async def checkin_submit(
         is_remote=is_remote,
         authorization_id=authorization_id,
         comments=comments,
+        offset_approved=offset_approved_default(db, declared_time, now),
     )
     db.add(entry)
     db.commit()
@@ -217,27 +254,59 @@ async def checkin_submit(
 
 @router.get("/time/checkout", response_class=HTMLResponse)
 async def checkout_page(request: Request, db: Session = Depends(get_db)):
-    """Show check-out form."""
+    """Show check-out form with live FOSC / BEOD preview."""
     employee = get_current_employee(request, db)
     if not employee:
         return RedirectResponse(url="/login", status_code=303)
 
     now = datetime.now()
-    # Get policy threshold
-    from app.services.settings import get_setting
-    try:
-        threshold = int(get_setting(db, "comment_threshold_minutes"))
-    except (ValueError, TypeError):
-        threshold = 30
+    today = date.today()
+    threshold = _comment_threshold(db)
 
+    from app.models import PhoneSupportEntry
+    from app.services.time_calc import (
+        calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
+    )
+    from app.services.time_state import latest_entry
+
+    entries = (
+        db.query(TimeEntry)
+        .filter(TimeEntry.employee_id == employee.id, TimeEntry.date == today)
+        .order_by(TimeEntry.declared_time)
+        .all()
+    )
+    offsites = (
+        db.query(OffsiteEntry)
+        .filter(OffsiteEntry.employee_id == employee.id, OffsiteEntry.date == today)
+        .all()
+    )
+    phones = (
+        db.query(PhoneSupportEntry)
+        .filter(PhoneSupportEntry.employee_id == employee.id, PhoneSupportEntry.date == today)
+        .all()
+    )
+    open_ci = latest_entry(db, employee.id, today)
+    open_checkin_iso = None
+    if open_ci and open_ci.entry_type == EntryType.check_in:
+        open_checkin_iso = open_ci.declared_time.isoformat(sep=" ", timespec="minutes")
+
+    completed_clock = calculate_clock_hours(entries)
+    # completed pairs only; open session added in browser from declared checkout time
     return templates.TemplateResponse("time_entry.html", {
         "request": request,
         "employee": employee,
         "entry_type": "check_out",
         "now": now,
-        "today": date.today(),
+        "today": today,
         "error": None,
         "comment_threshold": threshold,
+        "beod_blanket": _beod_blanket(db),
+        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "target_hours": get_target_hours(today),
+        "open_checkin_iso": open_checkin_iso,
+        "completed_clock_hours": completed_clock,
+        "offsite_hours": calculate_offsite_hours(offsites),
+        "phone_hours": calculate_phone_hours(phones),
     })
 
 
@@ -258,30 +327,28 @@ async def checkout_submit(
 
     today = date.today()
     now = datetime.now()
-    target = get_target_hours(today)
+    threshold = _comment_threshold(db)
 
     declared_time = datetime(today.year, today.month, today.day, declared_hour, declared_minute)
+
+    # State machine: require open check-in; reject orphan/repeat check-outs
+    state_err = can_check_out(db, employee.id, today, declared_time=declared_time)
+    if state_err:
+        return _time_entry_error(
+            request, employee, "check_out", now, today, state_err, threshold, db=db,
+        )
 
     loc_type = LocationType(location_type) if location_type in [e.value for e in LocationType] else LocationType.office
     is_remote = loc_type in (LocationType.remote, LocationType.offsite)
 
     # ENFORCE COMMENT POLICY
-    from app.services.settings import get_setting
-    try:
-        threshold = int(get_setting(db, "comment_threshold_minutes"))
-    except (ValueError, TypeError):
-        threshold = 30
-    
     diff_minutes = abs((now - declared_time).total_seconds()) / 60
     if diff_minutes > threshold and not comments.strip():
-        return templates.TemplateResponse("time_entry.html", {
-            "request": request,
-            "employee": employee,
-            "entry_type": "check_out",
-            "now": now,
-            "today": today,
-            "error": f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
-        })
+        return _time_entry_error(
+            request, employee, "check_out", now, today,
+            f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
+            threshold, db=db,
+        )
 
     entry = TimeEntry(
         employee_id=employee.id,
@@ -292,12 +359,18 @@ async def checkout_submit(
         location_type=loc_type,
         is_remote=is_remote,
         comments=comments,
+        offset_approved=offset_approved_default(db, declared_time, now),
     )
     db.add(entry)
     db.commit()
 
-    # Update daily summary with lunch info
-    update_daily_summary(db, employee.id, today, lunch_end_of_day=lunch_end_of_day)
+    # BEOD: blanket approval auto-approves; otherwise pending manager approval
+    beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
+    update_daily_summary(
+        db, employee.id, today,
+        lunch_end_of_day=lunch_end_of_day,
+        lunch_approved=beod_approved,
+    )
 
     log_action(
         db, action="check_out", entity_type="TimeEntry",
@@ -306,7 +379,8 @@ async def checkout_submit(
             "declared_time": str(declared_time),
             "submission_time": str(now),
             "location_type": loc_type.value,
-            "lunch_end_of_day": lunch_end_of_day,
+            "beod": lunch_end_of_day,
+            "beod_auto_approved": beod_approved,
             "comments": comments,
         },
         ip_address=request.client.host if request.client else "",
@@ -367,13 +441,16 @@ async def offsite_submit(
     start_time = datetime(today.year, today.month, today.day, start_hour, start_minute)
     end_time = datetime(today.year, today.month, today.day, end_hour, end_minute)
 
-    if end_time <= start_time:
+    offsite_err = validate_offsite_range(
+        db, employee.id, today, start_time, end_time,
+    )
+    if offsite_err:
         return templates.TemplateResponse("offsite.html", {
             "request": request,
             "employee": employee,
             "now": now,
             "today": today,
-            "error": "End time must be after start time.",
+            "error": offsite_err,
         })
 
     entry = OffsiteEntry(
@@ -474,8 +551,24 @@ async def offsite_gap_submit(
     start_time = datetime(today.year, today.month, today.day, start_hour, start_minute)
     end_time = datetime(today.year, today.month, today.day, end_hour, end_minute)
 
-    if end_time <= start_time:
-        return RedirectResponse(url="/", status_code=303)
+    offsite_err = validate_offsite_range(
+        db, employee.id, today, start_time, end_time,
+    )
+    if offsite_err:
+        gap_minutes = (end_hour * 60 + end_minute) - (start_hour * 60 + start_minute)
+        return templates.TemplateResponse("offsite_gap.html", {
+            "request": request,
+            "employee": employee,
+            "today": today,
+            "start_hour": start_hour,
+            "start_min": start_minute,
+            "end_hour": end_hour,
+            "end_min": end_minute,
+            "gap_hours": round(gap_minutes / 60, 1),
+            "start_display": f"{start_hour:02d}:{start_minute:02d}",
+            "end_display": f"{end_hour:02d}:{end_minute:02d}",
+            "error": offsite_err,
+        })
 
     entry = OffsiteEntry(
         employee_id=employee.id,
@@ -508,6 +601,63 @@ async def offsite_gap_submit(
     return RedirectResponse(url="/", status_code=303)
 
 
+def _render_past_day(request, db, employee, selected_date, error=None, success=None):
+    """Build past-day form context and template response."""
+    from app.models import DailySummary
+
+    today = date.today()
+    target = get_target_hours(selected_date)
+
+    existing_checkins = db.query(TimeEntry).filter(
+        TimeEntry.employee_id == employee.id,
+        TimeEntry.date == selected_date,
+    ).order_by(TimeEntry.declared_time).all()
+
+    existing_offsite = db.query(OffsiteEntry).filter(
+        OffsiteEntry.employee_id == employee.id,
+        OffsiteEntry.date == selected_date,
+    ).order_by(OffsiteEntry.start_time).all()
+
+    summary = db.query(DailySummary).filter(
+        DailySummary.employee_id == employee.id,
+        DailySummary.date == selected_date,
+    ).first()
+
+    recent_days = []
+    for i in range(1, PAST_DAY_MAX_LOOKBACK_DAYS + 1):
+        d = today - timedelta(days=i)
+        t = get_target_hours(d)
+        if t > 0:
+            recent_days.append({"date": d, "label": d.strftime("%a %b %d"), "target": t})
+
+    return templates.TemplateResponse("past_day.html", {
+        "request": request,
+        "employee": employee,
+        "today": today,
+        "selected_date": selected_date,
+        "target": target,
+        "existing_entries": existing_checkins,
+        "existing_offsite": existing_offsite,
+        "current_worked": summary.total_hours if summary else 0.0,
+        "recent_days": recent_days,
+        "error": error,
+        "success": success,
+    })
+
+
+def _validate_past_day_date(selected_date: date) -> str | None:
+    """Server-side rules for past-day entry. Returns error message or None."""
+    today = date.today()
+    if selected_date >= today:
+        return "Past day entry is only allowed for previous workdays (not today or future dates)."
+    earliest = today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS)
+    if selected_date < earliest:
+        return f"Past day entry is limited to the last {PAST_DAY_MAX_LOOKBACK_DAYS} days."
+    if get_target_hours(selected_date) <= 0:
+        return "Selected date is not a scheduled workday."
+    return None
+
+
 @router.get("/time/past-day", response_class=HTMLResponse)
 async def past_day_page(
     request: Request,
@@ -529,46 +679,7 @@ async def past_day_page(
     else:
         selected_date = today - timedelta(days=1)
 
-    target = get_target_hours(selected_date)
-
-    # Get existing entries for the selected date
-    from app.models import DailySummary
-    existing_checkins = db.query(TimeEntry).filter(
-        TimeEntry.employee_id == employee.id,
-        TimeEntry.date == selected_date,
-    ).order_by(TimeEntry.declared_time).all()
-
-    existing_offsite = db.query(OffsiteEntry).filter(
-        OffsiteEntry.employee_id == employee.id,
-        OffsiteEntry.date == selected_date,
-    ).order_by(OffsiteEntry.start_time).all()
-
-    summary = db.query(DailySummary).filter(
-        DailySummary.employee_id == employee.id,
-        DailySummary.date == selected_date,
-    ).first()
-
-    # Build recent workdays for date picker
-    recent_days = []
-    for i in range(1, 15):  # past 2 weeks, skip today
-        d = today - timedelta(days=i)
-        t = get_target_hours(d)
-        if t > 0:
-            recent_days.append({"date": d, "label": d.strftime("%a %b %d"), "target": t})
-
-    return templates.TemplateResponse("past_day.html", {
-        "request": request,
-        "employee": employee,
-        "today": today,
-        "selected_date": selected_date,
-        "target": target,
-        "existing_entries": existing_checkins,
-        "existing_offsite": existing_offsite,
-        "current_worked": summary.total_hours if summary else 0.0,
-        "recent_days": recent_days,
-        "error": None,
-        "success": None,
-    })
+    return _render_past_day(request, db, employee, selected_date)
 
 
 @router.post("/time/past-day", response_class=HTMLResponse)
@@ -594,17 +705,25 @@ async def past_day_submit(
         return RedirectResponse(url="/login", status_code=303)
 
     now = datetime.now()
+    today = date.today()
 
     try:
         selected_date = date.fromisoformat(entry_date)
     except ValueError:
-        return RedirectResponse(url="/time/past-day", status_code=303)
+        return _render_past_day(
+            request, db, employee, today - timedelta(days=1),
+            error="Invalid date.",
+        )
+
+    date_err = _validate_past_day_date(selected_date)
+    if date_err:
+        return _render_past_day(request, db, employee, selected_date, error=date_err)
 
     # Comments are mandatory for past day entries
     if not comments or not comments.strip():
-        return RedirectResponse(
-            url=f"/time/past-day?target_date={entry_date}",
-            status_code=303,
+        return _render_past_day(
+            request, db, employee, selected_date,
+            error="Comments are required for past day entries.",
         )
 
     # Build datetimes
@@ -618,10 +737,33 @@ async def past_day_submit(
     )
 
     if checkout_time <= checkin_time:
-        return RedirectResponse(
-            url=f"/time/past-day?target_date={entry_date}",
-            status_code=303,
+        return _render_past_day(
+            request, db, employee, selected_date,
+            error="Check-out time must be after check-in time.",
         )
+
+    # Optional offsite — must not overlap the clock interval (would double-count)
+    offsite_start = None
+    offsite_end = None
+    if offsite_location.strip() and offsite_start_hour >= 0 and offsite_end_hour >= 0:
+        offsite_start = datetime(
+            selected_date.year, selected_date.month, selected_date.day,
+            offsite_start_hour, offsite_start_minute,
+        )
+        offsite_end = datetime(
+            selected_date.year, selected_date.month, selected_date.day,
+            offsite_end_hour, offsite_end_minute,
+        )
+        offsite_err = validate_offsite_range(
+            db, employee.id, selected_date, offsite_start, offsite_end,
+            ignore_existing_clock=True,
+            ignore_existing_offsite=True,
+            extra_clock_intervals=[(checkin_time, checkout_time)],
+        )
+        if offsite_err:
+            return _render_past_day(
+                request, db, employee, selected_date, error=offsite_err,
+            )
 
     # CAPTURE OLD STATE BEFORE DELETING
     old_entries = db.query(TimeEntry).filter(
@@ -642,7 +784,7 @@ async def past_day_submit(
     db.query(OffsiteEntry).filter(OffsiteEntry.employee_id == employee.id, OffsiteEntry.date == selected_date).delete()
     db.flush()
 
-    # Create check-in entry
+    # Create check-in entry (past-day rewrite: offset auto-ok; audited via comments + manager email)
     ci = TimeEntry(
         employee_id=employee.id,
         date=selected_date,
@@ -652,6 +794,7 @@ async def past_day_submit(
         location_type=LocationType.office,
         is_remote=False,
         comments=comments or f"Past day entry ({selected_date})",
+        offset_approved=True,
     )
     db.add(ci)
 
@@ -665,19 +808,12 @@ async def past_day_submit(
         location_type=LocationType.office,
         is_remote=False,
         comments=comments or f"Past day entry ({selected_date})",
+        offset_approved=True,
     )
     db.add(co)
 
-    # Optional offsite entry
-    if offsite_location.strip() and offsite_start_hour >= 0 and offsite_end_hour >= 0:
-        offsite_start = datetime(
-            selected_date.year, selected_date.month, selected_date.day,
-            offsite_start_hour, offsite_start_minute,
-        )
-        offsite_end = datetime(
-            selected_date.year, selected_date.month, selected_date.day,
-            offsite_end_hour, offsite_end_minute,
-        )
+    # Optional offsite entry (already validated)
+    if offsite_location.strip() and offsite_start is not None and offsite_end is not None:
         if offsite_end > offsite_start:
             oe = OffsiteEntry(
                 employee_id=employee.id,
@@ -693,10 +829,12 @@ async def past_day_submit(
 
     db.commit()
 
-    # Update daily summary (lunch needs separate call with flag)
+    # BEOD: blanket auto-approves
+    beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
     update_daily_summary(
         db, employee.id, selected_date,
         lunch_end_of_day=lunch_end_of_day,
+        lunch_approved=beod_approved,
     )
 
     log_action(
@@ -894,5 +1032,105 @@ async def partial_leave_submit(
             ),
             daemon=True,
         ).start()
+
+    return RedirectResponse(url="/", status_code=303)
+
+
+# ── Phone support (FOSC additive hours) ───────────────────────────────
+
+@router.get("/time/phone-support", response_class=HTMLResponse)
+async def phone_support_page(request: Request, db: Session = Depends(get_db)):
+    """Log phone / after-hours support hours."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    existing = (
+        db.query(PhoneSupportEntry)
+        .filter(PhoneSupportEntry.employee_id == employee.id, PhoneSupportEntry.date == today)
+        .order_by(PhoneSupportEntry.submission_time.desc())
+        .all()
+    )
+    return templates.TemplateResponse("phone_support.html", {
+        "request": request,
+        "employee": employee,
+        "today": today,
+        "existing": existing,
+        "error": None,
+    })
+
+
+@router.post("/time/phone-support", response_class=HTMLResponse)
+async def phone_support_submit(
+    request: Request,
+    hours: float = Form(...),
+    comments: str = Form(""),
+    entry_date: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Add phone support hours (counts toward FOSC Normal Time)."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    work_date = today
+    if entry_date:
+        try:
+            work_date = date.fromisoformat(entry_date)
+        except ValueError:
+            work_date = today
+
+    existing = (
+        db.query(PhoneSupportEntry)
+        .filter(PhoneSupportEntry.employee_id == employee.id, PhoneSupportEntry.date == work_date)
+        .all()
+    )
+
+    if hours <= 0 or hours > 24:
+        return templates.TemplateResponse("phone_support.html", {
+            "request": request,
+            "employee": employee,
+            "today": work_date,
+            "existing": existing,
+            "error": "Hours must be between 0 and 24.",
+        })
+
+    if work_date > today:
+        return templates.TemplateResponse("phone_support.html", {
+            "request": request,
+            "employee": employee,
+            "today": today,
+            "existing": existing,
+            "error": "Cannot log phone support for a future date.",
+        })
+    if work_date < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
+        return templates.TemplateResponse("phone_support.html", {
+            "request": request,
+            "employee": employee,
+            "today": today,
+            "existing": existing,
+            "error": f"Phone support is limited to the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.",
+        })
+
+    entry = PhoneSupportEntry(
+        employee_id=employee.id,
+        date=work_date,
+        hours=round(hours, 2),
+        comments=comments.strip(),
+        submission_time=datetime.now(),
+    )
+    db.add(entry)
+    db.commit()
+
+    update_daily_summary(db, employee.id, work_date)
+
+    log_action(
+        db, action="phone_support", entity_type="PhoneSupportEntry",
+        entity_id=entry.id, employee_id=employee.id,
+        new_values={"date": str(work_date), "hours": hours, "comments": comments},
+        ip_address=request.client.host if request.client else "",
+    )
 
     return RedirectResponse(url="/", status_code=303)

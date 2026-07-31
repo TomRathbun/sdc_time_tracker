@@ -34,6 +34,8 @@ class LocationType(str, enum.Enum):
 class LeaveType(str, enum.Enum):
     vacation = "vacation"
     sick = "sick"
+    covid_sick = "covid_sick"
+    uae_holiday = "uae_holiday"
 
 
 class LeaveStatus(str, enum.Enum):
@@ -60,11 +62,15 @@ class Employee(Base):
     role = Column(Enum(Role), default=Role.employee, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     pin_needs_reset = Column(Boolean, default=True, nullable=False)
+    # FOSC leave entitlements (days per calendar year)
+    vacation_days_per_year = Column(Float, default=30.0, nullable=False)
+    sick_days_per_year = Column(Float, default=10.0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
     time_entries = relationship("TimeEntry", back_populates="employee", lazy="dynamic")
     offsite_entries = relationship("OffsiteEntry", back_populates="employee", lazy="dynamic")
+    phone_support_entries = relationship("PhoneSupportEntry", back_populates="employee", lazy="dynamic")
     daily_summaries = relationship("DailySummary", back_populates="employee", lazy="dynamic")
     leave_requests = relationship("LeaveRequest", back_populates="employee",
                                   foreign_keys="LeaveRequest.employee_id", lazy="dynamic")
@@ -88,6 +94,8 @@ class TimeEntry(Base):
     is_remote = Column(Boolean, default=False)
     authorization_id = Column(Integer, ForeignKey("remote_authorizations.id"), nullable=True)
     comments = Column(Text, default="")
+    # When |declared − submission| exceeds comment_threshold_minutes, requires manager approval
+    offset_approved = Column(Boolean, default=True, nullable=False)
 
     # Relationships
     employee = relationship("Employee", back_populates="time_entries")
@@ -114,6 +122,21 @@ class OffsiteEntry(Base):
     employee = relationship("Employee", back_populates="offsite_entries")
 
 
+class PhoneSupportEntry(Base):
+    """After-hours / phone support hours (additive to FOSC Normal Time)."""
+    __tablename__ = "phone_support_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    date = Column(Date, nullable=False, index=True)
+    hours = Column(Float, nullable=False)
+    comments = Column(Text, default="")
+    submission_time = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    employee = relationship("Employee", back_populates="phone_support_entries")
+
+
 class DailySummary(Base):
     __tablename__ = "daily_summaries"
     __table_args__ = (
@@ -123,14 +146,19 @@ class DailySummary(Base):
     id = Column(Integer, primary_key=True, index=True)
     employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
     date = Column(Date, nullable=False, index=True)
+    # FOSC Normal Time components (total_hours = clock + offsite + phone + BEOD credit)
     total_hours = Column(Float, default=0.0)
+    clock_hours = Column(Float, default=0.0)
+    offsite_hours = Column(Float, default=0.0)
+    phone_hours = Column(Float, default=0.0)
+    beod_hours = Column(Float, default=0.0)  # 0 or 1 when BEOD credit applied
     leave_hours = Column(Float, default=0.0)
-    leave_type = Column(Enum(LeaveType), nullable=True)  # vacation or sick
+    leave_type = Column(Enum(LeaveType), nullable=True)
     leave_approved = Column(Boolean, default=False)
     target_hours = Column(Float, nullable=False)
     is_compliant = Column(Boolean, default=False)
-    lunch_end_of_day = Column(Boolean, default=False)
-    lunch_approved = Column(Boolean, default=False)
+    lunch_end_of_day = Column(Boolean, default=False)  # BEOD claimed
+    lunch_approved = Column(Boolean, default=False)    # BEOD approved (blanket or manager)
 
     # Relationships
     employee = relationship("Employee", back_populates="daily_summaries")
@@ -199,3 +227,23 @@ class AppSetting(Base):
 
     def __repr__(self):
         return f"<AppSetting {self.key}={self.value}>"
+
+
+class TempoWeekly(Base):
+    """Hours charged in Lockheed TEMPO for an employee for a week (Mon start).
+
+    Used for discrepancy reporting: SDC tracker totals vs TEMPO.
+    """
+    __tablename__ = "tempo_weekly"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "week_start", name="uq_tempo_emp_week"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    week_start = Column(Date, nullable=False, index=True)  # Monday
+    hours = Column(Float, nullable=False, default=0.0)
+    notes = Column(Text, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+    employee = relationship("Employee")

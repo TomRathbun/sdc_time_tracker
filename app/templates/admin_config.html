@@ -253,91 +253,133 @@
                     </div>
                 </label>
             </div>
-            <!-- Policy Enforcement -->
-            <div class="glass-card p-6 mb-6">
-                <h2 class="text-lg font-semibold text-white mb-1 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    Policy Enforcement
-                </h2>
-                <p class="text-xs text-gray-500 mb-5">Configure mandatory fields and validation thresholds</p>
+        </div>
 
-                <div class="space-y-4">
-                    <!-- Comment Threshold -->
-                    <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center">
-                                    <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 012 2h-3l-4 4z" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p class="font-medium text-gray-200 text-sm">Comment Enforcement Threshold</p>
-                                    <p class="text-xs text-gray-500">Require comments if set time and actual time differ
-                                        by more than X minutes</p>
-                                </div>
-                            </div>
+        <!-- FOSC / Time policy -->
+        <div class="glass-card p-6 mb-6">
+            <h2 class="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+                <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                FOSC / BEOD Policy
+            </h2>
+            <p class="text-xs text-gray-500 mb-5">Break at end of day and related time rules</p>
+
+            <div class="space-y-4">
+                <label
+                    class="flex items-center justify-between p-4 rounded-xl bg-surface-900/40 border border-white/5 hover:border-white/10 transition-all cursor-pointer group"
+                    for="beod_blanket_approval">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-warning-500/10 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                         </div>
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm group-hover:text-white transition-colors">
+                                BEOD Blanket Approval</p>
+                            <p class="text-xs text-gray-500">
+                                {% if settings.beod_blanket_approval is defined %}
+                                {{ settings.beod_blanket_approval.description }}
+                                {% else %}
+                                When ON, checking BEOD on checkout auto-approves the +1h lunch credit (still requires ≥6h worked). When OFF, manager must approve each BEOD on the timesheet.
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="relative flex-shrink-0">
+                        <input type="checkbox" id="beod_blanket_approval" name="beod_blanket_approval" value="on"
+                            class="sr-only peer"
+                            {% if settings.beod_blanket_approval is defined and settings.beod_blanket_approval.enabled %}checked{% elif settings.beod_blanket_approval is not defined %}checked{% endif %}>
+                        <div
+                            class="w-11 h-6 bg-surface-900/80 border border-white/10 rounded-full peer-checked:bg-primary-600 peer-checked:border-primary-500/30 transition-all">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-5 h-5 bg-gray-500 rounded-full peer-checked:translate-x-5 peer-checked:bg-white transition-all shadow-lg">
+                        </div>
+                    </div>
+                </label>
+            </div>
+        </div>
 
-                        <div class="flex items-center gap-3 pl-13">
-                            <div class="relative flex-1 max-w-[200px]">
-                                <input type="number" name="comment_threshold_minutes" id="comment_threshold_minutes"
-                                    value="{{ settings.comment_threshold_minutes.value }}"
-                                    class="form-input text-lg font-mono py-2 text-center" min="0" max="1440">
-                                <div
-                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
-                                    Minutes</div>
+        <!-- Policy Enforcement -->
+        <div class="glass-card p-6 mb-6">
+            <h2 class="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+                <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Policy Enforcement
+            </h2>
+            <p class="text-xs text-gray-500 mb-5">Configure mandatory fields and validation thresholds</p>
+
+            <div class="space-y-4">
+                <!-- Comment Threshold -->
+                <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 012 2h-3l-4 4z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-200 text-sm">Comment Enforcement Threshold</p>
+                                <p class="text-xs text-gray-500">Require comments if set time and actual time differ by more than X minutes</p>
                             </div>
                         </div>
                     </div>
+                    <div class="flex items-center gap-3 pl-13">
+                        <div class="relative flex-1 max-w-[200px]">
+                            <input type="number" name="comment_threshold_minutes" id="comment_threshold_minutes"
+                                value="{{ settings.comment_threshold_minutes.value }}"
+                                class="form-input text-lg font-mono py-2 text-center" min="0" max="1440">
+                            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">Minutes</div>
+                        </div>
+                    </div>
+                </div>
 
-                    <!-- Login Display Count -->
-                    <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center">
-                                    <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor"
-                                        viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M4 6h16M4 10h16m-7 4h7M4 14h4m-4 4h16" />
-                                    </svg>
-                                </div>
-                                <div>
-                                    <p class="font-medium text-gray-200 text-sm">Login List Display Count</p>
-                                    <p class="text-xs text-gray-500">{{ settings.login_names_display_count.description }}</p>
-                                </div>
+                <!-- Login Display Count -->
+                <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-accent-500/10 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 6h16M4 10h16m-7 4h7M4 14h4m-4 4h16" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-200 text-sm">Login List Display Count</p>
+                                <p class="text-xs text-gray-500">{{ settings.login_names_display_count.description }}</p>
                             </div>
                         </div>
-
-                        <div class="flex items-center gap-3 pl-13">
-                            <div class="relative flex-1 max-w-[200px]">
-                                <input type="number" name="login_names_display_count" id="login_names_display_count"
-                                    value="{{ settings.login_names_display_count.value }}"
-                                    class="form-input text-lg font-mono py-2 text-center" min="1" max="100">
-                                <div
-                                    class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
-                                    Names</div>
-                            </div>
+                    </div>
+                    <div class="flex items-center gap-3 pl-13">
+                        <div class="relative flex-1 max-w-[200px]">
+                            <input type="number" name="login_names_display_count" id="login_names_display_count"
+                                value="{{ settings.login_names_display_count.value }}"
+                                class="form-input text-lg font-mono py-2 text-center" min="1" max="100">
+                            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">Names</div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Save Button -->
-            <button type="submit" id="btn-save-config"
-                class="w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]">
-                <span class="relative z-10 flex items-center justify-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Save Configuration
-                </span>
-            </button>
+        <!-- Save Button -->
+        <button type="submit" id="btn-save-config"
+            class="w-full relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400 text-white font-semibold py-3.5 rounded-xl shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-all duration-300 active:scale-[0.98]">
+            <span class="relative z-10 flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                Save Configuration
+            </span>
+        </button>
     </form>
 </div>
 {% endblock %}

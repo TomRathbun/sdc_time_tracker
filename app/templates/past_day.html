@@ -22,6 +22,12 @@
         <p class="text-gray-400 mt-1">Log your timeline for a previous workday</p>
     </div>
 
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+
     <!-- Date picker -->
     <div class="glass-card p-6 mb-6">
         <h2 class="text-sm font-semibold text-gray-300 mb-3">Select Date</h2>
@@ -138,10 +144,10 @@
             <div class="mb-6">
                 <label
                     class="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-surface-900/30 border border-white/5 hover:border-white/10 transition-colors">
-                    <input type="checkbox" name="lunch_end_of_day" value="true"
+                    <input type="checkbox" name="lunch_end_of_day" value="true" id="beod-past"
                         class="w-4 h-4 rounded bg-surface-700 border-white/10 text-primary-500 focus:ring-primary-500/30">
                     <div>
-                        <span class="text-sm font-medium text-gray-300">🍽 Lunch at end of day</span>
+                        <span class="text-sm font-medium text-gray-300">BEOD — Break at end of day (+1h)</span>
                         <span class="text-xs text-gray-500 ml-1">(needs admin approval, +1h)</span>
                     </div>
                 </label>

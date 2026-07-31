@@ -50,9 +50,16 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto">
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-white">Audit Trail</h1>
-        <p class="text-gray-400 mt-1">Tamper-evident log of all system actions</p>
+    <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Audit Trail</h1>
+            <p class="text-gray-400 mt-1">Tamper-evident log of all system actions</p>
+        </div>
+        {% if employee.role.value == 'manager' %}
+        <a href="/admin/data-reset" class="text-sm text-danger-400 hover:text-danger-300 border border-danger-500/20 px-3 py-2 rounded-xl">
+            Clear audit / reset data…
+        </a>
+        {% endif %}
     </div>
 
     <!-- Filter -->

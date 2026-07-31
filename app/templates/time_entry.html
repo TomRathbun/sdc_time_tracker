@@ -91,6 +91,26 @@
                 </p>
             </div>
 
+            {% if entry_type == "check_out" %}
+            <!-- Live FOSC preview for this checkout time -->
+            <div class="mb-6 p-4 rounded-xl bg-primary-500/5 border border-primary-500/15">
+                <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-2">What will be recorded</p>
+                <div class="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <p class="text-xs text-gray-500">Checkout time</p>
+                        <p id="preview-out-time" class="text-2xl font-mono font-bold text-white">--:--</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500">FOSC today (before BEOD)</p>
+                        <p id="preview-fosc-hours" class="text-2xl font-mono font-bold text-primary-300">—</p>
+                        <p class="text-xs text-gray-500">of {{ target_hours|default(0) }}h target</p>
+                    </div>
+                </div>
+                <p id="preview-fosc-detail" class="text-xs text-gray-500 mt-2"></p>
+                <p id="preview-fosc-with-beod" class="text-xs text-accent-300 mt-1 hidden"></p>
+            </div>
+            {% endif %}
+
             <!-- Location Type -->
             <div class="mb-6">
                 <label class="block text-sm font-medium text-gray-300 mb-3">Location</label>
@@ -136,7 +156,7 @@
                 </div>
             </div>
 
-            <!-- Lunch deviation (check-out only) -->
+            <!-- BEOD — optional; not automatic just because blanket is on -->
             {% if entry_type == "check_out" %}
             <div class="mb-6 p-4 rounded-xl bg-warning-500/5 border border-warning-500/10">
                 <label class="flex items-start gap-3 cursor-pointer">
@@ -144,9 +164,20 @@
                         class="mt-1 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500 focus:ring-primary-500/25"
                         id="lunch-eod">
                     <div>
-                        <p class="text-sm font-medium text-warning-300">Lunch taken at end of day</p>
-                        <p class="text-xs text-gray-500 mt-0.5">Requires prior supervisor approval. Checking this will
-                            flag the entry for review.</p>
+                        {% if beod_blanket|default(true) %}
+                        <p class="text-sm font-medium text-warning-300">Use BEOD — Break at end of day (+1h)</p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            Check only if you take the paid lunch at the <strong class="text-gray-400">end</strong> of the day
+                            (e.g. 07:00–15:00 = 8h + BEOD = 9h). Leave unchecked if you take lunch during the day.
+                            Needs ≥ {{ beod_minimum_hours|default(6) }}h worked. Blanket approval is ON — credit applies when checked.
+                        </p>
+                        {% else %}
+                        <p class="text-sm font-medium text-warning-300">Request end-of-day break (BEOD +1h)</p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            Optional request for manager approval if you take paid lunch at the end of the day.
+                            Leave unchecked for a normal mid-day lunch. Needs ≥ {{ beod_minimum_hours|default(6) }}h worked.
+                        </p>
+                        {% endif %}
                     </div>
                 </label>
             </div>
@@ -175,6 +206,7 @@
                     const warning = document.getElementById('threshold-warning');
                     const commentsArea = document.getElementById('comments');
                     const threshold = {{ comment_threshold }};
+                    const entryType = {{ entry_type|tojson }};
                     
                     const now = new Date();
                     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
@@ -201,9 +233,63 @@
                         }
                     }
 
-                    hourSelect.addEventListener('change', updateCommentStatus);
-                    minuteSelect.addEventListener('change', updateCommentStatus);
+                    function updateFoscPreview() {
+                        if (entryType !== 'check_out') return;
+                        const h = parseInt(hourSelect.value, 10);
+                        const m = parseInt(minuteSelect.value, 10);
+                        const pad = function (n) { return (n < 10 ? '0' : '') + n; };
+                        const outLabel = pad(h) + ':' + pad(m);
+                        const outEl = document.getElementById('preview-out-time');
+                        if (outEl) outEl.textContent = outLabel;
+
+                        const openIso = {{ open_checkin_iso|default(none)|tojson }};
+                        const completedClock = {{ completed_clock_hours|default(0) }};
+                        const offsiteH = {{ offsite_hours|default(0) }};
+                        const phoneH = {{ phone_hours|default(0) }};
+                        const target = {{ target_hours|default(0) }};
+                        const beodMin = {{ beod_minimum_hours|default(6) }};
+
+                        let sessionH = 0;
+                        if (openIso) {
+                            const open = new Date(openIso.replace(' ', 'T'));
+                            const out = new Date(open);
+                            out.setHours(h, m, 0, 0);
+                            sessionH = Math.max(0, (out - open) / 3600000);
+                        }
+                        const clock = Math.round((completedClock + sessionH) * 100) / 100;
+                        const fosc = Math.round((clock + offsiteH + phoneH) * 100) / 100;
+                        const foscEl = document.getElementById('preview-fosc-hours');
+                        if (foscEl) foscEl.textContent = fosc + 'h';
+                        const detail = document.getElementById('preview-fosc-detail');
+                        if (detail) {
+                            let t = 'clock ' + clock + 'h';
+                            if (sessionH) t += ' (includes this session)';
+                            if (offsiteH) t += ' · offsite ' + offsiteH + 'h';
+                            if (phoneH) t += ' · phone ' + phoneH + 'h';
+                            detail.textContent = t;
+                        }
+                        const withBeod = document.getElementById('preview-fosc-with-beod');
+                        const beodCb = document.getElementById('lunch-eod');
+                        if (withBeod && beodCb) {
+                            if (beodCb.checked) {
+                                if (fosc >= beodMin) {
+                                    withBeod.textContent = 'With BEOD: ' + (Math.round((fosc + 1) * 100) / 100) + 'h FOSC (target ' + target + 'h)';
+                                } else {
+                                    withBeod.textContent = 'BEOD checked but under ' + beodMin + 'h worked — no +1 credit.';
+                                }
+                                withBeod.classList.remove('hidden');
+                            } else {
+                                withBeod.classList.add('hidden');
+                            }
+                        }
+                    }
+
+                    hourSelect.addEventListener('change', function () { updateCommentStatus(); updateFoscPreview(); });
+                    minuteSelect.addEventListener('change', function () { updateCommentStatus(); updateFoscPreview(); });
+                    const beodCb = document.getElementById('lunch-eod');
+                    if (beodCb) beodCb.addEventListener('change', updateFoscPreview);
                     updateCommentStatus();
+                    updateFoscPreview();
                 });
             </script>
 

@@ -30,21 +30,40 @@
 <div class="max-w-4xl mx-auto">
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-white">Leave Management</h1>
-        <p class="text-gray-400 mt-1">Request vacation or record sick leave</p>
+        <p class="text-gray-400 mt-1">Book advance vacation, sick, COVID sick, or UAE holiday. Full day = FOSC target (9h Mon–Thu, 4h Fri).</p>
     </div>
+
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="mb-6 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm">{{ success }}</div>
+    {% endif %}
+
+    {% if balance %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div class="glass-card p-5 border-l-4 border-primary-400">
+            <p class="text-xs uppercase tracking-wider text-gray-500">Vacation remaining</p>
+            <p class="text-2xl font-bold text-white font-mono mt-1">{{ balance.vacation.remaining|int }}
+                <span class="text-sm text-gray-400 font-normal">/ {{ balance.vacation.entitlement|int }} days</span>
+            </p>
+            <p class="text-xs text-gray-500 mt-1">{{ balance.vacation.used|int }} used · {{ balance.vacation.pending|int }} pending</p>
+        </div>
+        <div class="glass-card p-5 border-l-4 border-danger-400">
+            <p class="text-xs uppercase tracking-wider text-gray-500">Sick remaining (incl. COVID)</p>
+            <p class="text-2xl font-bold text-white font-mono mt-1">{{ balance.sick.remaining|int }}
+                <span class="text-sm text-gray-400 font-normal">/ {{ balance.sick.entitlement|int }} days</span>
+            </p>
+            <p class="text-xs text-gray-500 mt-1">{{ balance.sick.used|int }} used · {{ balance.sick.pending|int }} pending</p>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <!-- Vacation Request -->
         <div class="glass-card p-6">
-            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <div class="w-8 h-8 rounded-lg bg-primary-500/10 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
-                    </svg>
-                </div>
-                Request Vacation
-            </h2>
+            <h2 class="text-lg font-semibold text-white mb-2">Request Vacation</h2>
+            <p class="text-xs text-gray-500 mb-4">Advance multi-day OK. Each workday uses 1 vacation day (9h or 4h Fri charged).</p>
             <form method="POST" action="/leave/vacation" id="vacation-form">
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
@@ -73,15 +92,8 @@
 
         <!-- Sick Leave -->
         <div class="glass-card p-6">
-            <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <div class="w-8 h-8 rounded-lg bg-danger-500/10 flex items-center justify-center">
-                    <svg class="w-4 h-4 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                </div>
-                Record Sick Leave
-            </h2>
+            <h2 class="text-lg font-semibold text-white mb-2">Record Sick Leave</h2>
+            <p class="text-xs text-gray-500 mb-4">Uses sick day balance. Full day = FOSC target hours.</p>
             <form method="POST" action="/leave/sick" id="sick-form">
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
@@ -104,6 +116,62 @@
                     <button type="submit" id="btn-submit-sick" class="w-full btn-primary">
                         Submit Sick Leave
                     </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- COVID Sick -->
+        <div class="glass-card p-6">
+            <h2 class="text-lg font-semibold text-white mb-2">COVID Sick Hours</h2>
+            <p class="text-xs text-gray-500 mb-4">Tracked separately; counts against sick balance.</p>
+            <form method="POST" action="/leave/covid-sick" id="covid-form">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="covid-start" class="block text-xs text-gray-500 mb-1">Start Date</label>
+                            <input type="text" name="start_date" id="covid-start" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
+                        </div>
+                        <div>
+                            <label for="covid-end" class="block text-xs text-gray-500 mb-1">End Date</label>
+                            <input type="text" name="end_date" id="covid-end" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="covid-comments" class="block text-xs text-gray-500 mb-1">Comments</label>
+                        <textarea name="comments" id="covid-comments" rows="2" class="form-input resize-none"
+                            placeholder="Optional notes..."></textarea>
+                    </div>
+                    <button type="submit" class="w-full btn-primary">Submit COVID Sick</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- UAE Holiday -->
+        <div class="glass-card p-6">
+            <h2 class="text-lg font-semibold text-white mb-2">UAE National Holiday</h2>
+            <p class="text-xs text-gray-500 mb-4">Does not use vacation/sick balance. Full day FOSC credit after approval.</p>
+            <form method="POST" action="/leave/uae-holiday" id="holiday-form">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="hol-start" class="block text-xs text-gray-500 mb-1">Start Date</label>
+                            <input type="text" name="start_date" id="hol-start" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
+                        </div>
+                        <div>
+                            <label for="hol-end" class="block text-xs text-gray-500 mb-1">End Date</label>
+                            <input type="text" name="end_date" id="hol-end" required readonly data-osk-ignore
+                                class="form-input cursor-pointer" placeholder="Select Date">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="hol-comments" class="block text-xs text-gray-500 mb-1">Comments</label>
+                        <textarea name="comments" id="hol-comments" rows="2" class="form-input resize-none"
+                            placeholder="Holiday name..."></textarea>
+                    </div>
+                    <button type="submit" class="w-full btn-primary">Submit Holiday</button>
                 </div>
             </form>
         </div>
@@ -150,42 +218,14 @@
         {% endif %}
     </div>
 
-    <!-- Pending Approvals (Manager/Supervisor) -->
-    {% if pending_approvals %}
-    <div class="glass-card p-6">
-        <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-warning-400 animate-pulse"></div>
-            Pending Approvals
-        </h2>
-        <div class="space-y-3">
-            {% for req in pending_approvals %}
-            <div class="flex items-center justify-between p-4 rounded-xl bg-surface-900/50 border border-white/5">
-                <div>
-                    <p class="font-medium text-white">{{ req.employee.name }}</p>
-                    <p class="text-sm text-gray-400">
-                        {{ req.leave_type.value.title() }} • {{ req.start_date }} → {{ req.end_date }}
-                        {% if req.comments %} • <span class="text-gray-500">{{ req.comments }}</span>{% endif %}
-                    </p>
-                </div>
-                <div class="flex gap-2">
-                    <form method="POST" action="/leave/{{ req.id }}/approve" class="inline">
-                        <button type="submit"
-                            class="px-4 py-2 rounded-lg bg-success-500/10 text-success-400 hover:bg-success-500/20 text-sm font-medium transition-colors"
-                            id="btn-approve-{{ req.id }}">
-                            Approve
-                        </button>
-                    </form>
-                    <form method="POST" action="/leave/{{ req.id }}/reject" class="inline">
-                        <button type="submit"
-                            class="px-4 py-2 rounded-lg bg-danger-500/10 text-danger-400 hover:bg-danger-500/20 text-sm font-medium transition-colors"
-                            id="btn-reject-{{ req.id }}">
-                            Reject
-                        </button>
-                    </form>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+    {% if employee.role.value in ['manager', 'supervisor'] %}
+    <div class="glass-card p-4 flex flex-wrap items-center justify-between gap-3 border border-primary-500/10">
+        <p class="text-sm text-gray-400">
+            Team leave approvals are on a separate page.
+        </p>
+        <a href="/leave/approvals" class="btn-primary text-sm py-2 px-4">
+            Open leave approvals →
+        </a>
     </div>
     {% endif %}
 </div>
@@ -215,6 +255,22 @@
             }
         });
         const sickEnd = flatpickr("#sick-end", config);
+
+        const covidStart = flatpickr("#covid-start", {
+            ...config,
+            onChange: function (selectedDates, dateStr, instance) {
+                covidEnd.set("minDate", dateStr);
+            }
+        });
+        const covidEnd = flatpickr("#covid-end", config);
+
+        const holStart = flatpickr("#hol-start", {
+            ...config,
+            onChange: function (selectedDates, dateStr, instance) {
+                holEnd.set("minDate", dateStr);
+            }
+        });
+        const holEnd = flatpickr("#hol-end", config);
     });
 </script>
 {% endblock %}

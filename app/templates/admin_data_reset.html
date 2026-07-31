@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Data Reset — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-8">
+        <a href="/admin" class="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-4 transition-colors">
+            ← Administration
+        </a>
+        <h1 class="text-2xl font-bold text-white">Production data reset</h1>
+        <p class="text-gray-400 mt-1">
+            Clear demo / seed data before loading real employees. <strong class="text-warning-300">Destructive — cannot be undone.</strong>
+        </p>
+    </div>
+
+    {% if message %}
+    <div class="mb-6 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm break-all">
+        {{ message | replace('+', ' ') }}
+    </div>
+    {% endif %}
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-danger-500/10 border border-danger-500/30 text-danger-300 text-sm">
+        {{ error | replace('+', ' ') }}
+    </div>
+    {% endif %}
+
+    <div class="glass-card p-6 mb-6">
+        <h2 class="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wider">Current counts</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div class="p-3 rounded-xl bg-surface-900/50">
+                <p class="text-xl font-mono text-white">{{ counts.employees }}</p>
+                <p class="text-[10px] text-gray-500">Employees</p>
+            </div>
+            <div class="p-3 rounded-xl bg-surface-900/50">
+                <p class="text-xl font-mono text-white">{{ counts.time_entries }}</p>
+                <p class="text-[10px] text-gray-500">Time entries</p>
+            </div>
+            <div class="p-3 rounded-xl bg-surface-900/50">
+                <p class="text-xl font-mono text-white">{{ counts.leave }}</p>
+                <p class="text-[10px] text-gray-500">Leave requests</p>
+            </div>
+            <div class="p-3 rounded-xl bg-surface-900/50">
+                <p class="text-xl font-mono text-white">{{ counts.audit }}</p>
+                <p class="text-[10px] text-gray-500">Audit rows</p>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="/admin/data-reset" class="glass-card p-6 space-y-5"
+        onsubmit="return confirm('This permanently deletes selected data. Continue?');">
+
+        <label class="flex items-start gap-3 p-4 rounded-xl bg-surface-900/40 border border-white/5 cursor-pointer">
+            <input type="checkbox" name="clear_audit" value="on" class="mt-1 w-4 h-4 rounded">
+            <span>
+                <span class="text-sm font-medium text-white block">Clear audit log</span>
+                <span class="text-xs text-gray-500">Deletes all audit trail rows ({{ counts.audit }}).</span>
+            </span>
+        </label>
+
+        <label class="flex items-start gap-3 p-4 rounded-xl bg-surface-900/40 border border-white/5 cursor-pointer">
+            <input type="checkbox" name="clear_time_data" value="on" class="mt-1 w-4 h-4 rounded">
+            <span>
+                <span class="text-sm font-medium text-white block">Clear all time & leave data</span>
+                <span class="text-xs text-gray-500">
+                    Punches, offsite, phone support, daily summaries, leave requests, remote authorizations.
+                    Keeps employee names/PINs.
+                </span>
+            </span>
+        </label>
+
+        <label class="flex items-start gap-3 p-4 rounded-xl bg-danger-500/10 border border-danger-500/20 cursor-pointer">
+            <input type="checkbox" name="remove_other_employees" value="on" class="mt-1 w-4 h-4 rounded">
+            <span>
+                <span class="text-sm font-medium text-danger-300 block">Remove all employees except me</span>
+                <span class="text-xs text-gray-500">
+                    Deletes every employee record other than your manager account ({{ employee.name }}).
+                    Also clears time/leave data first. Use before adding real staff.
+                </span>
+            </span>
+        </label>
+
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Type <span class="font-mono text-warning-300">RESET</span> to confirm</label>
+            <input type="text" name="confirm" required autocomplete="off"
+                class="form-input font-mono" placeholder="RESET">
+        </div>
+
+        <button type="submit" class="w-full py-3 rounded-xl bg-danger-600 hover:bg-danger-500 text-white font-semibold transition-colors">
+            Run selected cleanup
+        </button>
+    </form>
+</div>
+{% endblock %}

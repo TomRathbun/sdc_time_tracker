@@ -306,6 +306,28 @@
             <span id="modal-success-text"></span>
         </div>
 
+        <!-- Checkout preview: time + FOSC hours -->
+        <div id="modal-checkout-preview" style="display:none"
+            class="mb-4 p-3 rounded-xl bg-surface-900/60 border border-white/10 text-xs space-y-2">
+            <div class="flex justify-between items-center">
+                <span class="text-gray-500">Checkout time (recorded)</span>
+                <span id="preview-checkout-time" class="font-mono font-bold text-white text-sm">--:--</span>
+            </div>
+            <div class="flex justify-between items-center">
+                <span class="text-gray-500">Session / FOSC today</span>
+                <span id="preview-fosc" class="font-mono text-primary-300">—</span>
+            </div>
+            <p id="preview-detail" class="text-[11px] text-gray-500"></p>
+            <label id="preview-beod-wrap" class="flex items-start gap-2 pt-2 border-t border-white/5 cursor-pointer">
+                <input type="checkbox" id="modal-beod" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
+                <span>
+                    <span id="preview-beod-label" class="text-warning-300 font-medium block"></span>
+                    <span id="preview-beod-help" class="text-[11px] text-gray-500 block mt-0.5"></span>
+                    <span id="preview-beod-result" class="text-[11px] text-accent-300 block mt-1 hidden"></span>
+                </span>
+            </label>
+        </div>
+
         <!-- Submit Button -->
         <button type="button" id="modal-submit" onclick="submitQuickAction()" disabled
             class="w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gray-700/50 border border-white/5 cursor-not-allowed opacity-50">
@@ -413,6 +435,11 @@
         _lastCheckedPin = '';
         if (_pinCheckTimer) { clearTimeout(_pinCheckTimer); _pinCheckTimer = null; }
 
+        var previewEl = document.getElementById('modal-checkout-preview');
+        var beodCb = document.getElementById('modal-beod');
+        if (beodCb) beodCb.checked = false;
+        if (previewEl) previewEl.style.display = 'none';
+
         if (action === 'checkin') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-success-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>';
@@ -423,6 +450,7 @@
             icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
             title.textContent = 'Quick Check Out';
             subtitle.textContent = empName;
+            loadCheckoutPreview(empId);
         }
 
         // Fetch random weapon for spotlight
@@ -488,6 +516,10 @@
         var formData = new FormData();
         formData.append('employee_id', currentEmployeeId);
         formData.append('pin', pin);
+        if (currentAction === 'checkout') {
+            var beodEl = document.getElementById('modal-beod');
+            formData.append('beod', (beodEl && beodEl.checked) ? 'true' : 'false');
+        }
 
         fetch(url, { method: 'POST', body: formData })
             .then(function (response) {
@@ -520,6 +552,82 @@
     // Update button state as PIN is typed — validates against server
     var _pinCheckTimer = null;
     var _lastCheckedPin = '';
+
+    var _checkoutPreview = null;
+
+    function loadCheckoutPreview(empId) {
+        var previewEl = document.getElementById('modal-checkout-preview');
+        if (!previewEl) return;
+        previewEl.style.display = 'block';
+        document.getElementById('preview-checkout-time').textContent = '…';
+        document.getElementById('preview-fosc').textContent = 'Loading…';
+        document.getElementById('preview-detail').textContent = '';
+        document.getElementById('preview-beod-result').classList.add('hidden');
+
+        fetch('/api/checkout-preview/' + empId)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                _checkoutPreview = data;
+                if (!data.ok && data.error) {
+                    document.getElementById('preview-fosc').textContent = '—';
+                    document.getElementById('preview-detail').textContent = data.error;
+                    document.getElementById('preview-beod-wrap').style.display = 'none';
+                    return;
+                }
+                document.getElementById('preview-checkout-time').textContent = data.checkout_time;
+                document.getElementById('preview-fosc').textContent =
+                    data.fosc_hours + 'h / ' + data.target_hours + 'h target';
+                var detail = '';
+                if (data.checkin_time) {
+                    detail = 'In ' + data.checkin_time + ' → Out ' + data.checkout_time +
+                        ' (' + data.session_hours + 'h session)';
+                    if (data.phone_hours) detail += ' · phone ' + data.phone_hours + 'h';
+                    if (data.offsite_hours) detail += ' · offsite ' + data.offsite_hours + 'h';
+                }
+                document.getElementById('preview-detail').textContent = detail;
+
+                var wrap = document.getElementById('preview-beod-wrap');
+                wrap.style.display = 'flex';
+                var label = document.getElementById('preview-beod-label');
+                var help = document.getElementById('preview-beod-help');
+                if (data.beod_blanket) {
+                    label.textContent = 'Use BEOD — Break at end of day (+1h)';
+                    help.textContent = data.beod_eligible
+                        ? 'Optional. Only if you take paid lunch at end of day (not mid-day lunch). Credit applies immediately if checked (blanket ON).'
+                        : 'Need at least ' + data.beod_minimum_hours + 'h worked for BEOD credit. Currently ' + data.fosc_hours + 'h.';
+                } else {
+                    label.textContent = 'Request end-of-day break (BEOD +1h)';
+                    help.textContent = data.beod_eligible
+                        ? 'Optional. Requests manager approval for +1h lunch at end of day. Leave unchecked if you took lunch during the day.'
+                        : 'Need at least ' + data.beod_minimum_hours + 'h worked. Currently ' + data.fosc_hours + 'h.';
+                }
+                updateBeodPreviewResult();
+            })
+            .catch(function () {
+                document.getElementById('preview-detail').textContent = 'Could not load hour preview.';
+            });
+    }
+
+    function updateBeodPreviewResult() {
+        var data = _checkoutPreview;
+        var res = document.getElementById('preview-beod-result');
+        var beod = document.getElementById('modal-beod');
+        if (!data || !res || !beod) return;
+        if (beod.checked && data.beod_eligible) {
+            res.textContent = 'With BEOD: ' + data.fosc_with_beod + 'h FOSC today';
+            res.classList.remove('hidden');
+        } else if (beod.checked && !data.beod_eligible) {
+            res.textContent = 'BEOD will not add +1h (under ' + data.beod_minimum_hours + 'h worked).';
+            res.classList.remove('hidden');
+        } else {
+            res.classList.add('hidden');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var beod = document.getElementById('modal-beod');
+        if (beod) beod.addEventListener('change', updateBeodPreviewResult);
+    });
 
     function updateQuickButton() {
         var pin = document.getElementById('modal-pin').value;
