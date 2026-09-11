@@ -14,6 +14,7 @@ from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntr
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
+    beod_offered_on,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -222,6 +223,7 @@ def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
     work = round(clock + offsite_h + phone_h, 2)
     target = get_target_hours(today)
     beod_eligible = work >= BEOD_MINIMUM_HOURS
+    beod_offered = beod_offered_on(today)
     beod_blanket = get_bool_setting(db, "beod_blanket_approval")
     fosc_without = work
     fosc_with = round(work + 1.0, 2) if beod_eligible else work
@@ -253,6 +255,7 @@ def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
         "fosc_with_beod": fosc_with,
         "target_hours": target,
         "beod_eligible": beod_eligible,
+        "beod_offered": beod_offered,
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
         "beod_blanket": beod_blanket,
         "beod_already": beod_already,
@@ -362,6 +365,8 @@ async def quick_checkout(
     now = datetime.now()
     rounded_time = round_up_5(now)
     claim_beod = str(beod).lower() in ("true", "1", "on", "yes")
+    if not beod_offered_on(today):
+        claim_beod = False
     status = current_status(db, emp.id, today)
 
     if status == STATUS_CHECKED_OUT:

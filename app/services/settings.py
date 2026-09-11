@@ -45,6 +45,16 @@ FEATURE_DEFAULTS = {
         "value": "true",
         "description": "BEOD (break end of day): auto-approve when employee checks the box (no manager step). Off = individual approval after checkout.",
     },
+    "offset_variance_reasons": {
+        "value": (
+            "Forgot to punch\n"
+            "Traffic / commute delay\n"
+            "Meeting ran long\n"
+            "System or kiosk issue\n"
+            "Called back after leaving"
+        ),
+        "description": "Canned reasons for check-in/out time variances (one per line). Employees can also choose Other and type a reason.",
+    },
 }
 
 

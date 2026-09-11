@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-from typing import List, Optional
+from datetime import date, datetime, timedelta
+from typing import List, NamedTuple, Optional
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,89 @@ from app.models import (
 def get_target_hours(work_date: date) -> float:
     """Get the FOSC target hours for a given weekday (9 Mon–Thu, 4 Fri)."""
     return float(WEEKDAY_HOURS.get(work_date.weekday(), 0))
+
+
+BEOD_CREDIT_HOURS = 1.0
+
+
+class ProjectedCheckout(NamedTuple):
+    """Standard (9h / 4h) and optional earlier BEOD (8h Mon–Thu) checkout times."""
+    standard: Optional[datetime]
+    beod: Optional[datetime]
+    beod_claimed: bool = False
+
+
+def hours_to_meet_target(work_date: date, *, beod: bool = False) -> float:
+    """Clock hours needed to meet FOSC target.
+
+    Mon–Thu: 9h, or 8h when taking BEOD (+1h lunch credit).
+    Friday: 4h. BEOD is not used — 4h is below the 6h BEOD floor.
+    """
+    target = get_target_hours(work_date)
+    if target <= 0:
+        return 0.0
+    if beod:
+        needed = target - BEOD_CREDIT_HOURS
+        if needed >= BEOD_MINIMUM_HOURS:
+            return needed
+    return target
+
+
+def beod_offered_on(work_date: date) -> bool:
+    """BEOD checkbox is only offered when it can shorten the required clock day.
+
+    True Mon–Thu (9h → 8h). False Friday (4h, below the 6h BEOD floor) and weekends.
+    """
+    return hours_to_meet_target(work_date, beod=True) < hours_to_meet_target(work_date)
+
+
+def projected_checkout_time(
+    checkin_time: datetime,
+    work_date: date,
+    completed_hours: float = 0.0,
+    *,
+    beod: bool = False,
+) -> Optional[datetime]:
+    """Projected checkout = open check-in + remaining hours to hit the day target.
+
+    Returns None when there is no remaining target (weekend, already met, or
+    a return punch after a full day). Callers should hide the projection after
+    checkout (no open check-in) and after midnight (new work_date).
+    """
+    remaining = hours_to_meet_target(work_date, beod=beod) - (completed_hours or 0.0)
+    if remaining <= 0:
+        return None
+    return checkin_time + timedelta(hours=remaining)
+
+
+def projected_checkout_from_entries(
+    time_entries: List[TimeEntry],
+    work_date: date,
+    *,
+    beod_claimed: bool = False,
+) -> ProjectedCheckout:
+    """Projected checkout for an open session (empty if checked out / not in)."""
+    pending: Optional[TimeEntry] = None
+    for entry in sorted(time_entries, key=lambda e: (e.declared_time, e.id or 0)):
+        if entry.entry_type == EntryType.check_in:
+            pending = entry
+        elif entry.entry_type == EntryType.check_out:
+            pending = None
+    if pending is None:
+        return ProjectedCheckout(None, None, False)
+
+    completed = calculate_clock_hours(time_entries)
+    standard = projected_checkout_time(
+        pending.declared_time, work_date, completed, beod=False,
+    )
+    beod = projected_checkout_time(
+        pending.declared_time, work_date, completed, beod=True,
+    )
+    if beod_claimed:
+        return ProjectedCheckout(beod or standard, None, True)
+    if beod is not None and beod == standard:
+        beod = None
+    return ProjectedCheckout(standard, beod, False)
 
 
 def calculate_clock_hours(time_entries: List[TimeEntry]) -> float:

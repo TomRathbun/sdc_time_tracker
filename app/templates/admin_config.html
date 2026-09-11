@@ -367,6 +367,26 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Variance reasons -->
+                <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
+                    <div class="flex items-center gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-orange-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm">Time variance reasons</p>
+                            <p class="text-xs text-gray-500">{{ settings.offset_variance_reasons.description }}</p>
+                        </div>
+                    </div>
+                    <textarea name="offset_variance_reasons" id="offset_variance_reasons" rows="6"
+                        class="form-input font-mono text-sm resize-y"
+                        placeholder="One reason per line">{{ settings.offset_variance_reasons.value }}</textarea>
+                    <p class="text-[11px] text-gray-500 mt-2">Other is always offered so the employee can type a custom reason.</p>
+                </div>
             </div>
         </div>
 

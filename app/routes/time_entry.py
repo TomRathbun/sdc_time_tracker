@@ -20,7 +20,10 @@ from app.services.time_state import (
     last_checkout_entry, STATUS_CHECKED_OUT,
     RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
 )
-from app.services.time_offset import offset_approved_default
+from app.services.time_offset import (
+    offset_approved_default, get_variance_reasons, resolve_offset_comment,
+    needs_offset_approval,
+)
 from app.services.audit import log_action
 from app.services.settings import get_bool_setting
 
@@ -59,6 +62,7 @@ def _time_entry_error(request, employee, entry_type, now, today, error, threshol
         "phone_hours": 0,
         "is_recheckout": False,
         "last_checkout_display": None,
+        "variance_reasons": get_variance_reasons(db) if db is not None else [],
     }
     ctx.update(extra)
     return templates.TemplateResponse("time_entry.html", ctx)
@@ -89,6 +93,7 @@ async def checkin_page(request: Request, db: Session = Depends(get_db)):
         "comment_threshold": threshold,
         "beod_blanket": _beod_blanket(db),
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "variance_reasons": get_variance_reasons(db),
     })
 
 
@@ -99,6 +104,8 @@ async def checkin_submit(
     declared_minute: int = Form(...),
     location_type: str = Form("office"),
     comments: str = Form(""),
+    variance_reason: str = Form(""),
+    variance_other: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Submit a check-in entry."""
@@ -151,14 +158,15 @@ async def checkin_submit(
             )
         authorization_id = auth.id
 
-    # ENFORCE COMMENT POLICY
-    diff_minutes = abs((now - declared_time).total_seconds()) / 60
-    if diff_minutes > threshold and not comments.strip():
+    comment_text, comment_err = resolve_offset_comment(
+        db, declared_time, now, comments, variance_reason, variance_other,
+    )
+    if comment_err:
         return _time_entry_error(
-            request, employee, "check_in", now, today,
-            f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
-            threshold, db=db,
+            request, employee, "check_in", now, today, comment_err, threshold, db=db,
         )
+    if not comment_text and returning:
+        comment_text = RETURN_CHECKIN_COMMENT
 
     entry = TimeEntry(
         employee_id=employee.id,
@@ -169,7 +177,7 @@ async def checkin_submit(
         location_type=loc_type,
         is_remote=is_remote,
         authorization_id=authorization_id,
-        comments=comments.strip() or (RETURN_CHECKIN_COMMENT if returning else ""),
+        comments=comment_text,
         offset_approved=True if returning else offset_approved_default(db, declared_time, now),
     )
     db.add(entry)
@@ -186,21 +194,21 @@ async def checkin_submit(
             "declared_time": str(declared_time),
             "submission_time": str(now),
             "location_type": loc_type.value,
-            "comments": comments,
+            "comments": comment_text,
         },
         ip_address=request.client.host if request.client else "",
     )
 
     # TRIGGER POLICY ALERT EMAIL IF THRESHOLD EXCEEDED
     from app.services.settings import get_setting
-    if diff_minutes > threshold and get_setting(db, "manager_policy_alert_enabled") == "true":
+    if needs_offset_approval(db, declared_time, now) and get_setting(db, "manager_policy_alert_enabled") == "true":
         import threading
         from app.services.email import send_policy_violation_email
         managers = db.query(Employee).filter(Employee.role == Role.manager).all()
         mgr_emails = [m.email for m in managers if m.email]
         threading.Thread(
             target=send_policy_violation_email,
-            args=(employee.name, employee.email, mgr_emails, "check_in", declared_time, now, threshold, comments),
+            args=(employee.name, employee.email, mgr_emails, "check_in", declared_time, now, threshold, comment_text),
             daemon=True,
         ).start()
 
@@ -323,6 +331,7 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         "phone_hours": calculate_phone_hours(phones),
         "is_recheckout": is_recheckout,
         "last_checkout_display": last_checkout_display,
+        "variance_reasons": get_variance_reasons(db),
     })
 
 
@@ -334,6 +343,8 @@ async def checkout_submit(
     location_type: str = Form("office"),
     lunch_end_of_day: bool = Form(False),
     comments: str = Form(""),
+    variance_reason: str = Form(""),
+    variance_other: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Submit a check-out entry."""
@@ -365,12 +376,12 @@ async def checkout_submit(
         loc_type = LocationType(location_type) if location_type in [e.value for e in LocationType] else LocationType.office
         is_remote = loc_type in (LocationType.remote, LocationType.offsite)
 
-        diff_minutes = abs((now - declared_time).total_seconds()) / 60
-        if diff_minutes > threshold and not comments.strip():
+        comment_text, comment_err = resolve_offset_comment(
+            db, declared_time, now, comments, variance_reason, variance_other,
+        )
+        if comment_err:
             return _time_entry_error(
-                request, employee, "check_out", now, today,
-                f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
-                threshold, db=db,
+                request, employee, "check_out", now, today, comment_err, threshold, db=db,
                 is_recheckout=True,
                 last_checkout_display=last_co.declared_time.strftime("%H:%M"),
             )
@@ -394,7 +405,7 @@ async def checkout_submit(
             entry_type=EntryType.check_out,
             location_type=loc_type,
             is_remote=is_remote,
-            comments=comments.strip() or RECHECKOUT_COMMENT,
+            comments=comment_text or RECHECKOUT_COMMENT,
             offset_approved=offset_approved_default(db, declared_time, now),
         )
         db.add(return_ci)
@@ -419,7 +430,7 @@ async def checkout_submit(
                 "extra_hours": extra_h,
                 "location_type": loc_type.value,
                 "beod": lunch_end_of_day,
-                "comments": comments,
+                "comments": comment_text,
             },
             ip_address=request.client.host if request.client else "",
         )
@@ -435,13 +446,12 @@ async def checkout_submit(
     loc_type = LocationType(location_type) if location_type in [e.value for e in LocationType] else LocationType.office
     is_remote = loc_type in (LocationType.remote, LocationType.offsite)
 
-    # ENFORCE COMMENT POLICY
-    diff_minutes = abs((now - declared_time).total_seconds()) / 60
-    if diff_minutes > threshold and not comments.strip():
+    comment_text, comment_err = resolve_offset_comment(
+        db, declared_time, now, comments, variance_reason, variance_other,
+    )
+    if comment_err:
         return _time_entry_error(
-            request, employee, "check_out", now, today,
-            f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
-            threshold, db=db,
+            request, employee, "check_out", now, today, comment_err, threshold, db=db,
         )
 
     entry = TimeEntry(
@@ -452,7 +462,7 @@ async def checkout_submit(
         entry_type=EntryType.check_out,
         location_type=loc_type,
         is_remote=is_remote,
-        comments=comments,
+        comments=comment_text,
         offset_approved=offset_approved_default(db, declared_time, now),
     )
     db.add(entry)
@@ -475,21 +485,21 @@ async def checkout_submit(
             "location_type": loc_type.value,
             "beod": lunch_end_of_day,
             "beod_auto_approved": beod_approved,
-            "comments": comments,
+            "comments": comment_text,
         },
         ip_address=request.client.host if request.client else "",
     )
 
     # TRIGGER POLICY ALERT EMAIL IF THRESHOLD EXCEEDED
     from app.services.settings import get_setting
-    if diff_minutes > threshold and get_setting(db, "manager_policy_alert_enabled") == "true":
+    if needs_offset_approval(db, declared_time, now) and get_setting(db, "manager_policy_alert_enabled") == "true":
         import threading
         from app.services.email import send_policy_violation_email
         managers = db.query(Employee).filter(Employee.role == Role.manager).all()
         mgr_emails = [m.email for m in managers if m.email]
         threading.Thread(
             target=send_policy_violation_email,
-            args=(employee.name, employee.email, mgr_emails, "check_out", declared_time, now, threshold, comments),
+            args=(employee.name, employee.email, mgr_emails, "check_out", declared_time, now, threshold, comment_text),
             daemon=True,
         ).start()
 

@@ -106,9 +106,9 @@
                                     On Leave
                                 </span>
                                 {% elif emp_status == 'checked_in' %}
-                                <span class="flex items-center gap-1 text-[10px] text-success-400">
+                                <span class="flex items-center gap-1 text-[10px] text-success-400 flex-wrap">
                                     <span class="w-1.5 h-1.5 rounded-full bg-success-400 animate-pulse"></span>
-                                    In @ {{ emp_time }}
+                                    In @ {{ emp_time }}{% if emp_info.projected_checkout %}<span class="text-accent-400"> · Out ~{{ emp_info.projected_checkout }}{% if emp_info.beod_claimed %} BEOD{% endif %}</span>{% endif %}{% if emp_info.projected_checkout_beod %}<span class="text-warning-400"> · ~{{ emp_info.projected_checkout_beod }} BEOD</span>{% endif %}
                                 </span>
                                 {% elif emp_status == 'checked_out' %}
                                 <span class="flex items-center gap-1 text-[10px] text-gray-500">
@@ -589,6 +589,7 @@
         document.getElementById('preview-fosc').textContent = 'Loading…';
         document.getElementById('preview-detail').textContent = '';
         document.getElementById('preview-beod-result').classList.add('hidden');
+        document.getElementById('preview-beod-wrap').style.display = 'none';
 
         fetch('/api/checkout-preview/' + empId)
             .then(function (r) { return r.json(); })
@@ -619,8 +620,10 @@
                 document.getElementById('preview-detail').textContent = detail;
 
                 var wrap = document.getElementById('preview-beod-wrap');
-                if (data.beod_already) {
+                var beodCb = document.getElementById('modal-beod');
+                if (data.beod_already || data.beod_offered === false) {
                     wrap.style.display = 'none';
+                    if (beodCb) beodCb.checked = false;
                     return;
                 }
                 wrap.style.display = 'flex';
@@ -794,6 +797,10 @@
         if (document.getElementById('pin')) {
             updateRegularLoginButton();
         }
+        // Kiosk: drop yesterday's In/Out and projected checkout after midnight
+        var now = new Date();
+        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+        setTimeout(function () { window.location.reload(); }, nextMidnight.getTime() - now.getTime());
     });
 </script>
 {% endblock %}

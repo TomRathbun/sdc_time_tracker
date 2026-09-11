@@ -197,17 +197,36 @@
             </div>
             {% endif %}
 
-            <!-- Comments -->
-            <div class="mb-8">
+            <!-- Optional notes (under threshold) -->
+            <div class="mb-8" id="comments-wrap">
                 <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">
                     Comments
-                    <span id="comment-optional-hint" class="text-gray-600">(optional)</span>
-                    <span id="comment-required-hint" class="text-danger-500 hidden">(mandatory due to time difference)</span>
+                    <span class="text-gray-600">(optional)</span>
                 </label>
                 <textarea name="comments" id="comments" rows="2" class="form-input resize-none"
                     placeholder="{% if is_recheckout|default(false) %}e.g. Boss called me back for a short discussion{% else %}Any notes about this entry...{% endif %}"></textarea>
-                <p id="threshold-warning" class="text-xs text-warning-400 mt-2 hidden">
-                    Note: A comment is required because your set time differs from the current time by more than {{ comment_threshold }} minutes.
+            </div>
+
+            <!-- Canned variance reason (over threshold) -->
+            <div class="mb-8 hidden" id="variance-reason-wrap">
+                <label for="variance_reason" class="block text-sm font-medium text-gray-300 mb-2">
+                    Reason for time difference
+                    <span class="text-danger-400">(required)</span>
+                </label>
+                <select name="variance_reason" id="variance_reason" class="form-select">
+                    <option value="">Select a reason…</option>
+                    {% for r in variance_reasons|default([]) %}
+                    <option value="{{ r }}">{{ r }}</option>
+                    {% endfor %}
+                    <option value="__other__">Other</option>
+                </select>
+                <div id="variance-other-wrap" class="mt-3 hidden">
+                    <label for="variance_other" class="block text-sm font-medium text-gray-300 mb-2">Please specify</label>
+                    <textarea name="variance_other" id="variance_other" rows="2" class="form-input resize-none"
+                        placeholder="Type the reason…"></textarea>
+                </div>
+                <p id="threshold-warning" class="text-xs text-warning-400 mt-2">
+                    Your set time differs from the current time by more than {{ comment_threshold }} minutes. Pick a reason (or Other).
                 </p>
             </div>
 
@@ -215,15 +234,26 @@
                 document.addEventListener('DOMContentLoaded', function() {
                     const hourSelect = document.getElementById('declared_hour');
                     const minuteSelect = document.getElementById('declared_minute');
-                    const optionalHint = document.getElementById('comment-optional-hint');
-                    const requiredHint = document.getElementById('comment-required-hint');
-                    const warning = document.getElementById('threshold-warning');
+                    const commentsWrap = document.getElementById('comments-wrap');
                     const commentsArea = document.getElementById('comments');
+                    const reasonWrap = document.getElementById('variance-reason-wrap');
+                    const reasonSelect = document.getElementById('variance_reason');
+                    const otherWrap = document.getElementById('variance-other-wrap');
+                    const otherArea = document.getElementById('variance_other');
                     const threshold = {{ comment_threshold }};
                     const entryType = {{ entry_type|tojson }};
                     
                     const now = new Date();
                     const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+
+                    function updateOtherVisibility() {
+                        const isOther = reasonSelect && reasonSelect.value === '__other__';
+                        if (otherWrap) otherWrap.classList.toggle('hidden', !isOther);
+                        if (otherArea) {
+                            if (isOther) otherArea.setAttribute('required', 'required');
+                            else otherArea.removeAttribute('required');
+                        }
+                    }
 
                     function updateCommentStatus() {
                         const selectedHour = parseInt(hourSelect.value);
@@ -233,17 +263,20 @@
                         const diff = Math.abs(currentTotalMinutes - selectedTotalMinutes);
                         
                         if (diff > threshold) {
-                            optionalHint.classList.add('hidden');
-                            requiredHint.classList.remove('hidden');
-                            warning.classList.remove('hidden');
-                            commentsArea.setAttribute('required', 'required');
-                            commentsArea.classList.add('border-warning-500/50');
+                            if (commentsWrap) commentsWrap.classList.add('hidden');
+                            if (commentsArea) commentsArea.removeAttribute('required');
+                            if (reasonWrap) reasonWrap.classList.remove('hidden');
+                            if (reasonSelect) reasonSelect.setAttribute('required', 'required');
+                            updateOtherVisibility();
                         } else {
-                            optionalHint.classList.remove('hidden');
-                            requiredHint.classList.add('hidden');
-                            warning.classList.add('hidden');
-                            commentsArea.removeAttribute('required');
-                            commentsArea.classList.remove('border-warning-500/50');
+                            if (commentsWrap) commentsWrap.classList.remove('hidden');
+                            if (reasonWrap) reasonWrap.classList.add('hidden');
+                            if (reasonSelect) {
+                                reasonSelect.removeAttribute('required');
+                                reasonSelect.value = '';
+                            }
+                            if (otherArea) otherArea.removeAttribute('required');
+                            if (otherWrap) otherWrap.classList.add('hidden');
                         }
                     }
 
@@ -300,6 +333,7 @@
 
                     hourSelect.addEventListener('change', function () { updateCommentStatus(); updateFoscPreview(); });
                     minuteSelect.addEventListener('change', function () { updateCommentStatus(); updateFoscPreview(); });
+                    if (reasonSelect) reasonSelect.addEventListener('change', updateOtherVisibility);
                     const beodCb = document.getElementById('lunch-eod');
                     if (beodCb) beodCb.addEventListener('change', updateFoscPreview);
                     updateCommentStatus();

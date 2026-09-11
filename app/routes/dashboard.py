@@ -16,6 +16,7 @@ from app.models import (
 from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
+    projected_checkout_from_entries,
 )
 from app.services.leave_balance import get_leave_balance
 
@@ -84,6 +85,14 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     target_hours = get_target_hours(today)
     is_workday = target_hours > 0
+    projected = projected_checkout_from_entries(
+        todays_entries,
+        today,
+        beod_claimed=bool(daily_summary and daily_summary.lunch_end_of_day),
+    ) if status == "checked_in" else None
+    projected_checkout = projected.standard if projected else None
+    projected_checkout_beod = projected.beod if projected else None
+    projected_beod_claimed = projected.beod_claimed if projected else False
 
     # Live FOSC breakdown (includes open check-in session so Progress is not stuck at 0)
     clock_hours = calculate_clock_hours(todays_entries)
@@ -131,6 +140,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "is_workday": is_workday,
         "target_hours": target_hours,
         "status": status,
+        "projected_checkout": projected_checkout,
+        "projected_checkout_beod": projected_checkout_beod,
+        "projected_beod_claimed": projected_beod_claimed,
         "todays_entries": todays_entries,
         "todays_offsite": todays_offsite,
         "todays_phone": todays_phone,

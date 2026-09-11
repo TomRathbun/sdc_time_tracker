@@ -170,6 +170,40 @@ def paired_clock_intervals(time_entries: Sequence[TimeEntry]) -> List[Tuple[date
     return intervals
 
 
+def squash_continuous_sessions(
+    time_entries: Sequence[TimeEntry],
+) -> List[Tuple[TimeEntry, Optional[TimeEntry]]]:
+    """Collapse back-to-back sessions into first check-in / last check-out.
+
+    Re-checkout (called back) inserts a return punch at the previous out time,
+    so the two sessions touch and display as one. A real gap — checkout, leave
+    for the doctor, check in later — stays as separate In/Out pairs.
+    """
+    sorted_entries = sorted(time_entries, key=lambda e: (e.declared_time, e.id or 0))
+    raw: List[Tuple[TimeEntry, Optional[TimeEntry]]] = []
+    pending: Optional[TimeEntry] = None
+    for entry in sorted_entries:
+        if entry.entry_type == EntryType.check_in:
+            pending = entry
+        elif entry.entry_type == EntryType.check_out and pending:
+            raw.append((pending, entry))
+            pending = None
+    if pending:
+        raw.append((pending, None))
+
+    if not raw:
+        return []
+
+    merged: List[Tuple[TimeEntry, Optional[TimeEntry]]] = [raw[0]]
+    for ci, co in raw[1:]:
+        prev_ci, prev_co = merged[-1]
+        if prev_co is not None and ci.declared_time <= prev_co.declared_time:
+            merged[-1] = (prev_ci, co)
+        else:
+            merged.append((ci, co))
+    return merged
+
+
 def open_checkin_time(time_entries: Sequence[TimeEntry]) -> Optional[datetime]:
     """If the day ends with an unpaired check-in, return its declared_time."""
     sorted_entries = sorted(time_entries, key=lambda e: (e.declared_time, e.id or 0))

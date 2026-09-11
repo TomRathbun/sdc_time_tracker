@@ -850,6 +850,33 @@
     }
 }
 
+/* Timesheet punch reason hover */
+.punch-reason-tip {
+    display: none;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    z-index: 50;
+    min-width: 140px;
+    max-width: 220px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: #0f172a;
+    border: 1px solid rgba(251, 146, 60, 0.45);
+    color: #fed7aa;
+    font-size: 10px;
+    line-height: 1.4;
+    text-align: left;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    white-space: pre-wrap;
+    pointer-events: none;
+}
+
+.group:hover > .punch-reason-tip {
+    display: block;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .brand-clock-svg .bc-sweep {
         animation: none;

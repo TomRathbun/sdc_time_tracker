@@ -14,14 +14,35 @@ from app.config import SESSION_COOKIE_NAME
 from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
 from app.services.audit import log_action
 from app.services.settings import get_setting
+from app.services.time_calc import projected_checkout_from_entries
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _empty_status(**overrides):
+    base = {
+        "status": "not_started",
+        "time": None,
+        "minutes": None,
+        "projected_checkout": None,
+        "projected_checkout_beod": None,
+        "beod_claimed": False,
+    }
+    base.update(overrides)
+    return base
+
+
 def _get_employee_status(db: Session, employees):
-    """Build a dict of employee_id → {status, time, minutes} for today's entries."""
+    """Build a dict of employee_id → today's punch status and projected checkout."""
     today = date.today()
+    beod_claimed_ids = {
+        row.employee_id
+        for row in db.query(DailySummary).filter(
+            DailySummary.date == today,
+            DailySummary.lunch_end_of_day == True,  # noqa: E712
+        )
+    }
     status_map = {}
     for emp in employees:
         entries = db.query(TimeEntry).filter(
@@ -29,21 +50,27 @@ def _get_employee_status(db: Session, employees):
             TimeEntry.date == today,
         ).order_by(TimeEntry.declared_time).all()
         if not entries:
-            status_map[emp.id] = {"status": "not_started", "time": None, "minutes": None}
+            status_map[emp.id] = _empty_status()
         elif entries[-1].entry_type == EntryType.check_in:
             last_time = entries[-1].declared_time
-            status_map[emp.id] = {
-                "status": "checked_in",
-                "time": last_time.strftime("%H:%M"),
-                "minutes": last_time.hour * 60 + last_time.minute
-            }
+            proj = projected_checkout_from_entries(
+                entries, today, beod_claimed=emp.id in beod_claimed_ids,
+            )
+            status_map[emp.id] = _empty_status(
+                status="checked_in",
+                time=last_time.strftime("%H:%M"),
+                minutes=last_time.hour * 60 + last_time.minute,
+                projected_checkout=proj.standard.strftime("%H:%M") if proj.standard else None,
+                projected_checkout_beod=proj.beod.strftime("%H:%M") if proj.beod else None,
+                beod_claimed=proj.beod_claimed,
+            )
         else:
             last_time = entries[-1].declared_time
-            status_map[emp.id] = {
-                "status": "checked_out",
-                "time": last_time.strftime("%H:%M"),
-                "minutes": last_time.hour * 60 + last_time.minute
-            }
+            status_map[emp.id] = _empty_status(
+                status="checked_out",
+                time=last_time.strftime("%H:%M"),
+                minutes=last_time.hour * 60 + last_time.minute,
+            )
     return status_map
 
 

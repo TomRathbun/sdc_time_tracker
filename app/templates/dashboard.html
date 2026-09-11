@@ -87,6 +87,14 @@
                         {{ fosc_hours }}h FOSC so far · Target: {{ target_hours }}h
                         {% if live_session_hours %} · session {{ live_session_hours }}h{% endif %}
                     </p>
+                    {% if projected_checkout %}
+                    <p class="text-sm text-accent-400 mt-0.5">
+                        Projected checkout {{ projected_checkout.strftime("%H:%M") }}{% if projected_beod_claimed %} with BEOD{% endif %}
+                    </p>
+                    {% endif %}
+                    {% if projected_checkout_beod %}
+                    <p class="text-sm text-warning-400 mt-0.5">{{ projected_checkout_beod.strftime("%H:%M") }} with BEOD</p>
+                    {% endif %}
                 </div>
             </div>
             <div class="flex gap-2">
@@ -401,4 +409,14 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        var now = new Date();
+        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+        setTimeout(function () { window.location.reload(); }, nextMidnight.getTime() - now.getTime());
+    })();
+</script>
 {% endblock %}

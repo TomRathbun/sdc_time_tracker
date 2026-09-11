@@ -17,6 +17,7 @@ from app.services.time_state import (
     can_recheckout,
     current_status,
     plan_recheckout,
+    squash_continuous_sessions,
     STATUS_CHECKED_IN,
     STATUS_CHECKED_OUT,
 )
@@ -121,6 +122,105 @@ class RecheckoutStateTests(unittest.TestCase):
         entries = self.db.query(TimeEntry).filter(TimeEntry.employee_id == self.emp_id).all()
         # 9.0 + 0.42 (16:20–16:45 = 25 min)
         self.assertEqual(calculate_clock_hours(entries), 9.42)
+
+
+class SquashContinuousSessionsTests(unittest.TestCase):
+    def setUp(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        self.db = sessionmaker(bind=engine)()
+        emp = Employee(
+            name="Test User",
+            pin_hash=hash_pin("1234"),
+            role=Role.employee,
+            is_active=True,
+            pin_needs_reset=False,
+        )
+        self.db.add(emp)
+        self.db.commit()
+        self.emp_id = emp.id
+        self.day = date(2026, 9, 10)
+
+    def tearDown(self):
+        self.db.close()
+
+    def _punch(self, kind, hour, minute=0):
+        entry = TimeEntry(
+            employee_id=self.emp_id,
+            date=self.day,
+            declared_time=datetime(2026, 9, 10, hour, minute),
+            submission_time=datetime(2026, 9, 10, hour, minute),
+            entry_type=kind,
+            location_type=LocationType.office,
+            is_remote=False,
+            comments="",
+            offset_approved=True,
+        )
+        self.db.add(entry)
+        self.db.commit()
+        return entry
+
+    def _entries(self):
+        return (
+            self.db.query(TimeEntry)
+            .filter(TimeEntry.employee_id == self.emp_id)
+            .order_by(TimeEntry.declared_time, TimeEntry.id)
+            .all()
+        )
+
+    def _times(self, sessions):
+        return [
+            (
+                ci.declared_time.strftime("%H:%M"),
+                co.declared_time.strftime("%H:%M") if co else None,
+            )
+            for ci, co in sessions
+        ]
+
+    def test_single_session_unchanged(self):
+        self._punch(EntryType.check_in, 7, 0)
+        self._punch(EntryType.check_out, 16, 0)
+        self.assertEqual(self._times(squash_continuous_sessions(self._entries())), [
+            ("07:00", "16:00"),
+        ])
+
+    def test_recheckout_squashes_to_first_in_last_out(self):
+        self._punch(EntryType.check_in, 7, 0)
+        self._punch(EntryType.check_out, 16, 0)
+        self._punch(EntryType.check_in, 16, 0)
+        self._punch(EntryType.check_out, 16, 45)
+        self.assertEqual(self._times(squash_continuous_sessions(self._entries())), [
+            ("07:00", "16:45"),
+        ])
+
+    def test_gap_for_doctor_keeps_two_sessions(self):
+        self._punch(EntryType.check_in, 7, 0)
+        self._punch(EntryType.check_out, 10, 0)
+        self._punch(EntryType.check_in, 11, 30)
+        self._punch(EntryType.check_out, 16, 0)
+        self.assertEqual(self._times(squash_continuous_sessions(self._entries())), [
+            ("07:00", "10:00"),
+            ("11:30", "16:00"),
+        ])
+
+    def test_recheckout_then_still_in_shows_first_in_only(self):
+        self._punch(EntryType.check_in, 7, 0)
+        self._punch(EntryType.check_out, 16, 0)
+        self._punch(EntryType.check_in, 16, 0)
+        self.assertEqual(self._times(squash_continuous_sessions(self._entries())), [
+            ("07:00", None),
+        ])
+
+    def test_two_recheckouts_still_one_block(self):
+        self._punch(EntryType.check_in, 7, 0)
+        self._punch(EntryType.check_out, 16, 0)
+        self._punch(EntryType.check_in, 16, 0)
+        self._punch(EntryType.check_out, 16, 20)
+        self._punch(EntryType.check_in, 16, 20)
+        self._punch(EntryType.check_out, 16, 45)
+        self.assertEqual(self._times(squash_continuous_sessions(self._entries())), [
+            ("07:00", "16:45"),
+        ])
 
 
 if __name__ == "__main__":

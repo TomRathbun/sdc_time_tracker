@@ -16,7 +16,9 @@ from app.models import (
 )
 from app.services.audit import log_action
 from app.services.time_calc import get_target_hours, update_daily_summary
+from app.services.time_offset import reject_time_offset
 from app.services.leave_sync import apply_leave_approval
+from app.services.time_state import squash_continuous_sessions
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -432,28 +434,35 @@ async def team_timesheet(
                 key=lambda e: e.declared_time,
             )
 
-            def _punch_info(entries):
-                punches = []
-                for e in entries:
-                    dec = e.declared_time
-                    sub = e.submission_time
-                    diff = abs((sub - dec).total_seconds()) / 60.0
-                    over = not bool(getattr(e, "offset_approved", True))
-                    punches.append({
-                        "id": e.id,
-                        "declared": dec.strftime("%H:%M"),
-                        "submitted": sub.strftime("%H:%M") if sub else "—",
-                        "diff_min": int(round(diff)),
-                        "needs_approval": over,
-                        "comments": (e.comments or "")[:80],
-                    })
-                return punches
+            def _punch_info_one(e):
+                dec = e.declared_time
+                sub = e.submission_time
+                diff = abs((sub - dec).total_seconds()) / 60.0 if sub else 0.0
+                over = not bool(getattr(e, "offset_approved", True))
+                return {
+                    "id": e.id,
+                    "declared": dec.strftime("%H:%M"),
+                    "submitted": sub.strftime("%H:%M") if sub else "—",
+                    "diff_min": int(round(diff)),
+                    "needs_approval": over,
+                    "comments": (e.comments or "").strip(),
+                }
 
-            ci_punches = _punch_info(check_ins)
-            co_punches = _punch_info(check_outs)
-            offset_pending = any(p["needs_approval"] for p in ci_punches + co_punches)
+            # Re-checkout (touching sessions) → first in / last out.
+            # A real gap (doctor visit, etc.) stays as separate pairs.
+            punch_sessions = []
+            for ci_e, co_e in squash_continuous_sessions(day_entries):
+                punch_sessions.append({
+                    "ci": _punch_info_one(ci_e),
+                    "co": _punch_info_one(co_e) if co_e else None,
+                })
+            ci_punches = [s["ci"] for s in punch_sessions]
+            co_punches = [s["co"] for s in punch_sessions if s["co"]]
+            offset_pending = any(
+                not bool(getattr(e, "offset_approved", True)) for e in day_entries
+            )
             pending_offset_ids = [
-                p["id"] for p in ci_punches + co_punches if p["needs_approval"]
+                e.id for e in day_entries if not bool(getattr(e, "offset_approved", True))
             ]
 
             # Determine cell status — pending items take priority
@@ -497,6 +506,7 @@ async def team_timesheet(
                 "co_dot": co_dot,
                 "ci_punches": ci_punches,
                 "co_punches": co_punches,
+                "punch_sessions": punch_sessions,
                 "offset_pending": offset_pending,
                 "pending_offset_ids": pending_offset_ids,
                 "leave_hours": leave_hrs,
@@ -599,6 +609,55 @@ async def approve_time_offset(
             db, action="approve_time_offset", entity_type="TimeEntry",
             entity_id=approved_ids[0], employee_id=employee.id,
             new_values={"entry_ids": approved_ids},
+            ip_address=request.client.host if request.client else "",
+        )
+
+    redirect_url = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.post("/admin/reject-offset", response_class=HTMLResponse)
+async def reject_time_offset_route(
+    request: Request,
+    week: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Disapprove a time variance: declared time reverts to the actual punch time."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    form = await request.form()
+    ids = form.getlist("entry_id") if hasattr(form, "getlist") else []
+    if not ids:
+        single = form.get("entry_id")
+        if single:
+            ids = [single]
+    bulk = form.get("entry_ids", "")
+    if bulk:
+        ids = [x.strip() for x in str(bulk).split(",") if x.strip()]
+
+    rejected = []
+    touched = set()
+    for raw in ids:
+        try:
+            eid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        entry = db.query(TimeEntry).filter(TimeEntry.id == eid).first()
+        if entry and not entry.offset_approved:
+            info = reject_time_offset(entry)
+            rejected.append(info)
+            touched.add((entry.employee_id, entry.date))
+
+    if rejected:
+        for emp_id, work_date in touched:
+            update_daily_summary(db, emp_id, work_date)
+        db.commit()
+        log_action(
+            db, action="reject_time_offset", entity_type="TimeEntry",
+            entity_id=rejected[0]["entry_id"], employee_id=employee.id,
+            new_values={"entries": rejected},
             ip_address=request.client.host if request.client else "",
         )
 
