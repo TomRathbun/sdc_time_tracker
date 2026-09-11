@@ -739,3 +739,113 @@
         right: calc(50% - 620px);
     }
 }
+/* ── Brand marks: live radar clock + intercept GIF ─────────────────── */
+
+.brand-lockup {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+}
+
+.brand-clock,
+.lm-mark {
+    position: relative;
+    flex-shrink: 0;
+    overflow: hidden;
+    background: #0b1220;
+    border: 1px solid rgba(243, 226, 167, 0.22);
+    box-shadow:
+        0 10px 28px rgba(2, 6, 23, 0.55),
+        0 0 0 1px rgba(125, 211, 252, 0.08),
+        0 0 22px rgba(99, 102, 241, 0.22);
+}
+
+.brand-clock--hero,
+.lm-mark--hero {
+    width: 5rem;
+    height: 5rem;
+    border-radius: 1rem;
+}
+
+.brand-clock--mid,
+.lm-mark--mid {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 0.9rem;
+}
+
+.brand-clock--nav,
+.lm-mark--nav {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+}
+
+.brand-clock-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.brand-clock-svg .bc-sweep {
+    transform-origin: 50px 50px;
+    transform-box: view-box;
+    animation: radar-sweep 4.5s linear infinite;
+}
+
+.brand-clock-svg .bc-hour,
+.brand-clock-svg .bc-minute,
+.brand-clock-svg .bc-second {
+    transform-origin: 50px 50px;
+    transform-box: view-box;
+}
+
+.lm-mark-gif {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.lm-mark-star {
+    position: absolute;
+    inset: 16%;
+    width: 68%;
+    height: 68%;
+    object-fit: contain;
+    pointer-events: none;
+    z-index: 2;
+    filter: drop-shadow(0 0 5px rgba(243, 226, 167, 0.55));
+}
+
+.lm-mark::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 55%, transparent 35%, rgba(5, 10, 22, 0.35) 100%);
+    z-index: 1;
+}
+
+@keyframes radar-sweep {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .brand-clock-svg .bc-sweep {
+        animation: none;
+    }
+
+    .lm-mark-gif {
+        visibility: hidden;
+    }
+
+    .lm-mark {
+        background-image: url('/static/images/lm_intercept_still.png');
+        background-size: cover;
+        background-position: center;
+    }
+}
