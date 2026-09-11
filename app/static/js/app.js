@@ -100,4 +100,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // Run automatically
     updateTZClocks();
     setInterval(updateTZClocks, 1000);
+
+    // Live analog hands on the radar brand clock (Abu Dhabi)
+    function updateBrandClocks() {
+        var clocks = document.querySelectorAll('.brand-clock-svg');
+        if (!clocks.length) return;
+        var now = new Date();
+        var parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Dubai',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).formatToParts(now);
+        var map = {};
+        parts.forEach(function (p) { map[p.type] = p.value; });
+        var h = parseInt(map.hour, 10);
+        var m = parseInt(map.minute, 10);
+        var s = parseInt(map.second, 10);
+        var sDeg = s * 6;
+        var mDeg = m * 6 + s * 0.1;
+        var hDeg = ((h % 12) * 30) + m * 0.5;
+        clocks.forEach(function (svg) {
+            var hour = svg.querySelector('.bc-hour');
+            var minute = svg.querySelector('.bc-minute');
+            var second = svg.querySelector('.bc-second');
+            if (hour) hour.setAttribute('transform', 'rotate(' + hDeg + ' 50 50)');
+            if (minute) minute.setAttribute('transform', 'rotate(' + mDeg + ' 50 50)');
+            if (second) second.setAttribute('transform', 'rotate(' + sDeg + ' 50 50)');
+        });
+    }
+    updateBrandClocks();
+    setInterval(updateBrandClocks, 1000);
 });

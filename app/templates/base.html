@@ -45,7 +45,8 @@
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/css/app.css?v=9">
+    <link rel="stylesheet" href="/static/css/app.css?v=10">
+    <link rel="icon" type="image/png" href="/static/images/app_icon.png?v=7">
 
     <style>
         :root {
@@ -71,16 +72,11 @@
                 <div class="flex items-center justify-between h-16">
                     <!-- Logo -->
                     <a href="/" class="flex items-center gap-3 group">
-                        <div
-                            class="w-12 h-12 rounded-xl overflow-hidden shadow-xl shadow-primary-500/30 group-hover:shadow-primary-500/50 transition-all duration-300 border border-white/10">
-                            <img src="/static/images/app_icon.png?v=6" alt="SDC Time Logo"
-                                class="w-full h-full object-cover">
-                        </div>
+                        {% with brand_size='nav' %}{% include '_brand_clock.html' %}{% endwith %}
                         <span
                             class="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
                             Time Tracker</span>
-                        <img src="/static/images/lm_star.png" alt="LM Star"
-                            class="w-12 h-12 object-contain brightness-200 opacity-60 mix-blend-screen">
+                        {% with brand_size='nav' %}{% include '_brand_lm.html' %}{% endwith %}
                     </a>
 
                     <!-- Nav Links -->
@@ -280,7 +276,7 @@
 
     {% block modals %}{% endblock %}
 
-    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/app.js?v=8"></script>
     <script src="/static/js/onscreen_input.js?v=5"></script>
 
     <!-- Tab Session Sync — Prevents "confused" tabs when multiple users log in -->
