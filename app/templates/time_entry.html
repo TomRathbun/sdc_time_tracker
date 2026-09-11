@@ -170,9 +170,9 @@
                 </div>
             </div>
 
-            <!-- BEOD — optional; not automatic just because blanket is on -->
+            <!-- BEOD — only offered after 5h of work -->
             {% if entry_type == "check_out" %}
-            <div class="mb-6 p-4 rounded-xl bg-warning-500/5 border border-warning-500/10">
+            <div id="beod-option-box" class="mb-6 p-4 rounded-xl bg-warning-500/5 border border-warning-500/10" style="display:none">
                 <label class="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" name="lunch_end_of_day" value="true"
                         class="mt-1 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500 focus:ring-primary-500/25"
@@ -262,6 +262,7 @@
                         const phoneH = {{ phone_hours|default(0) }};
                         const target = {{ target_hours|default(0) }};
                         const beodMin = {{ beod_minimum_hours|default(6) }};
+                        const beodOptionMin = {{ beod_option_min_hours|default(5) }};
 
                         let sessionH = 0;
                         if (openIso) {
@@ -284,6 +285,15 @@
                         }
                         const withBeod = document.getElementById('preview-fosc-with-beod');
                         const beodCb = document.getElementById('lunch-eod');
+                        const beodBox = document.getElementById('beod-option-box');
+                        if (beodBox) {
+                            if (fosc >= beodOptionMin) {
+                                beodBox.style.display = '';
+                            } else {
+                                beodBox.style.display = 'none';
+                                if (beodCb) beodCb.checked = false;
+                            }
+                        }
                         if (withBeod && beodCb) {
                             if (beodCb.checked) {
                                 if (fosc >= beodMin) {

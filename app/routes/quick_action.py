@@ -9,11 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import verify_pin
-from app.config import BEOD_MINIMUM_HOURS
+from app.config import BEOD_MINIMUM_HOURS, BEOD_OPTION_MIN_HOURS
 from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
+    show_beod_option,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -254,6 +255,8 @@ def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
         "target_hours": target,
         "beod_eligible": beod_eligible,
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "beod_option_min_hours": BEOD_OPTION_MIN_HOURS,
+        "beod_show": show_beod_option(work, beod_already),
         "beod_blanket": beod_blanket,
         "beod_already": beod_already,
     }

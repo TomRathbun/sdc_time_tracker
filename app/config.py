@@ -37,6 +37,8 @@ DEFAULT_SICK_DAYS_PER_YEAR = 10.0
 
 # BEOD (Break at End of Day): minimum real work hours before +1h paid lunch credit
 BEOD_MINIMUM_HOURS = 6.0
+# Hours of work before the BEOD checkbox is offered on checkout (credit still needs 6h)
+BEOD_OPTION_MIN_HOURS = 5.0
 
 # Application info
 APP_NAME = "SDC Time Tracker"

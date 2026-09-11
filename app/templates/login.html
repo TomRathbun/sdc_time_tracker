@@ -332,7 +332,7 @@
                 <span id="preview-fosc" class="font-mono text-primary-300">—</span>
             </div>
             <p id="preview-detail" class="text-[11px] text-gray-500"></p>
-            <label id="preview-beod-wrap" class="flex items-start gap-2 pt-2 border-t border-white/5 cursor-pointer">
+            <label id="preview-beod-wrap" class="flex items-start gap-2 pt-2 border-t border-white/5 cursor-pointer" style="display:none">
                 <input type="checkbox" id="modal-beod" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
                 <span>
                     <span id="preview-beod-label" class="text-warning-300 font-medium block"></span>
@@ -457,7 +457,9 @@
 
         var previewEl = document.getElementById('modal-checkout-preview');
         var beodCb = document.getElementById('modal-beod');
+        var beodWrap = document.getElementById('preview-beod-wrap');
         if (beodCb) beodCb.checked = false;
+        if (beodWrap) beodWrap.style.display = 'none';
         if (previewEl) previewEl.style.display = 'none';
 
         if (action === 'checkin') {
@@ -619,8 +621,10 @@
                 document.getElementById('preview-detail').textContent = detail;
 
                 var wrap = document.getElementById('preview-beod-wrap');
-                if (data.beod_already) {
+                var beodCb = document.getElementById('modal-beod');
+                if (!data.beod_show) {
                     wrap.style.display = 'none';
+                    if (beodCb) beodCb.checked = false;
                     return;
                 }
                 wrap.style.display = 'flex';

@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS
+from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS, BEOD_OPTION_MIN_HOURS
 from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, EntryType, LeaveType,
 )
@@ -16,6 +16,17 @@ from app.models import (
 def get_target_hours(work_date: date) -> float:
     """Get the FOSC target hours for a given weekday (9 Mon–Thu, 4 Fri)."""
     return float(WEEKDAY_HOURS.get(work_date.weekday(), 0))
+
+
+def show_beod_option(work_hours: float, already_claimed: bool = False) -> bool:
+    """Whether to offer the BEOD checkbox (quick checkout and checkout form).
+
+    Hidden until 5h of work, and hidden if already claimed today.
+    Credit still requires BEOD_MINIMUM_HOURS (6h).
+    """
+    if already_claimed:
+        return False
+    return work_hours >= BEOD_OPTION_MIN_HOURS
 
 
 def calculate_clock_hours(time_entries: List[TimeEntry]) -> float:

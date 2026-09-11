@@ -13,7 +13,7 @@ from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, EntryType, LocationType,
     RemoteAuthorization, AuthorizationStatus, Employee, Role
 )
-from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
+from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS, BEOD_OPTION_MIN_HOURS
 from app.services.time_calc import update_daily_summary, get_target_hours
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -52,6 +52,7 @@ def _time_entry_error(request, employee, entry_type, now, today, error, threshol
         "comment_threshold": threshold if threshold is not None else 30,
         "beod_blanket": beod_blanket,
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "beod_option_min_hours": BEOD_OPTION_MIN_HOURS,
         "target_hours": get_target_hours(today) if today else 0,
         "open_checkin_iso": None,
         "completed_clock_hours": 0,
@@ -316,6 +317,7 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         "comment_threshold": threshold,
         "beod_blanket": _beod_blanket(db),
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "beod_option_min_hours": BEOD_OPTION_MIN_HOURS,
         "target_hours": get_target_hours(today),
         "open_checkin_iso": open_checkin_iso,
         "completed_clock_hours": completed_clock,
