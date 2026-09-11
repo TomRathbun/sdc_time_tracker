@@ -25,6 +25,19 @@ If you just need to punch in or out without viewing your dashboard, you can use 
 > [!NOTE]
 > **Time Rounding Policy:** Quick Check-In punches are automatically rounded *down* to the nearest 5-minute mark (e.g., 08:04 becomes 08:00). Quick Check-Out punches are automatically rounded *up* to the nearest 5-minute mark (e.g., 17:01 becomes 17:05).
 
+### 1.1.1 Re-Check Out (called back after leaving)
+If you already checked out and your manager calls you back for extra work (a short discussion, a signature, etc.):
+
+**From the login list (fastest):**
+1. Find your name — it will show **Out @ HH:MM**.
+2. The red/amber **check-out arrow is enabled again**. Tap it.
+3. Enter your PIN. The preview shows extra time from your last checkout until now.
+4. Confirm **Re-Check Out**. Extra hours are added as a second session; the original punches stay on the timeline.
+
+**If you are still in the extra discussion and will leave later:** tap the green **Return** arrow first (checks you back in), then Check Out when you actually leave.
+
+**If it happened yesterday:** open **Past Day**, pick the date, and use **Add extra session** (does not wipe the rest of the day).
+
 ![Login Selection Screen with Quick Actions](./quick_checkin_modal.png)
 
 

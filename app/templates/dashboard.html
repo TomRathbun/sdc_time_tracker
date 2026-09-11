@@ -90,7 +90,6 @@
                 </div>
             </div>
             <div class="flex gap-2">
-                <a href="/time/checkin" class="btn-secondary" id="btn-checkin-again">New Check-In</a>
                 <a href="/time/checkout" class="btn-primary" id="btn-checkout-banner">Check Out</a>
             </div>
         </div>
@@ -114,9 +113,13 @@
                         <span class="text-warning-400">· Below target ({{ target_hours }}h)</span>
                         {% endif %}
                     </p>
+                    <p class="text-xs text-gray-500 mt-1">Boss called you back? Return, or re-check out to capture extra time.</p>
                 </div>
             </div>
-            <a href="/time/checkin" class="btn-secondary" id="btn-checkin-return">Check In Again</a>
+            <div class="flex gap-2 flex-wrap">
+                <a href="/time/checkin" class="btn-secondary" id="btn-checkin-return">Return</a>
+                <a href="/time/checkout" class="btn-primary" id="btn-recheckout-banner">Re-Check Out</a>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -321,7 +324,15 @@
                 </div>
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <span class="font-medium text-white text-sm">{{ entry.entry_type.value.replace('_', ' ').title() }}</span>
+                        <span class="font-medium text-white text-sm">
+                            {% if entry.entry_type.value == 'check_in' and entry.comments and 'Return after checkout' in entry.comments %}
+                            Return
+                            {% elif entry.entry_type.value == 'check_out' and entry.comments and 'Re-checkout' in entry.comments %}
+                            Re-Check Out
+                            {% else %}
+                            {{ entry.entry_type.value.replace('_', ' ').title() }}
+                            {% endif %}
+                        </span>
                         <span class="px-1.5 py-0.5 rounded-full text-[10px] font-medium
                             {% if entry.location_type.value == 'office' %}bg-primary-500/10 text-primary-300
                             {% elif entry.location_type.value == 'remote' %}bg-accent-500/10 text-accent-300

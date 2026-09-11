@@ -15,7 +15,11 @@ from app.models import (
 )
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import update_daily_summary, get_target_hours
-from app.services.time_state import can_check_in, can_check_out, validate_offsite_range
+from app.services.time_state import (
+    can_check_in, can_check_out, can_recheckout, current_status,
+    last_checkout_entry, STATUS_CHECKED_OUT,
+    RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
+)
 from app.services.time_offset import offset_approved_default
 from app.services.audit import log_action
 from app.services.settings import get_bool_setting
@@ -53,6 +57,8 @@ def _time_entry_error(request, employee, entry_type, now, today, error, threshol
         "completed_clock_hours": 0,
         "offsite_hours": 0,
         "phone_hours": 0,
+        "is_recheckout": False,
+        "last_checkout_display": None,
     }
     ctx.update(extra)
     return templates.TemplateResponse("time_entry.html", ctx)
@@ -121,6 +127,7 @@ async def checkin_submit(
         TimeEntry.entry_type == EntryType.check_out,
     ).order_by(TimeEntry.declared_time.desc()).first()
 
+    returning = last_checkout is not None
     if last_checkout and declared_time < last_checkout.declared_time:
         declared_time = last_checkout.declared_time
 
@@ -162,8 +169,8 @@ async def checkin_submit(
         location_type=loc_type,
         is_remote=is_remote,
         authorization_id=authorization_id,
-        comments=comments,
-        offset_approved=offset_approved_default(db, declared_time, now),
+        comments=comments.strip() or (RETURN_CHECKIN_COMMENT if returning else ""),
+        offset_approved=True if returning else offset_approved_default(db, declared_time, now),
     )
     db.add(entry)
     db.commit()
@@ -199,7 +206,7 @@ async def checkin_submit(
 
     # Send check-in confirmation email (non-blocking, if enabled)
     from app.services.settings import get_bool_setting
-    if employee.email and get_bool_setting(db, "checkin_email_enabled"):
+    if employee.email and get_bool_setting(db, "checkin_email_enabled") and not returning:
         import threading
         from app.services.email import send_checkin_email
         from app.models import LeaveRequest, LeaveStatus
@@ -287,11 +294,18 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
     )
     open_ci = latest_entry(db, employee.id, today)
     open_checkin_iso = None
+    is_recheckout = False
+    last_checkout_display = None
     if open_ci and open_ci.entry_type == EntryType.check_in:
+        open_checkin_iso = open_ci.declared_time.isoformat(sep=" ", timespec="minutes")
+    elif open_ci and open_ci.entry_type == EntryType.check_out:
+        is_recheckout = True
+        last_checkout_display = open_ci.declared_time.strftime("%H:%M")
+        # Preview extra session as if it starts at last checkout
         open_checkin_iso = open_ci.declared_time.isoformat(sep=" ", timespec="minutes")
 
     completed_clock = calculate_clock_hours(entries)
-    # completed pairs only; open session added in browser from declared checkout time
+    # completed pairs only; open/extra session added in browser from declared checkout time
     return templates.TemplateResponse("time_entry.html", {
         "request": request,
         "employee": employee,
@@ -307,6 +321,8 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         "completed_clock_hours": completed_clock,
         "offsite_hours": calculate_offsite_hours(offsites),
         "phone_hours": calculate_phone_hours(phones),
+        "is_recheckout": is_recheckout,
+        "last_checkout_display": last_checkout_display,
     })
 
 
@@ -330,6 +346,84 @@ async def checkout_submit(
     threshold = _comment_threshold(db)
 
     declared_time = datetime(today.year, today.month, today.day, declared_hour, declared_minute)
+
+    status = current_status(db, employee.id, today)
+    if status == STATUS_CHECKED_OUT:
+        state_err = can_recheckout(db, employee.id, today, declared_time)
+        if state_err:
+            last_co = last_checkout_entry(db, employee.id, today)
+            return _time_entry_error(
+                request, employee, "check_out", now, today, state_err, threshold, db=db,
+                is_recheckout=True,
+                last_checkout_display=last_co.declared_time.strftime("%H:%M") if last_co else None,
+                open_checkin_iso=(
+                    last_co.declared_time.isoformat(sep=" ", timespec="minutes") if last_co else None
+                ),
+            )
+        # Extra session: return check-in at last checkout, then this checkout
+        last_co = last_checkout_entry(db, employee.id, today)
+        loc_type = LocationType(location_type) if location_type in [e.value for e in LocationType] else LocationType.office
+        is_remote = loc_type in (LocationType.remote, LocationType.offsite)
+
+        diff_minutes = abs((now - declared_time).total_seconds()) / 60
+        if diff_minutes > threshold and not comments.strip():
+            return _time_entry_error(
+                request, employee, "check_out", now, today,
+                f"Policy Violation: You must provide a comment when your set time ({declared_time.strftime('%H:%M')}) differs from actual time ({now.strftime('%H:%M')}) by more than {threshold} minutes.",
+                threshold, db=db,
+                is_recheckout=True,
+                last_checkout_display=last_co.declared_time.strftime("%H:%M"),
+            )
+
+        return_ci = TimeEntry(
+            employee_id=employee.id,
+            date=today,
+            declared_time=last_co.declared_time,
+            submission_time=now,
+            entry_type=EntryType.check_in,
+            location_type=loc_type,
+            is_remote=is_remote,
+            comments=RETURN_CHECKIN_COMMENT,
+            offset_approved=True,
+        )
+        entry = TimeEntry(
+            employee_id=employee.id,
+            date=today,
+            declared_time=declared_time,
+            submission_time=now,
+            entry_type=EntryType.check_out,
+            location_type=loc_type,
+            is_remote=is_remote,
+            comments=comments.strip() or RECHECKOUT_COMMENT,
+            offset_approved=offset_approved_default(db, declared_time, now),
+        )
+        db.add(return_ci)
+        db.add(entry)
+        db.commit()
+
+        beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
+        update_daily_summary(
+            db, employee.id, today,
+            lunch_end_of_day=lunch_end_of_day,
+            lunch_approved=beod_approved,
+        )
+
+        extra_h = round((declared_time - last_co.declared_time).total_seconds() / 3600.0, 2)
+        log_action(
+            db, action="recheckout", entity_type="TimeEntry",
+            entity_id=entry.id, employee_id=employee.id,
+            new_values={
+                "return_time": str(last_co.declared_time),
+                "declared_time": str(declared_time),
+                "submission_time": str(now),
+                "extra_hours": extra_h,
+                "location_type": loc_type.value,
+                "beod": lunch_end_of_day,
+                "comments": comments,
+            },
+            ip_address=request.client.host if request.client else "",
+        )
+        return RedirectResponse(url="/", status_code=303)
 
     # State machine: require open check-in; reject orphan/repeat check-outs
     state_err = can_check_out(db, employee.id, today, declared_time=declared_time)
@@ -630,6 +724,14 @@ def _render_past_day(request, db, employee, selected_date, error=None, success=N
         if t > 0:
             recent_days.append({"date": d, "label": d.strftime("%a %b %d"), "target": t})
 
+    last_co = None
+    can_add_extra = False
+    if existing_checkins:
+        last = existing_checkins[-1]
+        if last.entry_type == EntryType.check_out:
+            can_add_extra = True
+            last_co = last
+
     return templates.TemplateResponse("past_day.html", {
         "request": request,
         "employee": employee,
@@ -642,6 +744,10 @@ def _render_past_day(request, db, employee, selected_date, error=None, success=N
         "recent_days": recent_days,
         "error": error,
         "success": success,
+        "can_add_extra": can_add_extra,
+        "last_checkout_display": last_co.declared_time.strftime("%H:%M") if last_co else None,
+        "last_checkout_hour": last_co.declared_time.hour if last_co else 16,
+        "last_checkout_minute": last_co.declared_time.minute if last_co else 0,
     })
 
 
@@ -878,6 +984,139 @@ async def past_day_submit(
 
     return RedirectResponse(url="/", status_code=303)
 
+
+@router.post("/time/past-day/extra-session", response_class=HTMLResponse)
+async def past_day_extra_session(
+    request: Request,
+    entry_date: str = Form(...),
+    extra_start_hour: int = Form(...),
+    extra_start_minute: int = Form(...),
+    extra_end_hour: int = Form(...),
+    extra_end_minute: int = Form(...),
+    comments: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Append an extra check-in/out pair to a past day (called back after checkout)."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    now = datetime.now()
+    try:
+        selected_date = date.fromisoformat(entry_date)
+    except ValueError:
+        return _render_past_day(
+            request, db, employee, date.today() - timedelta(days=1),
+            error="Invalid date.",
+        )
+
+    date_err = _validate_past_day_date(selected_date)
+    if date_err:
+        return _render_past_day(request, db, employee, selected_date, error=date_err)
+
+    if not comments or not comments.strip():
+        return _render_past_day(
+            request, db, employee, selected_date,
+            error="Comments are required when adding an extra session.",
+        )
+
+    start_time = datetime(
+        selected_date.year, selected_date.month, selected_date.day,
+        extra_start_hour, extra_start_minute,
+    )
+    end_time = datetime(
+        selected_date.year, selected_date.month, selected_date.day,
+        extra_end_hour, extra_end_minute,
+    )
+
+    state_err = can_recheckout(db, employee.id, selected_date, end_time)
+    if state_err:
+        return _render_past_day(request, db, employee, selected_date, error=state_err)
+
+    last_co = last_checkout_entry(db, employee.id, selected_date)
+    if start_time < last_co.declared_time:
+        return _render_past_day(
+            request, db, employee, selected_date,
+            error=(
+                f"Return time cannot be before last checkout "
+                f"({last_co.declared_time.strftime('%H:%M')})."
+            ),
+        )
+    if end_time <= start_time:
+        return _render_past_day(
+            request, db, employee, selected_date,
+            error="Extra-session check-out must be after the return time.",
+        )
+
+    note = comments.strip()
+    return_ci = TimeEntry(
+        employee_id=employee.id,
+        date=selected_date,
+        declared_time=start_time,
+        submission_time=now,
+        entry_type=EntryType.check_in,
+        location_type=LocationType.office,
+        is_remote=False,
+        comments=f"{RETURN_CHECKIN_COMMENT} — {note}",
+        offset_approved=True,
+    )
+    extra_co = TimeEntry(
+        employee_id=employee.id,
+        date=selected_date,
+        declared_time=end_time,
+        submission_time=now,
+        entry_type=EntryType.check_out,
+        location_type=LocationType.office,
+        is_remote=False,
+        comments=f"{RECHECKOUT_COMMENT} — {note}",
+        offset_approved=True,
+    )
+    db.add(return_ci)
+    db.add(extra_co)
+    db.commit()
+
+    update_daily_summary(db, employee.id, selected_date)
+
+    extra_h = round((end_time - start_time).total_seconds() / 3600.0, 2)
+    log_action(
+        db, action="past_day_extra_session", entity_type="TimeEntry",
+        entity_id=extra_co.id, employee_id=employee.id,
+        new_values={
+            "date": str(selected_date),
+            "return_time": str(start_time),
+            "checkout": str(end_time),
+            "extra_hours": extra_h,
+            "comments": note,
+        },
+        ip_address=request.client.host if request.client else "",
+    )
+
+    import threading
+    from app.services.email import send_past_day_modification_email
+    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
+    mgr_emails = [m.email for m in managers if m.email]
+    threading.Thread(
+        target=send_past_day_modification_email,
+        args=(
+            employee.name,
+            employee.name,
+            str(selected_date),
+            "Extra session (called back)",
+            note,
+            mgr_emails,
+            [
+                ("Return / extra in", start_time.strftime("%H:%M")),
+                ("Re-checkout", end_time.strftime("%H:%M")),
+                ("Extra hours", f"{extra_h}h"),
+            ],
+        ),
+        daemon=True,
+    ).start()
+
+    return _render_past_day(
+        request, db, employee, selected_date,
+        success=f"Extra session added: {start_time.strftime('%H:%M')}–{end_time.strftime('%H:%M')} (+{extra_h}h).",
+    )
 
 
 @router.get("/time/partial-leave", response_class=HTMLResponse)

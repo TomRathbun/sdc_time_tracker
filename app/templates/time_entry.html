@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ "Check In" if entry_type == "check_in" else "Check Out" }} — SDC Time Tracker{% endblock %}
+{% block title %}{% if is_recheckout|default(false) %}Re-Check Out{% elif entry_type == "check_in" %}Check In{% else %}Check Out{% endif %} — SDC Time Tracker{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
@@ -20,6 +20,14 @@
                 </svg>
             </div>
             Check In
+            {% elif is_recheckout|default(false) %}
+            <div class="w-10 h-10 rounded-xl bg-warning-500/10 flex items-center justify-center">
+                <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                </svg>
+            </div>
+            Re-Check Out
             {% else %}
             <div class="w-10 h-10 rounded-xl bg-danger-500/10 flex items-center justify-center">
                 <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,6 +39,12 @@
             {% endif %}
         </h1>
         <p class="text-gray-400 mt-1">{{ today.strftime("%A, %B %d, %Y") }}</p>
+        {% if is_recheckout|default(false) %}
+        <div class="mt-4 p-4 rounded-xl bg-warning-500/10 border border-warning-500/20 text-sm text-warning-200">
+            You already checked out{% if last_checkout_display %} at <span class="font-mono font-semibold text-white">{{ last_checkout_display }}</span>{% endif %}.
+            This records extra time from that punch until the time you select — for when the boss calls you back after you have left.
+        </div>
+        {% endif %}
     </div>
 
     <!-- Form Card -->
@@ -191,7 +205,7 @@
                     <span id="comment-required-hint" class="text-danger-500 hidden">(mandatory due to time difference)</span>
                 </label>
                 <textarea name="comments" id="comments" rows="2" class="form-input resize-none"
-                    placeholder="Any notes about this entry..."></textarea>
+                    placeholder="{% if is_recheckout|default(false) %}e.g. Boss called me back for a short discussion{% else %}Any notes about this entry...{% endif %}"></textarea>
                 <p id="threshold-warning" class="text-xs text-warning-400 mt-2 hidden">
                     Note: A comment is required because your set time differs from the current time by more than {{ comment_threshold }} minutes.
                 </p>
@@ -301,6 +315,12 @@
                         d="M11 16l-4-4m0 0l4-4m-4 4h14" />
                 </svg>
                 Submit Check-In
+                {% elif is_recheckout|default(false) %}
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                </svg>
+                Submit Re-Check Out
                 {% else %}
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
