@@ -345,6 +345,22 @@
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
+.quick-action-card.is-disabled,
+.quick-action-card[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+    transform: none;
+}
+
+.quick-action-card.is-disabled:hover {
+    border-color: rgba(255, 255, 255, 0.05);
+    background: rgba(15, 23, 42, 0.5);
+    transform: none;
+    box-shadow: none;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

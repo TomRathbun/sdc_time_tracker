@@ -154,12 +154,21 @@
 
     {% if is_workday %}
     <div class="{% if leave_balance %}xl:col-span-8{% else %}xl:col-span-12{% endif %} grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        <a href="/time/checkin" class="quick-action-card group py-3" id="quick-checkin">
+        {% if status == "checked_in" %}
+        <span class="quick-action-card is-disabled py-3" id="quick-checkin" title="Already checked in" aria-disabled="true">
+            <div class="w-8 h-8 rounded-lg bg-surface-800/50 flex items-center justify-center mb-1.5 mx-auto">
+                <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>
+            </div>
+            <span class="text-xs font-medium text-gray-600 text-center block">Check In</span>
+        </span>
+        {% else %}
+        <a href="/time/checkin" class="quick-action-card group py-3" id="quick-checkin" title="{% if status == 'checked_out' %}Return (called back){% else %}Check In{% endif %}">
             <div class="w-8 h-8 rounded-lg bg-success-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-success-500/20">
                 <svg class="w-4 h-4 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>
             </div>
-            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">Check In</span>
+            <span class="text-xs font-medium text-gray-300 group-hover:text-white text-center block">{% if status == "checked_out" %}Return{% else %}Check In{% endif %}</span>
         </a>
+        {% endif %}
         <a href="/time/checkout" class="quick-action-card group py-3" id="quick-checkout">
             <div class="w-8 h-8 rounded-lg bg-danger-500/10 flex items-center justify-center mb-1.5 mx-auto group-hover:bg-danger-500/20">
                 <svg class="w-4 h-4 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>

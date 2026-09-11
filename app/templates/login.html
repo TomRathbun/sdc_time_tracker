@@ -123,10 +123,18 @@
                     <!-- Quick Action Buttons (hidden for supervisors and PIN-reset-needed) -->
                     {% if emp.role.value != 'supervisor' and not emp.pin_needs_reset %}
                     <div class="flex items-center gap-1.5 flex-shrink-0">
-                        <!-- Check In / Return -->
-                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkin', '{% if emp_status == 'checked_out' %}{{ emp_time }}{% endif %}')"
-                            class="p-2 rounded-lg bg-success-500/10 text-success-400 hover:bg-success-500/20 hover:text-success-300 transition-all active:scale-95"
-                            title="{% if emp_status == 'checked_out' %}Return (called back){% else %}Quick Check In{% endif %}" id="btn-quick-ci-{{ emp.id }}">
+                        <!-- Check In: on until you punch in; off while in; back on after checkout or a new day -->
+                        <button
+                            {% if emp_status != 'checked_in' %}onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkin', '{% if emp_status == 'checked_out' %}{{ emp_time }}{% endif %}')"{% endif %}
+                            class="p-2 rounded-lg transition-all
+                                {% if emp_status == 'checked_in' %}
+                                    bg-surface-800/50 text-gray-600 cursor-not-allowed
+                                {% else %}
+                                    bg-success-500/10 text-success-400 hover:bg-success-500/20 hover:text-success-300 active:scale-95
+                                {% endif %}"
+                            title="{% if emp_status == 'checked_in' %}Already checked in{% elif emp_status == 'checked_out' %}Return (called back){% else %}Quick Check In{% endif %}"
+                            id="btn-quick-ci-{{ emp.id }}"
+                            {% if emp_status == 'checked_in' %}disabled aria-disabled="true"{% endif %}>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M11 16l-4-4m0 0l4-4m-4 4h14" />
@@ -421,6 +429,10 @@
     function hideEl(el) { el.style.display = 'none'; }
 
     function openQuickModal(empId, empName, action, lastPunch) {
+        if (action === 'checkin') {
+            var ciBtn = document.getElementById('btn-quick-ci-' + empId);
+            if (ciBtn && ciBtn.disabled) return;
+        }
         currentEmployeeId = empId;
         currentAction = action;
         currentLastPunch = lastPunch || '';
