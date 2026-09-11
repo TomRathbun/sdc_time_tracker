@@ -13,7 +13,7 @@ from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, EntryType, LocationType,
     RemoteAuthorization, AuthorizationStatus, Employee, Role
 )
-from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS, BEOD_OPTION_MIN_HOURS
+from app.config import PAST_DAY_MAX_LOOKBACK_DAYS
 from app.services.time_calc import update_daily_summary, get_target_hours
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -22,7 +22,7 @@ from app.services.time_state import (
 )
 from app.services.time_offset import offset_approved_default
 from app.services.audit import log_action
-from app.services.settings import get_bool_setting
+from app.services.settings import get_bool_setting, get_beod_minimum_hours
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -40,6 +40,10 @@ def _beod_blanket(db: Session) -> bool:
     return get_bool_setting(db, "beod_blanket_approval")
 
 
+def _beod_min(db: Session) -> float:
+    return get_beod_minimum_hours(db) if db is not None else 5.0
+
+
 def _time_entry_error(request, employee, entry_type, now, today, error, threshold=None, db=None, **extra):
     beod_blanket = _beod_blanket(db) if db is not None else True
     ctx = {
@@ -51,8 +55,7 @@ def _time_entry_error(request, employee, entry_type, now, today, error, threshol
         "error": error,
         "comment_threshold": threshold if threshold is not None else 30,
         "beod_blanket": beod_blanket,
-        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
-        "beod_option_min_hours": BEOD_OPTION_MIN_HOURS,
+        "beod_minimum_hours": _beod_min(db),
         "target_hours": get_target_hours(today) if today else 0,
         "open_checkin_iso": None,
         "completed_clock_hours": 0,
@@ -89,7 +92,7 @@ async def checkin_page(request: Request, db: Session = Depends(get_db)):
         "error": None,
         "comment_threshold": threshold,
         "beod_blanket": _beod_blanket(db),
-        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        "beod_minimum_hours": _beod_min(db),
     })
 
 
@@ -316,8 +319,7 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         "error": None,
         "comment_threshold": threshold,
         "beod_blanket": _beod_blanket(db),
-        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
-        "beod_option_min_hours": BEOD_OPTION_MIN_HOURS,
+        "beod_minimum_hours": _beod_min(db),
         "target_hours": get_target_hours(today),
         "open_checkin_iso": open_checkin_iso,
         "completed_clock_hours": completed_clock,

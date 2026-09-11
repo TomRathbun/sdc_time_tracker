@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS, BEOD_OPTION_MIN_HOURS
+from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS
 from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, EntryType, LeaveType,
 )
@@ -18,15 +18,19 @@ def get_target_hours(work_date: date) -> float:
     return float(WEEKDAY_HOURS.get(work_date.weekday(), 0))
 
 
-def show_beod_option(work_hours: float, already_claimed: bool = False) -> bool:
-    """Whether to offer the BEOD checkbox (quick checkout and checkout form).
+def show_beod_option(
+    work_hours: float,
+    already_claimed: bool = False,
+    min_hours: float = BEOD_MINIMUM_HOURS,
+) -> bool:
+    """Offer BEOD when work hours meet the manager-configured gate.
 
-    Hidden until 5h of work, and hidden if already claimed today.
-    Credit still requires BEOD_MINIMUM_HOURS (6h).
+    Same threshold is used for +1h credit in update_daily_summary().
+    Hidden if already claimed today.
     """
     if already_claimed:
         return False
-    return work_hours >= BEOD_OPTION_MIN_HOURS
+    return work_hours >= min_hours
 
 
 def calculate_clock_hours(time_entries: List[TimeEntry]) -> float:
@@ -101,7 +105,7 @@ def update_daily_summary(
     """Recalculate and update/create the daily summary for an employee.
 
     FOSC Normal Time = clock + offsite + phone + BEOD credit (+1 if claimed,
-    approved, and work hours before credit >= BEOD_MINIMUM_HOURS).
+    approved, and work hours before credit >= manager-configured minimum).
 
     Leave hours only count toward compliance when leave_approved=True.
     leave_hours < 0 means preserve existing leave fields.
@@ -125,9 +129,11 @@ def update_daily_summary(
     clock_hours = calculate_clock_hours(time_entries)
     offsite_hours = calculate_offsite_hours(offsite_entries)
     phone_hours = calculate_phone_hours(phone_entries)
-    # Work hours that count toward the BEOD 6h floor (not leave)
     work_hours = round(clock_hours + offsite_hours + phone_hours, 2)
     target_hours = get_target_hours(work_date)
+
+    from app.services.settings import get_beod_minimum_hours
+    beod_min = get_beod_minimum_hours(db)
 
     summary = db.query(DailySummary).filter(
         DailySummary.employee_id == employee_id,
@@ -153,10 +159,10 @@ def update_daily_summary(
 
     beod_hours = 0.0
     total_hours = work_hours
-    if eff_beod_claimed and eff_beod_approved and work_hours >= BEOD_MINIMUM_HOURS:
+    if eff_beod_claimed and eff_beod_approved and work_hours >= beod_min:
         beod_hours = 1.0
         total_hours = round(work_hours + 1.0, 2)
-    elif eff_beod_claimed and work_hours < BEOD_MINIMUM_HOURS:
+    elif eff_beod_claimed and work_hours < beod_min:
         # Claimed but below floor — no credit; keep claim flag for audit/display
         beod_hours = 0.0
 

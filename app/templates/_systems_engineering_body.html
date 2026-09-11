@@ -328,7 +328,7 @@ erDiagram
                             </tr>
                             <tr>
                                 <td class="se-req-id">FR-BEOD-01</td>
-                                <td>BEOD credit (+1h) shall apply only if claimed/approved and raw work hours before credit ≥ configured minimum (default 6.0h).</td>
+                                <td>BEOD credit (+1h) shall apply only if claimed/approved and raw work hours before credit ≥ the manager-configured minimum (same value that shows the checkout checkbox; default 5.0h).</td>
                                 <td><span class="se-badge se-badge-shall">shall</span></td>
                             </tr>
                             <tr>
@@ -440,11 +440,11 @@ erDiagram
                     </div>
                     <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
                         <p class="se-req-id mb-2">AC-BEOD-01 · FR-BEOD-01</p>
-                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> BEOD is claimed and approved, and clock+offsite+phone = 5.5h<br>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> BEOD is claimed and approved, minimum is 5.0h, and clock+offsite+phone = 4.5h<br>
                         <strong class="text-gray-100">When</strong> daily summary is recalculated<br>
-                        <strong class="text-gray-100">Then</strong> beod_hours = 0 and total_hours = 5.5 (minimum not met).<br>
-                        <strong class="text-gray-100">Given</strong> the same flags and hours = 6.0<br>
-                        <strong class="text-gray-100">Then</strong> beod_hours = 1.0 and total_hours = 7.0.</p>
+                        <strong class="text-gray-100">Then</strong> beod_hours = 0 and total_hours = 4.5 (minimum not met).<br>
+                        <strong class="text-gray-100">Given</strong> the same flags and hours = 5.0<br>
+                        <strong class="text-gray-100">Then</strong> beod_hours = 1.0 and total_hours = 6.0.</p>
                     </div>
                     <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
                         <p class="se-req-id mb-2">AC-LEAVE-02 · FR-LEAVE-02</p>
@@ -630,7 +630,7 @@ flowchart TD
     C -->|No| Z[beod_hours = 0]
     C -->|Yes| D{Approved?\nblanket OR manager}
     D -->|No| Z
-    D -->|Yes| E{raw ≥ BEOD_MINIMUM?\ndefault 6.0h}
+    D -->|Yes| E{raw ≥ BEOD min hours?\nmanager config, default 5.0h}
     E -->|No| Z
     E -->|Yes| F[beod_hours = 1.0]
     Z --> G[total = raw + beod]
@@ -688,8 +688,8 @@ flowchart TD
                             </tr>
                             <tr>
                                 <td class="se-req-id">FR-BEOD-01</td>
-                                <td><code>time_calc.update_daily_summary</code> + config BEOD_MINIMUM</td>
-                                <td>AC-BEOD-01 boundary tests at 5.99 / 6.0</td>
+                                <td><code>time_calc.update_daily_summary</code> + setting <code>beod_minimum_hours</code></td>
+                                <td>AC-BEOD-01 boundary tests at 4.99 / 5.0; checkbox hidden below same gate</td>
                             </tr>
                             <tr>
                                 <td class="se-req-id">FR-LEAVE-02</td>

@@ -45,6 +45,10 @@ FEATURE_DEFAULTS = {
         "value": "true",
         "description": "BEOD (break end of day): auto-approve when employee checks the box (no manager step). Off = individual approval after checkout.",
     },
+    "beod_minimum_hours": {
+        "value": "5",
+        "description": "Hours of work (clock + offsite + phone) required before BEOD is offered on checkout and before the +1h credit applies.",
+    },
 }
 
 
@@ -74,6 +78,32 @@ def get_setting(db: Session, key: str) -> str:
 def get_bool_setting(db: Session, key: str) -> bool:
     """Get a boolean setting (true/false string → bool)."""
     return get_setting(db, key).lower() == "true"
+
+
+def get_float_setting(db: Session, key: str, default: float | None = None) -> float:
+    """Parse a numeric setting; fall back to default or FEATURE_DEFAULTS."""
+    raw = get_setting(db, key)
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        if default is not None:
+            return float(default)
+        fallback = FEATURE_DEFAULTS.get(key, {}).get("value", "0")
+        try:
+            return float(fallback)
+        except (TypeError, ValueError):
+            return 0.0
+
+
+def get_beod_minimum_hours(db: Session) -> float:
+    """Manager-configured BEOD gate (show checkbox + apply +1h credit)."""
+    from app.config import BEOD_MINIMUM_HOURS
+    val = get_float_setting(db, "beod_minimum_hours", BEOD_MINIMUM_HOURS)
+    if val < 0:
+        val = 0.0
+    if val > 16:
+        val = 16.0
+    return round(val, 2)
 
 
 def set_setting(db: Session, key: str, value: str):

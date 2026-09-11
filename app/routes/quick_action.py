@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import verify_pin
-from app.config import BEOD_MINIMUM_HOURS, BEOD_OPTION_MIN_HOURS
 from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
@@ -23,7 +22,7 @@ from app.services.time_state import (
 )
 from app.services.time_offset import offset_approved_default
 from app.services.audit import log_action
-from app.services.settings import get_bool_setting
+from app.services.settings import get_bool_setting, get_beod_minimum_hours
 
 router = APIRouter(prefix="/api")
 
@@ -222,7 +221,8 @@ def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
     phone_h = calculate_phone_hours(phones)
     work = round(clock + offsite_h + phone_h, 2)
     target = get_target_hours(today)
-    beod_eligible = work >= BEOD_MINIMUM_HOURS
+    beod_min = get_beod_minimum_hours(db)
+    beod_eligible = work >= beod_min
     beod_blanket = get_bool_setting(db, "beod_blanket_approval")
     fosc_without = work
     fosc_with = round(work + 1.0, 2) if beod_eligible else work
@@ -254,9 +254,8 @@ def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
         "fosc_with_beod": fosc_with,
         "target_hours": target,
         "beod_eligible": beod_eligible,
-        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
-        "beod_option_min_hours": BEOD_OPTION_MIN_HOURS,
-        "beod_show": show_beod_option(work, beod_already),
+        "beod_minimum_hours": beod_min,
+        "beod_show": show_beod_option(work, beod_already, beod_min),
         "beod_blanket": beod_blanket,
         "beod_already": beod_already,
     }
@@ -385,7 +384,7 @@ async def quick_checkout(
             elif not get_bool_setting(db, "beod_blanket_approval"):
                 msg += " (BEOD requested — pending approval)"
             else:
-                msg += " (BEOD claimed but under 6h worked — no credit)"
+                msg += f" (BEOD claimed but under {get_beod_minimum_hours(db):g}h worked — no credit)"
         return JSONResponse({
             "ok": True,
             "message": msg,
@@ -439,7 +438,7 @@ async def quick_checkout(
         elif claim_beod and not beod_approved:
             msg += " (BEOD requested — pending approval)"
         elif claim_beod and not summary.beod_hours:
-            msg += " (BEOD claimed but under 6h worked — no credit)"
+            msg += f" (BEOD claimed but under {get_beod_minimum_hours(db):g}h worked — no credit)"
 
     return JSONResponse({
         "ok": True,
@@ -457,6 +456,7 @@ async def get_settings(db: Session = Depends(get_db)):
         "onscreen_numpad_enabled": get_bool_setting(db, "onscreen_numpad_enabled"),
         "onscreen_keyboard_enabled": get_bool_setting(db, "onscreen_keyboard_enabled"),
         "beod_blanket_approval": get_bool_setting(db, "beod_blanket_approval"),
+        "beod_minimum_hours": get_beod_minimum_hours(db),
     })
 
 

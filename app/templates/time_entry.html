@@ -170,7 +170,7 @@
                 </div>
             </div>
 
-            <!-- BEOD — only offered after 5h of work -->
+            <!-- BEOD — offered only after the manager-configured hours of work -->
             {% if entry_type == "check_out" %}
             <div id="beod-option-box" class="mb-6 p-4 rounded-xl bg-warning-500/5 border border-warning-500/10" style="display:none">
                 <label class="flex items-start gap-3 cursor-pointer">
@@ -183,13 +183,13 @@
                         <p class="text-xs text-gray-500 mt-0.5">
                             Check only if you take the paid lunch at the <strong class="text-gray-400">end</strong> of the day
                             (e.g. 07:00–15:00 = 8h + BEOD = 9h). Leave unchecked if you take lunch during the day.
-                            Needs ≥ {{ beod_minimum_hours|default(6) }}h worked. Blanket approval is ON — credit applies when checked.
+                            Needs ≥ {{ beod_minimum_hours|default(5) }}h worked. Blanket approval is ON — credit applies when checked.
                         </p>
                         {% else %}
                         <p class="text-sm font-medium text-warning-300">Request end-of-day break (BEOD +1h)</p>
                         <p class="text-xs text-gray-500 mt-0.5">
                             Optional request for manager approval if you take paid lunch at the end of the day.
-                            Leave unchecked for a normal mid-day lunch. Needs ≥ {{ beod_minimum_hours|default(6) }}h worked.
+                            Leave unchecked for a normal mid-day lunch. Needs ≥ {{ beod_minimum_hours|default(5) }}h worked.
                         </p>
                         {% endif %}
                     </div>
@@ -261,8 +261,7 @@
                         const offsiteH = {{ offsite_hours|default(0) }};
                         const phoneH = {{ phone_hours|default(0) }};
                         const target = {{ target_hours|default(0) }};
-                        const beodMin = {{ beod_minimum_hours|default(6) }};
-                        const beodOptionMin = {{ beod_option_min_hours|default(5) }};
+                        const beodMin = {{ beod_minimum_hours|default(5) }};
 
                         let sessionH = 0;
                         if (openIso) {
@@ -287,7 +286,7 @@
                         const beodCb = document.getElementById('lunch-eod');
                         const beodBox = document.getElementById('beod-option-box');
                         if (beodBox) {
-                            if (fosc >= beodOptionMin) {
+                            if (fosc >= beodMin) {
                                 beodBox.style.display = '';
                             } else {
                                 beodBox.style.display = 'none';

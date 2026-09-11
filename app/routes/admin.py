@@ -810,6 +810,13 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
         else:
             # Regular text/number input
             value = form.get(key, info["value"])
+            if key == "beod_minimum_hours":
+                try:
+                    hours = float(value)
+                except (TypeError, ValueError):
+                    hours = float(info["value"])
+                hours = min(16.0, max(0.0, hours))
+                value = str(int(hours) if hours == int(hours) else round(hours, 2))
         set_setting(db, key, value)
 
     log_action(
