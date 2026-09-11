@@ -298,7 +298,12 @@ erDiagram
                             </tr>
                             <tr>
                                 <td class="se-req-id">FR-CO-01</td>
-                                <td>The system shall reject check-out unless the employee is in the <em>checked_in</em> state and declared check-out ≥ check-in.</td>
+                                <td>The system shall reject check-out unless the employee is in the <em>checked_in</em> state and declared check-out ≥ check-in, <strong>except</strong> re-checkout (FR-CO-02).</td>
+                                <td><span class="se-badge se-badge-shall">shall</span></td>
+                            </tr>
+                            <tr>
+                                <td class="se-req-id">FR-CO-02</td>
+                                <td>When already <em>checked_out</em>, the system shall accept a re-checkout: insert a return check-in at the previous checkout time and a new checkout at the declared time (extra session after being called back). Declared re-checkout shall be strictly after the last checkout.</td>
                                 <td><span class="se-badge se-badge-shall">shall</span></td>
                             </tr>
                             <tr>
@@ -419,6 +424,14 @@ erDiagram
                     Acceptance criteria make requirements testable. Format: <em>Given / When / Then</em>.
                 </p>
                 <div class="space-y-4">
+                    <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
+                        <p class="se-req-id mb-2">AC-CO-02 · FR-CO-02</p>
+                        <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> employee E checked out today at 16:00<br>
+                        <strong class="text-gray-100">When</strong> E submits a re-checkout at 16:45<br>
+                        <strong class="text-gray-100">Then</strong> the system stores a return check-in at 16:00 and a check-out at 16:45, and clock hours increase by 0.75h.<br>
+                        <strong class="text-gray-100">When</strong> E submits a re-checkout at 16:00 or earlier<br>
+                        <strong class="text-gray-100">Then</strong> the system rejects with a message that re-checkout must be after the last checkout.</p>
+                    </div>
                     <div class="bg-surface-800/50 border border-white/5 rounded-xl p-4">
                         <p class="se-req-id mb-2">AC-CI-02 · FR-CI-02</p>
                         <p class="text-sm text-gray-300"><strong class="text-gray-100">Given</strong> employee E is checked in today<br>
@@ -573,10 +586,10 @@ stateDiagram-v2
     [*] --> NotStarted: No entries for day
     NotStarted --> CheckedIn: check_in
     CheckedIn --> CheckedOut: check_out\n(declared ≥ check-in)
-    CheckedOut --> CheckedIn: check_in again\n(split shift)
+    CheckedOut --> CheckedIn: check_in again\n(return / split shift)
+    CheckedOut --> CheckedOut: re-checkout\n(extra session from last out)
     CheckedIn --> CheckedIn: reject double check-in
     NotStarted --> NotStarted: reject check-out
-    CheckedOut --> CheckedOut: reject double check-out
                 </div>
 
                 <h3 class="text-lg font-semibold text-gray-200 mb-2">10.2 Leave request lifecycle</h3>

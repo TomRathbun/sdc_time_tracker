@@ -27,6 +27,11 @@
         {{ error }}
     </div>
     {% endif %}
+    {% if success %}
+    <div class="mb-6 p-4 rounded-xl bg-success-500/10 border border-success-500/30 text-success-300 text-sm" role="status">
+        {{ success }}
+    </div>
+    {% endif %}
 
     <!-- Date picker -->
     <div class="glass-card p-6 mb-6">
@@ -90,6 +95,59 @@
         </div>
         {% endif %}
     </div>
+
+    {% if can_add_extra|default(false) %}
+    <div class="glass-card p-6 mb-6 border-l-4 border-warning-400">
+        <h2 class="text-sm font-semibold text-white mb-1">Called back after checkout?</h2>
+        <p class="text-xs text-gray-400 mb-4">
+            Last checkout was <span class="font-mono text-white">{{ last_checkout_display }}</span>.
+            Add an extra session without rewriting the rest of the day.
+        </p>
+        <form method="POST" action="/time/past-day/extra-session" id="extra-session-form">
+            <input type="hidden" name="entry_date" value="{{ selected_date.isoformat() }}">
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="text-xs text-gray-500 mb-1.5 block">Return time</label>
+                    <div class="flex gap-2">
+                        <select name="extra_start_hour" class="form-select flex-1">
+                            {% for h in range(5, 22) %}
+                            <option value="{{ h }}" {% if h==last_checkout_hour %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="extra_start_minute" class="form-select flex-1">
+                            {% for m in range(0, 60, 5) %}
+                            <option value="{{ m }}" {% if m==last_checkout_minute %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 mb-1.5 block">Re-check out</label>
+                    <div class="flex gap-2">
+                        <select name="extra_end_hour" class="form-select flex-1">
+                            {% for h in range(5, 22) %}
+                            <option value="{{ h }}" {% if h==last_checkout_hour %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="extra_end_minute" class="form-select flex-1">
+                            {% for m in range(0, 60, 5) %}
+                            <option value="{{ m }}" {% if m==((last_checkout_minute + 30) % 60) %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label for="extra_comments" class="text-xs text-gray-500 mb-1.5 block">Why the extra session
+                    <span class="text-danger-400">*</span></label>
+                <input type="text" name="comments" id="extra_comments" required minlength="3"
+                    class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-white/20"
+                    placeholder="e.g. Boss called me back for a short discussion">
+            </div>
+            <button type="submit" class="btn-primary w-full py-3" id="btn-add-extra-session">Add extra session</button>
+        </form>
+    </div>
+    {% endif %}
 
     <!-- Entry Form -->
     <div class="glass-card p-6">

@@ -14,6 +14,9 @@ STATUS_NOT_STARTED = "not_started"
 STATUS_CHECKED_IN = "checked_in"
 STATUS_CHECKED_OUT = "checked_out"
 
+RETURN_CHECKIN_COMMENT = "Return after checkout (called back)"
+RECHECKOUT_COMMENT = "Re-checkout — extra session after being called back"
+
 
 def latest_entry(
     db: Session,
@@ -26,6 +29,24 @@ def latest_entry(
         .filter(
             TimeEntry.employee_id == employee_id,
             TimeEntry.date == work_date,
+        )
+        .order_by(TimeEntry.declared_time.desc(), TimeEntry.id.desc())
+        .first()
+    )
+
+
+def last_checkout_entry(
+    db: Session,
+    employee_id: int,
+    work_date: date,
+) -> Optional[TimeEntry]:
+    """Latest check-out punch for employee/day."""
+    return (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.employee_id == employee_id,
+            TimeEntry.date == work_date,
+            TimeEntry.entry_type == EntryType.check_out,
         )
         .order_by(TimeEntry.declared_time.desc(), TimeEntry.id.desc())
         .first()
@@ -60,7 +81,10 @@ def can_check_out(
     work_date: date,
     declared_time: Optional[datetime] = None,
 ) -> Optional[str]:
-    """Return an error message if check-out is not allowed, else None."""
+    """Return an error message if a normal check-out is not allowed, else None.
+
+    A second checkout after already being out is handled by can_recheckout().
+    """
     status = current_status(db, employee_id, work_date)
     if status == STATUS_NOT_STARTED:
         return "No open check-in found. Check in first."
@@ -75,6 +99,51 @@ def can_check_out(
                 f"({open_checkin.declared_time.strftime('%H:%M')})."
             )
     return None
+
+
+def can_recheckout(
+    db: Session,
+    employee_id: int,
+    work_date: date,
+    declared_time: datetime,
+) -> Optional[str]:
+    """Allow a second (or later) checkout after already being out.
+
+    Used when the employee left, then was called back (boss discussion, etc.)
+    and needs to punch out again. Extra time is recorded as a new pair:
+    return check-in at the previous checkout time, then this checkout.
+    """
+    status = current_status(db, employee_id, work_date)
+    if status == STATUS_NOT_STARTED:
+        return "No check-out to extend. Check in first."
+    if status == STATUS_CHECKED_IN:
+        return "You are still checked in. Use Check Out, not Re-Check Out."
+
+    last_co = last_checkout_entry(db, employee_id, work_date)
+    if not last_co:
+        return "No previous check-out found for today."
+    if declared_time <= last_co.declared_time:
+        return (
+            f"Re-checkout time must be after your last checkout "
+            f"({last_co.declared_time.strftime('%H:%M')})."
+        )
+    return None
+
+
+def plan_recheckout(
+    last_checkout_time: datetime,
+    new_checkout_time: datetime,
+) -> Tuple[Optional[Tuple[datetime, datetime]], Optional[str]]:
+    """Pure planner: extra session starts at last checkout, ends at new checkout.
+
+    Returns ((return_checkin, checkout), None) or (None, error).
+    """
+    if new_checkout_time <= last_checkout_time:
+        return None, (
+            f"Re-checkout time must be after your last checkout "
+            f"({last_checkout_time.strftime('%H:%M')})."
+        )
+    return (last_checkout_time, new_checkout_time), None
 
 
 def ranges_overlap(

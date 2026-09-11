@@ -128,23 +128,24 @@
                     <!-- Quick Action Buttons (hidden for supervisors and PIN-reset-needed) -->
                     {% if emp.role.value != 'supervisor' and not emp.pin_needs_reset %}
                     <div class="flex items-center gap-1.5 flex-shrink-0">
-                        <!-- Check In -->
-                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkin')"
+                        <!-- Check In / Return -->
+                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkin', '{% if emp_status == 'checked_out' %}{{ emp_time }}{% endif %}')"
                             class="p-2 rounded-lg bg-success-500/10 text-success-400 hover:bg-success-500/20 hover:text-success-300 transition-all active:scale-95"
-                            title="Quick Check In" id="btn-quick-ci-{{ emp.id }}">
+                            title="{% if emp_status == 'checked_out' %}Return (called back){% else %}Quick Check In{% endif %}" id="btn-quick-ci-{{ emp.id }}">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M11 16l-4-4m0 0l4-4m-4 4h14" />
                             </svg>
                         </button>
-                        <!-- Check Out (disabled if no check-in) -->
-                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'checkout')" class="p-2 rounded-lg transition-all active:scale-95
+                        <!-- Check Out (enabled when in, or re-checkout when already out) -->
+                        <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', '{% if emp_status == 'checked_out' %}recheckout{% else %}checkout{% endif %}', '{{ emp_time or '' }}')" class="p-2 rounded-lg transition-all active:scale-95
                                 {% if emp_status == 'checked_in' %}
                                     bg-danger-500/10 text-danger-400 hover:bg-danger-500/20 hover:text-danger-300
+                                {% elif emp_status == 'checked_out' %}
+                                    bg-warning-500/10 text-warning-400 hover:bg-warning-500/20 hover:text-warning-300
                                 {% else %}
                                     bg-surface-800/50 text-gray-600 cursor-not-allowed
-                                {% endif %}" title="Quick Check Out" id="btn-quick-co-{{ emp.id }}" {% if emp_status
-                            !='checked_in' %}disabled{% endif %}>
+                                {% endif %}" title="{% if emp_status == 'checked_out' %}Re-Check Out (called back){% else %}Quick Check Out{% endif %}" id="btn-quick-co-{{ emp.id }}" {% if emp_status not in ['checked_in', 'checked_out'] %}disabled{% endif %}>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                     d="M17 16l4-4m0 0l-4-4m4 4H7" />
@@ -419,13 +420,15 @@
     // ═══════════════════════════════════════════
     let currentEmployeeId = null;
     let currentAction = null;
+    let currentLastPunch = '';
 
     function showEl(el) { el.style.display = 'flex'; }
     function hideEl(el) { el.style.display = 'none'; }
 
-    function openQuickModal(empId, empName, action) {
+    function openQuickModal(empId, empName, action, lastPunch) {
         currentEmployeeId = empId;
         currentAction = action;
+        currentLastPunch = lastPunch || '';
 
         const modal = document.getElementById('quick-modal');
         const content = document.getElementById('quick-modal-content');
@@ -453,8 +456,14 @@
         if (action === 'checkin') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-success-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>';
-            title.textContent = 'Quick Check In';
-            subtitle.textContent = empName;
+            title.textContent = currentLastPunch ? 'Return to work' : 'Quick Check In';
+            subtitle.textContent = currentLastPunch ? (empName + ' · out at ' + currentLastPunch) : empName;
+        } else if (action === 'recheckout') {
+            icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-warning-500/10';
+            icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
+            title.textContent = 'Re-Check Out';
+            subtitle.textContent = empName + (currentLastPunch ? ' · extra time after ' + currentLastPunch : ' · called back');
+            loadCheckoutPreview(empId);
         } else {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-danger-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
@@ -526,7 +535,7 @@
         var formData = new FormData();
         formData.append('employee_id', currentEmployeeId);
         formData.append('pin', pin);
-        if (currentAction === 'checkout') {
+        if (currentAction === 'checkout' || currentAction === 'recheckout') {
             var beodEl = document.getElementById('modal-beod');
             formData.append('beod', (beodEl && beodEl.checked) ? 'true' : 'false');
         }
@@ -588,7 +597,13 @@
                 document.getElementById('preview-fosc').textContent =
                     data.fosc_hours + 'h / ' + data.target_hours + 'h target';
                 var detail = '';
-                if (data.checkin_time) {
+                if (data.recheckout && data.last_checkout_time) {
+                    detail = 'Already out at ' + data.last_checkout_time +
+                        ' → extra session until ' + data.checkout_time +
+                        ' (+' + data.session_hours + 'h). Boss called you back?';
+                    if (data.phone_hours) detail += ' · phone ' + data.phone_hours + 'h';
+                    if (data.offsite_hours) detail += ' · offsite ' + data.offsite_hours + 'h';
+                } else if (data.checkin_time) {
                     detail = 'In ' + data.checkin_time + ' → Out ' + data.checkout_time +
                         ' (' + data.session_hours + 'h session)';
                     if (data.phone_hours) detail += ' · phone ' + data.phone_hours + 'h';
@@ -597,6 +612,10 @@
                 document.getElementById('preview-detail').textContent = detail;
 
                 var wrap = document.getElementById('preview-beod-wrap');
+                if (data.beod_already) {
+                    wrap.style.display = 'none';
+                    return;
+                }
                 wrap.style.display = 'flex';
                 var label = document.getElementById('preview-beod-label');
                 var help = document.getElementById('preview-beod-help');
@@ -681,7 +700,10 @@
                         btn.disabled = false;
                         if (currentAction === 'checkin') {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-success-600 to-success-500 hover:from-success-500 hover:to-success-400 shadow-success-500/25';
-                            btnText.textContent = 'Check In';
+                            btnText.textContent = currentLastPunch ? 'Return' : 'Check In';
+                        } else if (currentAction === 'recheckout') {
+                            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-warning-600 to-warning-500 hover:from-warning-500 hover:to-warning-400 shadow-warning-500/25';
+                            btnText.textContent = 'Re-Check Out';
                         } else {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-danger-500/25';
                             btnText.textContent = 'Check Out';
@@ -696,7 +718,9 @@
                     // On error, allow submit anyway (server will re-validate)
                     btn.disabled = false;
                     btn.className = disabledClass;
-                    btnText.textContent = currentAction === 'checkin' ? 'Check In' : 'Check Out';
+                    btnText.textContent = currentAction === 'checkin'
+                        ? (currentLastPunch ? 'Return' : 'Check In')
+                        : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out');
                 });
         }, 300);
     }

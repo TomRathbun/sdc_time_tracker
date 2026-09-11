@@ -6,6 +6,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 
 ### Timekeeping
 - **Quick check-in / check-out** — one-tap entry from login or dashboard (office, remote, offsite)
+- **Re-check out** — after you have already left, punch out again to capture extra time (boss called you back). Records a return session from the previous checkout until now. Also available on past-day as an extra session.
 - **Past-day entry** — log or correct previous workdays (manager rules apply)
 - **Offsite / remote work** — dedicated offsite logging with gap detection
 - **Phone support hours** — additive hours that roll into FOSC totals
