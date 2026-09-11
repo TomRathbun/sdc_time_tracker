@@ -16,6 +16,7 @@ from app.models import (
 from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
+    project_checkout_for_day,
 )
 from app.services.leave_balance import get_leave_balance
 
@@ -123,6 +124,11 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     if target_hours > 0:
         progress_pct = min(100.0, round((effective_hours / target_hours) * 100, 1))
 
+    proj = None
+    if status == "checked_in":
+        extra = offsite_hours + phone_hours + approved_leave
+        proj = project_checkout_for_day(todays_entries, target_hours, extra_hours=extra)
+
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "employee": employee,
@@ -152,4 +158,6 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "leave_type_label": leave_type_label,
         "effective_hours": effective_hours,
         "progress_pct": progress_pct,
+        "proj_out": proj["without_display"] if proj else None,
+        "proj_out_beod": proj["with_beod_display"] if proj else None,
     })

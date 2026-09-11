@@ -13,7 +13,7 @@ from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntr
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
-    show_beod_option,
+    show_beod_option, project_checkout_for_day,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -156,11 +156,30 @@ async def quick_checkin(
     else:
         msg = f"Checked in at {rounded_time.strftime('%H:%M')}"
 
+    entries = (
+        db.query(TimeEntry)
+        .filter(TimeEntry.employee_id == emp.id, TimeEntry.date == today)
+        .all()
+    )
+    extra = (
+        calculate_offsite_hours(
+            db.query(OffsiteEntry).filter(OffsiteEntry.employee_id == emp.id, OffsiteEntry.date == today).all()
+        )
+        + calculate_phone_hours(
+            db.query(PhoneSupportEntry).filter(PhoneSupportEntry.employee_id == emp.id, PhoneSupportEntry.date == today).all()
+        )
+    )
+    proj = project_checkout_for_day(entries, get_target_hours(today), extra_hours=extra)
+    if proj:
+        msg += f" · out {proj['without_display']} ({proj['with_beod_display']} BEOD)"
+
     return JSONResponse({
         "ok": True,
         "message": msg,
         "time": rounded_time.strftime("%H:%M"),
         "returning": returning,
+        "proj_out": proj["without_display"] if proj else None,
+        "proj_out_beod": proj["with_beod_display"] if proj else None,
     })
 
 

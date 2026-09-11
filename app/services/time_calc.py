@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -11,6 +11,10 @@ from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS
 from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, EntryType, LeaveType,
 )
+from app.services.time_state import open_checkin_time
+
+
+BEOD_CREDIT_HOURS = 1.0
 
 
 def get_target_hours(work_date: date) -> float:
@@ -31,6 +35,61 @@ def show_beod_option(
     if already_claimed:
         return False
     return work_hours >= min_hours
+
+
+def round_up_5min(dt: datetime) -> datetime:
+    """Round a datetime up to the next 5-minute punch mark."""
+    dt = dt.replace(second=0, microsecond=0)
+    rem = dt.minute % 5
+    if rem:
+        dt = dt + timedelta(minutes=5 - rem)
+    return dt
+
+
+def project_checkout_times(
+    open_checkin: datetime,
+    target_hours: float,
+    completed_clock_hours: float = 0.0,
+    extra_hours: float = 0.0,
+    beod_credit: float = BEOD_CREDIT_HOURS,
+) -> Optional[dict]:
+    """Projected checkout to hit today's target, with and without BEOD.
+
+    extra_hours = offsite + phone + approved leave already on the day.
+    completed_clock_hours = closed In/Out pairs (not the open session).
+    """
+    if open_checkin is None or target_hours <= 0:
+        return None
+    already = float(completed_clock_hours or 0) + float(extra_hours or 0)
+    need_plain = max(0.0, float(target_hours) - already)
+    need_beod = max(0.0, float(target_hours) - already - float(beod_credit))
+    out_plain = round_up_5min(open_checkin + timedelta(hours=need_plain))
+    out_beod = round_up_5min(open_checkin + timedelta(hours=need_beod))
+    return {
+        "without": out_plain,
+        "with_beod": out_beod,
+        "without_display": out_plain.strftime("%H:%M"),
+        "with_beod_display": out_beod.strftime("%H:%M"),
+        "hours_needed_without": round(need_plain, 2),
+        "hours_needed_with_beod": round(need_beod, 2),
+    }
+
+
+def project_checkout_for_day(
+    time_entries: List[TimeEntry],
+    target_hours: float,
+    extra_hours: float = 0.0,
+) -> Optional[dict]:
+    """Projection from today's punches when currently checked in."""
+    open_ci = open_checkin_time(time_entries)
+    if not open_ci:
+        return None
+    return project_checkout_times(
+        open_ci,
+        target_hours,
+        completed_clock_hours=calculate_clock_hours(time_entries),
+        extra_hours=extra_hours,
+    )
 
 
 def calculate_clock_hours(time_entries: List[TimeEntry]) -> float:

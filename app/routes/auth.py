@@ -11,38 +11,70 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import verify_pin, create_session_token, get_current_employee
 from app.config import SESSION_COOKIE_NAME
-from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
+from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary, OffsiteEntry, PhoneSupportEntry
 from app.services.audit import log_action
 from app.services.settings import get_setting
+from app.services.time_calc import (
+    get_target_hours, calculate_offsite_hours, calculate_phone_hours,
+    project_checkout_for_day,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
 def _get_employee_status(db: Session, employees):
-    """Build a dict of employee_id → {status, time, minutes} for today's entries."""
+    """Build a dict of employee_id → {status, time, minutes, proj_out, proj_out_beod}."""
     today = date.today()
+    target = get_target_hours(today)
+    emp_ids = [emp.id for emp in employees]
+
+    offsites = db.query(OffsiteEntry).filter(OffsiteEntry.date == today).all() if emp_ids else []
+    phones = db.query(PhoneSupportEntry).filter(PhoneSupportEntry.date == today).all() if emp_ids else []
+    summaries = db.query(DailySummary).filter(DailySummary.date == today).all() if emp_ids else []
+    offsite_by = {}
+    phone_by = {}
+    leave_by = {}
+    for oe in offsites:
+        offsite_by.setdefault(oe.employee_id, []).append(oe)
+    for pe in phones:
+        phone_by.setdefault(pe.employee_id, []).append(pe)
+    for s in summaries:
+        leave_by[s.employee_id] = float(s.leave_hours or 0) if s.leave_approved else 0.0
+
     status_map = {}
     for emp in employees:
         entries = db.query(TimeEntry).filter(
             TimeEntry.employee_id == emp.id,
             TimeEntry.date == today,
         ).order_by(TimeEntry.declared_time).all()
+        extra = (
+            calculate_offsite_hours(offsite_by.get(emp.id, []))
+            + calculate_phone_hours(phone_by.get(emp.id, []))
+            + leave_by.get(emp.id, 0.0)
+        )
         if not entries:
-            status_map[emp.id] = {"status": "not_started", "time": None, "minutes": None}
+            status_map[emp.id] = {
+                "status": "not_started", "time": None, "minutes": None,
+                "proj_out": None, "proj_out_beod": None,
+            }
         elif entries[-1].entry_type == EntryType.check_in:
             last_time = entries[-1].declared_time
+            proj = project_checkout_for_day(entries, target, extra_hours=extra)
             status_map[emp.id] = {
                 "status": "checked_in",
                 "time": last_time.strftime("%H:%M"),
-                "minutes": last_time.hour * 60 + last_time.minute
+                "minutes": last_time.hour * 60 + last_time.minute,
+                "proj_out": proj["without_display"] if proj else None,
+                "proj_out_beod": proj["with_beod_display"] if proj else None,
             }
         else:
             last_time = entries[-1].declared_time
             status_map[emp.id] = {
                 "status": "checked_out",
                 "time": last_time.strftime("%H:%M"),
-                "minutes": last_time.hour * 60 + last_time.minute
+                "minutes": last_time.hour * 60 + last_time.minute,
+                "proj_out": None, "proj_out_beod": None,
             }
     return status_map
 

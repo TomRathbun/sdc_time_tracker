@@ -87,6 +87,13 @@
                         {{ fosc_hours }}h FOSC so far · Target: {{ target_hours }}h
                         {% if live_session_hours %} · session {{ live_session_hours }}h{% endif %}
                     </p>
+                    {% if proj_out %}
+                    <p class="text-xs text-gray-500 mt-1 font-mono">
+                        Projected out <span class="text-gray-200">{{ proj_out }}</span>
+                        <span class="text-gray-600">·</span>
+                        <span class="text-warning-300">{{ proj_out_beod }} BEOD</span>
+                    </p>
+                    {% endif %}
                 </div>
             </div>
             <div class="flex gap-2">
