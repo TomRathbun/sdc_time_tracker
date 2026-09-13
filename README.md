@@ -7,6 +7,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 ### Timekeeping
 - **Quick check-in / check-out** — one-tap entry from login or dashboard (office, remote, offsite)
 - **Re-check out** — after you have already left, punch out again to capture extra time (boss called you back). Records a return session from the previous checkout until now. Also available on past-day as an extra session.
+- **Projected checkout** — after check-in, login and dashboard show expected out time (9h Mon–Thu, 8h with BEOD, 4h Friday). Clears after checkout or midnight. Friday quick checkout hides BEOD.
 - **Past-day entry** — log or correct previous workdays (manager rules apply)
 - **Offsite / remote work** — dedicated offsite logging with gap detection
 - **Phone support hours** — additive hours that roll into FOSC totals
@@ -19,14 +20,14 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - **Leave types** — vacation, sick, COVID sick, UAE national holiday  
   Full leave day = target hours for that weekday (9h or 4h Friday)
 - **Leave balances** — defaults (e.g. 30 vacation / 10 sick) with pending requests reserving days
-- **Declared vs submission** — when declared time differs from device submission beyond a threshold, manager **offset approval** is required
+- **Declared vs submission** — when declared time differs from device submission beyond a threshold, the employee picks a **canned reason** (or Other). Managers see the reason on hover, then **Approve** (keep declared time) or **Reject** (revert to actual punch time). Reasons are configurable in Admin → Configuration.
 
 ### Manager / admin
-- **Admin timesheet** — declared vs submitted, offsets, BEOD, leave, and future weeks
+- **Admin timesheet** — declared vs submitted, offsets, BEOD, leave, and future weeks. Continuous re-checkout sessions squash to first in / last out; a real gap (e.g. doctor) stays as separate punches.
 - **Leave approvals** — dedicated `/leave/approvals` page (separate from request UI)
-- **Config** — BEOD, schedule, thresholds, and related settings
+- **Config** — BEOD, schedule, thresholds, variance reasons, and related settings
 - **Audit trail** — change history and policy alerts
-- **Production data reset** — clear demo/audit data before real staff go live
+- **Production data reset** — clear audit log, time/leave data, and/or extra employees before go-live (`/admin/data-reset`)
 
 ### Reports & FOSC export
 - **TEMPO import** — weekly hours charged in Lockheed TEMPO (CSV / form)
@@ -54,7 +55,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 |--------|--------|
 | Backend | Python 3.11+, FastAPI |
 | Database | SQLite + SQLAlchemy |
-| Frontend | Jinja2, Tailwind CSS, HTMX |
+| Frontend | Jinja2, Tailwind CSS, HTMX (local copies under `app/static/js/`) |
 | Excel export | openpyxl |
 | Tooling | `uv` (recommended) |
 
@@ -80,14 +81,49 @@ With TLS (certs under `certs/`):
 uv run python run.py
 ```
 
+## Go-live / work server
+
+The live staff list lives in git (`app/live_roster.py`). **Do not commit `sdc_time.db`.**
+
+**Empty database (first start):** the app seeds all staff automatically.
+
+**Database already has demo users:**
+
+```bash
+uv run python load_live_roster.py
+```
+
+That adds/updates the roster, deactivates leftover demo names, and clears the audit log.
+
+| | |
+|---|---|
+| Initial PIN | `1234` for everyone |
+| First login | staff **must** set a new PIN |
+| Admin | Jermaine Corley, Tom Rathbun (role: manager) |
+| Supervisor | Omar Eldeeb |
+| Everyone else | employee |
+
+To wipe the audit log later: log in as a manager → **Administration → Data reset** → **Clear audit log** → type `RESET`. Same page can also clear test punches.
+
+### Shared kiosk computer
+
+PIN fields are marked so browsers and password managers should not save or autofill them.
+
+On the shared Opera/Chrome profile still turn **off** password saving:
+
+**Settings → Privacy & security → Autofill → Passwords** → disable **Save passwords** and **Auto sign-in**.
+
+A dedicated kiosk/guest profile is best.
+
 ## Typical production flow
 
-1. Reset demo data (admin) and create real employees  
-2. Staff check in/out; log phone support, offsite, and leave as needed  
-3. Managers approve leave, offsets, and review timesheets  
-4. Import **TEMPO** weekly hours on **Reports**  
-5. Export **FOSC weekly** or **quarterly** package for contract submission  
-6. Open **Discrepancy Tracker** for base vs TEMPO shortfalls  
+1. Deploy, then confirm the live roster (first start, or `load_live_roster.py`)  
+2. Staff check in/out with PIN `1234` and immediately set a personal PIN  
+3. Log phone support, offsite, and leave as needed  
+4. Managers approve leave, offsets, and review timesheets  
+5. Import **TEMPO** weekly hours on **Reports**  
+6. Export **FOSC weekly** or **quarterly** package for contract submission  
+7. Open **Discrepancy Tracker** for base vs TEMPO shortfalls  
 
 ## Training new engineers
 
@@ -105,6 +141,7 @@ That page is a living SE pack for this product: stakeholders, architecture, shal
 
 ```
 app/
+  live_roster.py         # go-live names and roles
   models.py              # employees, entries, leave, TEMPO, summaries
   routes/                # auth, dashboard, time, leave, admin, reports
   services/
@@ -112,12 +149,13 @@ app/
     time_state.py        # check-in state machine
     leave_balance.py     # entitlements & pending
     leave_sync.py        # leave → DailySummary
-    time_offset.py       # declared vs submission
+    time_offset.py       # declared vs submission + variance reasons
     pending.py           # manager pending work
   static/
     lockheed_weapons.json
     images/weapons/      # Tactical Library art
   templates/             # UI pages
+load_live_roster.py      # apply roster to an existing database
 ```
 
 Reference FOSC template (optional):  

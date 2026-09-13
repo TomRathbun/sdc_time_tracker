@@ -54,7 +54,8 @@
                     <div>
                         <label for="emp-pin" class="block text-xs text-gray-500 mb-1">PIN</label>
                         <input type="text" name="pin" id="emp-pin" required class="form-input font-mono"
-                            placeholder="e.g. 1234" maxlength="8" pattern="[0-9]+" autocomplete="off">
+                            placeholder="e.g. 1234" maxlength="8" pattern="[0-9]+"
+                            autocomplete="one-time-code" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
                     </div>
                     <div>
                         <label for="emp-role" class="block text-xs text-gray-500 mb-1">Role</label>
@@ -298,7 +299,8 @@
                     <label class="block text-xs text-gray-500 mb-1">Reset PIN <span class="text-gray-600">(leave blank
                             to keep current)</span></label>
                     <input type="text" name="reset_pin" id="edit-pin" class="form-input font-mono" placeholder="New PIN"
-                        maxlength="8" pattern="[0-9]*" autocomplete="off">
+                        maxlength="8" pattern="[0-9]*"
+                        autocomplete="one-time-code" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
                 </div>
             </div>
             <div class="flex gap-3 mt-6">
