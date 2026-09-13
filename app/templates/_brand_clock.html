@@ -1,7 +1,8 @@
 {# Live radar clock. Set brand_size: hero | nav | mid before including. #}
 {% set sz = brand_size|default('hero') %}
-<div class="brand-clock brand-clock--{{ sz }}" aria-hidden="true" title="Abu Dhabi time">
-    <svg class="brand-clock-svg" viewBox="0 0 100 100" role="img">
+{% if sz == 'nav' %}{% set px = 48 %}{% elif sz == 'mid' %}{% set px = 64 %}{% else %}{% set px = 80 %}{% endif %}
+<div class="brand-clock brand-clock--{{ sz }}" style="width:{{ px }}px;height:{{ px }}px;overflow:hidden;flex-shrink:0;" aria-hidden="true" title="Abu Dhabi time">
+    <svg class="brand-clock-svg" viewBox="0 0 100 100" width="{{ px }}" height="{{ px }}" role="img">
         <defs>
             <radialGradient id="bc-face-{{ sz }}" cx="50%" cy="42%" r="70%">
                 <stop offset="0%" stop-color="#163056" />
@@ -44,9 +45,15 @@
             {% endfor %}
         </g>
         <g class="bc-hands">
-            <line class="bc-hour" x1="50" y1="50" x2="50" y2="30" stroke="#f3e2a7" stroke-width="3.2" stroke-linecap="round" />
-            <line class="bc-minute" x1="50" y1="50" x2="50" y2="22" stroke="#e2e8f0" stroke-width="2.1" stroke-linecap="round" />
-            <line class="bc-second" x1="50" y1="54" x2="50" y2="16" stroke="#7dd3fc" stroke-width="1.1" stroke-linecap="round" />
+            <g class="bc-hour">
+                <line x1="50" y1="50" x2="50" y2="30" stroke="#f3e2a7" stroke-width="3.2" stroke-linecap="round" />
+            </g>
+            <g class="bc-minute">
+                <line x1="50" y1="50" x2="50" y2="22" stroke="#e2e8f0" stroke-width="2.1" stroke-linecap="round" />
+            </g>
+            <g class="bc-second">
+                <line x1="50" y1="54" x2="50" y2="16" stroke="#7dd3fc" stroke-width="1.4" stroke-linecap="round" />
+            </g>
             <circle cx="50" cy="50" r="3.2" fill="#f3e2a7" />
             <circle cx="50" cy="50" r="1.4" fill="#0b1220" />
         </g>

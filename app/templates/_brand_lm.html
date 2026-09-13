@@ -1,9 +1,11 @@
 {# Intercept GIF + gold star. Set brand_size: hero | nav | mid before including. #}
 {% set sz = brand_size|default('hero') %}
-<div class="lm-mark lm-mark--{{ sz }}" title="Air and missile defense">
+{% if sz == 'nav' %}{% set px = 48 %}{% elif sz == 'mid' %}{% set px = 64 %}{% else %}{% set px = 80 %}{% endif %}
+{% set star_px = (px * 0.68)|int %}
+<div class="lm-mark lm-mark--{{ sz }}" style="width:{{ px }}px;height:{{ px }}px;overflow:hidden;flex-shrink:0;position:relative;" title="Air and missile defense">
     <picture>
-        <source srcset="/static/images/lm_intercept.webp?v=1" type="image/webp">
-        <img class="lm-mark-gif" src="/static/images/lm_intercept.gif?v=1" alt="" width="160" height="160">
+        <source srcset="/static/images/lm_intercept.webp?v=5" type="image/webp">
+        <img class="lm-mark-gif" src="/static/images/lm_intercept.gif?v=5" alt="" width="{{ px }}" height="{{ px }}">
     </picture>
-    <img class="lm-mark-star" src="/static/images/lm_star_clear.png?v=1" alt="Lockheed Martin">
+    <img class="lm-mark-star" src="/static/images/lm_star_clear.png?v=1" alt="Lockheed Martin" width="{{ star_px }}" height="{{ star_px }}">
 </div>

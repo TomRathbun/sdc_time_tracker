@@ -7,8 +7,8 @@
     <meta name="description" content="SDC Time Tracker — Electronic Time and Attendance System">
     <title>{% block title %}SDC Time Tracker{% endblock %}</title>
 
-    <!-- Tailwind CSS via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (local copy — Opera/trackers often block the CDN) -->
+    <script src="/static/js/tailwindcdn.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -41,11 +41,11 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
 
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <!-- HTMX (local) -->
+    <script src="/static/js/htmx.min.js"></script>
 
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="/static/css/app.css?v=12">
+    <link rel="stylesheet" href="/static/css/app.css?v=14">
     <link rel="icon" type="image/png" href="/static/images/app_icon.png?v=7">
 
     <style>
@@ -276,7 +276,7 @@
 
     {% block modals %}{% endblock %}
 
-    <script src="/static/js/app.js?v=8"></script>
+    <script src="/static/js/app.js?v=9"></script>
     <script src="/static/js/onscreen_input.js?v=5"></script>
 
     <!-- Tab Session Sync — Prevents "confused" tabs when multiple users log in -->

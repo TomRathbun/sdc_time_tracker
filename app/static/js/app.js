@@ -118,7 +118,8 @@ document.addEventListener('DOMContentLoaded', () => {
         var h = parseInt(map.hour, 10);
         var m = parseInt(map.minute, 10);
         var s = parseInt(map.second, 10);
-        var sDeg = s * 6;
+        var ms = now.getMilliseconds();
+        var sDeg = s * 6 + ms * 0.006;
         var mDeg = m * 6 + s * 0.1;
         var hDeg = ((h % 12) * 30) + m * 0.5;
         clocks.forEach(function (svg) {
@@ -131,5 +132,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     updateBrandClocks();
-    setInterval(updateBrandClocks, 1000);
+    setInterval(updateBrandClocks, 100);
 });

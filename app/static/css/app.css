@@ -810,12 +810,9 @@
     animation: radar-sweep 4.5s linear infinite;
 }
 
-.brand-clock-svg .bc-hour,
-.brand-clock-svg .bc-minute,
-.brand-clock-svg .bc-second {
-    transform-origin: 50px 50px;
-    transform-box: view-box;
-}
+/* Hands use SVG transform="rotate(deg 50 50)" only — CSS transform-origin
+   on <line> makes Chromium/Opera orbit the stroke bbox, so the second
+   hand is visible at 12 o'clock and clipped the rest of the way around. */
 
 .lm-mark-gif {
     display: block;
@@ -887,7 +884,7 @@
     }
 
     .lm-mark {
-        background-image: url('/static/images/lm_intercept_still.png');
+        background-image: url('/static/images/lm_intercept_still.png?v=5');
         background-size: cover;
         background-position: center;
     }
