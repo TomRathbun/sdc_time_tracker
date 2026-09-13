@@ -91,45 +91,27 @@ async def startup():
 
 
 def _seed_default_data():
-    """Create default manager account if no employees exist."""
+    """Create the live roster if the database has no employees yet."""
     from app.database import SessionLocal
-    from app.models import Employee, Role
+    from app.models import Employee
     from app.auth import hash_pin
+    from app.live_roster import LIVE_ROSTER, INITIAL_PIN
 
     db = SessionLocal()
     try:
-        count = db.query(Employee).count()
-        if count == 0:
-            # Create a default manager
-            manager = Employee(
-                name="Admin Manager",
-                pin_hash=hash_pin("1234"),
-                role=Role.manager,
-                is_active=True,
-            )
-            db.add(manager)
-
-            # Create some sample employees
-            emp1 = Employee(
-                name="John Smith",
-                pin_hash=hash_pin("5678"),
-                role=Role.employee,
-                is_active=True,
-            )
-            emp2 = Employee(
-                name="Sarah Johnson",
-                pin_hash=hash_pin("9012"),
-                role=Role.supervisor,
-                is_active=True,
-            )
-            emp3 = Employee(
-                name="Ahmed Al-Rashid",
-                pin_hash=hash_pin("3456"),
-                role=Role.employee,
-                is_active=True,
-            )
-            db.add_all([emp1, emp2, emp3])
+        if db.query(Employee).count() == 0:
+            pin_hash = hash_pin(INITIAL_PIN)
+            db.add_all([
+                Employee(
+                    name=name,
+                    pin_hash=pin_hash,
+                    role=role,
+                    is_active=True,
+                    pin_needs_reset=True,
+                )
+                for name, role in LIVE_ROSTER
+            ])
             db.commit()
-            print("✅ Seeded default employees (Manager PIN: 1234, Supervisor PIN: 9012)")
+            print(f"Seeded {len(LIVE_ROSTER)} live employees (PIN {INITIAL_PIN}, change on first login)")
     finally:
         db.close()
