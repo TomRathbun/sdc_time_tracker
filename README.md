@@ -61,6 +61,10 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 
 ## Installation
 
+**New kiosk/server PC (Windows or RHEL):** follow **[INSTALL.md](INSTALL.md)** — clone, `uv sync`, firewall, first start, auto-start, Tailscale, backups.
+
+Quick local install:
+
 ```bash
 cd sdc_time_tracker
 uv sync
@@ -156,6 +160,7 @@ app/
     images/weapons/      # Tactical Library art
   templates/             # UI pages
 load_live_roster.py      # apply roster to an existing database
+INSTALL.md               # Windows / RHEL server install
 ```
 
 Reference FOSC template (optional):  
