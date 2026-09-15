@@ -111,6 +111,107 @@ async def export_fosc_quarterly(
     )
 
 
+def _truthy(val: str | None, default: bool = False) -> bool:
+    if val is None:
+        return default
+    return str(val).strip().lower() in {"1", "true", "yes", "on"}
+
+
+@router.get("/reports/vacation-schedule", response_class=HTMLResponse)
+async def vacation_schedule_page(
+    request: Request,
+    year: int = Query(None),
+    quarter: str = Query(""),
+    pending: str = Query("0"),
+    holidays: str = Query("1"),
+    db: Session = Depends(get_db),
+):
+    """Printable projected vacation schedule for the customer."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    if year is None:
+        year = today.year
+    q = None
+    if quarter and str(quarter).isdigit():
+        qi = int(quarter)
+        if 1 <= qi <= 4:
+            q = qi
+    include_pending = _truthy(pending, False)
+    include_holidays = _truthy(holidays, True)
+
+    from app.services.vacation_schedule import build_vacation_schedule
+
+    schedule = build_vacation_schedule(
+        db,
+        year,
+        q,
+        include_pending=include_pending,
+        include_holidays=include_holidays,
+        prepared_by=employee.name,
+        as_of=today,
+    )
+    return templates.TemplateResponse("vacation_schedule.html", {
+        "request": request,
+        "employee": employee,
+        "schedule": schedule,
+        "year": year,
+        "quarter": q,
+        "include_pending": include_pending,
+        "include_holidays": include_holidays,
+    })
+
+
+@router.get("/reports/export/vacation-schedule")
+async def export_vacation_schedule(
+    request: Request,
+    year: int = Query(None),
+    quarter: str = Query(""),
+    pending: str = Query("0"),
+    holidays: str = Query("1"),
+    db: Session = Depends(get_db),
+):
+    """Excel of the projected vacation schedule (cover + roster + coverage)."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    if year is None:
+        year = today.year
+    q = None
+    if quarter and str(quarter).isdigit():
+        qi = int(quarter)
+        if 1 <= qi <= 4:
+            q = qi
+
+    from app.services.vacation_schedule import (
+        build_vacation_schedule,
+        build_vacation_schedule_workbook,
+    )
+
+    schedule = build_vacation_schedule(
+        db,
+        year,
+        q,
+        include_pending=_truthy(pending, False),
+        include_holidays=_truthy(holidays, True),
+        prepared_by=employee.name,
+        as_of=today,
+    )
+    buf = build_vacation_schedule_workbook(schedule)
+    period = "Q" + str(q) if q else "FY"
+    filename = f"FOSC_{period}_{year}_Projected_Vacation_Schedule.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+
 @router.get("/reports/tempo", response_class=HTMLResponse)
 async def tempo_import_page(
     request: Request,

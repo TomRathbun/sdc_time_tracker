@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}Projected Vacation Schedule — SDC Time Tracker{% endblock %}
+
+{% block head %}
+<style>
+    .vac-toolbar { }
+    .vac-paper {
+        background: #f7f4ee;
+        color: #1a1f2b;
+        border-radius: 4px;
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+    }
+    .vac-paper h1, .vac-paper h2, .vac-paper h3, .vac-paper p, .vac-paper th, .vac-paper td, .vac-paper li, .vac-paper span, .vac-paper div {
+        color: inherit;
+    }
+    .vac-rule { height: 3px; background: #1b2a4a; }
+    .vac-rule-gold { height: 1px; background: #8a7a4b; }
+    .vac-table { width: 100%; border-collapse: collapse; }
+    .vac-table th {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #5c5648;
+        border-bottom: 1px solid #c5c0b5;
+        padding: 8px 8px;
+        text-align: left;
+        font-weight: 600;
+    }
+    .vac-table td {
+        padding: 7px 8px;
+        border-bottom: 1px solid #e4dfd4;
+        font-size: 12px;
+        vertical-align: top;
+    }
+    .vac-badge {
+        display: inline-block;
+        font-size: 9px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        padding: 2px 6px;
+        border: 1px solid #c5c0b5;
+        border-radius: 2px;
+    }
+    .vac-badge-approved { background: #e8eee6; color: #2d4a32; border-color: #b7c7b4; }
+    .vac-badge-pending { background: #f4e6c4; color: #6a4e12; border-color: #d8c48a; }
+    .vac-badge-holiday { background: #d9e6f2; color: #1b2a4a; border-color: #adc0d4; }
+    .gantt-track { position: relative; height: 22px; background: repeating-linear-gradient(90deg, #efebe3 0, #efebe3 calc(var(--gutter, 8.33%) - 1px), #e0dbd0 calc(var(--gutter, 8.33%) - 1px), #e0dbd0 var(--gutter, 8.33%)); }
+    .gantt-bar {
+        position: absolute;
+        top: 3px;
+        height: 16px;
+        border-radius: 2px;
+        font-size: 9px;
+        line-height: 16px;
+        padding: 0 4px;
+        overflow: hidden;
+        white-space: nowrap;
+        color: #f7f4ee;
+        background: #1b2a4a;
+    }
+    .gantt-bar.pending {
+        background: repeating-linear-gradient(135deg, #6a5a2a, #6a5a2a 4px, #8a7a4b 4px, #8a7a4b 8px);
+        color: #f7f4ee;
+    }
+    .gantt-bar.holiday {
+        background: #4a6a88;
+    }
+    .sig-line { border-bottom: 1px solid #1a1f2b; height: 28px; }
+    @media print {
+        nav, .collage-bg, .scanlines, .tz-clock-panel, #mobile-menu, .no-print { display: none !important; }
+        body { background: white !important; color: #1a1f2b !important; }
+        main { padding: 0 !important; max-width: none !important; margin: 0 !important; }
+        .vac-paper {
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            background: white !important;
+        }
+        .vac-page-break { page-break-before: always; }
+        @page { size: A4 landscape; margin: 10mm; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="no-print mb-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Projected vacation schedule</h1>
+            <p class="text-gray-400 mt-1 text-sm">Printable customer copy of approved (and optional pending) leave for the FOSC in-country team.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="/reports/export/vacation-schedule?year={{ year }}{% if quarter %}&quarter={{ quarter }}{% endif %}&pending={{ 1 if include_pending else 0 }}&holidays={{ 1 if include_holidays else 0 }}"
+               class="btn-secondary px-4" id="btn-export-vac-xlsx">Download Excel</a>
+            <button type="button" onclick="window.print()" class="btn-primary px-5" id="btn-print-vac">
+                Print customer copy
+            </button>
+        </div>
+    </div>
+
+    <form method="GET" action="/reports/vacation-schedule" class="no-print glass-card p-4 mb-6 flex flex-wrap items-end gap-4">
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Year</label>
+            <input type="number" name="year" min="2020" max="2100" value="{{ year }}" class="form-input font-mono text-sm w-28">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Period</label>
+            <select name="quarter" class="form-select text-sm w-40">
+                <option value="" {% if not quarter %}selected{% endif %}>Full year</option>
+                {% for q in [1, 2, 3, 4] %}
+                <option value="{{ q }}" {% if quarter == q %}selected{% endif %}>Q{{ q }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Pending requests</label>
+            <select name="pending" class="form-select text-sm w-56">
+                <option value="0" {% if not include_pending %}selected{% endif %}>Approved only (customer copy)</option>
+                <option value="1" {% if include_pending %}selected{% endif %}>Include pending</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">UAE holidays</label>
+            <select name="holidays" class="form-select text-sm w-48">
+                <option value="1" {% if include_holidays %}selected{% endif %}>Show holidays</option>
+                <option value="0" {% if not include_holidays %}selected{% endif %}>Vacation only</option>
+            </select>
+        </div>
+        <button type="submit" class="btn-secondary px-4">Update preview</button>
+    </form>
+
+    <article class="vac-paper p-8 sm:p-10" id="vacation-print-doc">
+        <header>
+            <p class="text-[10px] tracking-[0.28em] uppercase text-[#8a7a4b] font-semibold">{{ schedule.contract }}</p>
+            <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-2 mb-3">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1b2a4a]">{{ schedule.title }}</h1>
+                    <p class="text-sm text-[#5c5648] mt-1">{{ schedule.program }} · {{ schedule.period.label }}</p>
+                </div>
+                <div class="text-xs text-[#5c5648] sm:text-right font-mono">
+                    <p>{{ schedule.period.span_label }}</p>
+                    <p>Issued {{ schedule.as_of.strftime("%d %b %Y") }}</p>
+                    {% if schedule.prepared_by %}<p>Prepared by {{ schedule.prepared_by }}</p>{% endif %}
+                </div>
+            </div>
+            <div class="vac-rule"></div>
+            <div class="vac-rule-gold mt-[3px]"></div>
+        </header>
+
+        <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-5 text-[#1a1f2b]">
+            <div class="border border-[#e4dfd4] p-3">
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Active staff</p>
+                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.staff_count }}</p>
+            </div>
+            <div class="border border-[#e4dfd4] p-3">
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Leave periods</p>
+                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.trip_count }}</p>
+            </div>
+            <div class="border border-[#e4dfd4] p-3">
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Peak concurrent</p>
+                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.peak_count }}</p>
+            </div>
+            <div class="border border-[#e4dfd4] p-3">
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Overlap workdays</p>
+                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.overlap_count }}</p>
+            </div>
+        </section>
+
+        <p class="text-xs text-[#5c5648] mb-4">
+            {% if include_pending %}
+            This copy includes <strong>pending</strong> requests (gold / hatched). Remove the pending filter before handing to the customer if only approved leave should appear.
+            {% else %}
+            Customer copy — <strong>approved leave only</strong>. Full-day FOSC vacation (9h Mon–Thu, 4h Friday). UAE national holidays are shown separately when enabled.
+            {% endif %}
+            {% if schedule.peak_days %}
+            Peak coverage: {{ schedule.peak_count }} staff on {{ schedule.peak_days[0].strftime("%d %b %Y") }}{% if schedule.peak_days|length > 1 %} and {{ schedule.peak_days|length - 1 }} other day(s){% endif %}.
+            {% endif %}
+        </p>
+
+        <h2 class="text-sm font-semibold tracking-[0.14em] uppercase text-[#1b2a4a] mb-2">Roster</h2>
+        <div class="overflow-x-auto">
+            <table class="vac-table">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Role</th>
+                        <th>Period</th>
+                        <th>Type</th>
+                        <th>Workdays</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for emp in schedule.roster %}
+                        {% if emp.trips %}
+                            {% for trip in emp.trips %}
+                            <tr>
+                                <td class="font-medium">{% if loop.first %}{{ emp.name }}{% endif %}</td>
+                                <td class="capitalize text-[#5c5648]">{% if loop.first %}{{ emp.role }}{% endif %}</td>
+                                <td class="font-mono text-[11px]">{{ trip.clipped_start.strftime("%d %b %Y") }} – {{ trip.clipped_end.strftime("%d %b %Y") }}</td>
+                                <td>{{ trip.leave_type.replace('_', ' ') | title }}</td>
+                                <td class="font-mono">{{ trip.workdays }}</td>
+                                <td>
+                                    <span class="vac-badge {% if trip.status == 'pending' %}vac-badge-pending{% elif trip.leave_type == 'uae_holiday' %}vac-badge-holiday{% else %}vac-badge-approved{% endif %}">{{ trip.status }}</span>
+                                </td>
+                                <td class="text-[#5c5648]">{{ trip.comments }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td class="font-medium">{{ emp.name }}</td>
+                                <td class="capitalize text-[#5c5648]">{{ emp.role }}</td>
+                                <td class="text-[#8a7a4b]" colspan="4">No projected vacation in this period</td>
+                                <td class="font-mono text-[#5c5648]">{{ emp.vacation_remaining }}d remaining</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if schedule.gantt_rows %}
+        <h2 class="text-sm font-semibold tracking-[0.14em] uppercase text-[#1b2a4a] mt-8 mb-2">Timeline</h2>
+        <div class="border border-[#e4dfd4]">
+            <div class="flex text-[10px] uppercase tracking-wider text-[#8a7a4b] border-b border-[#e4dfd4]">
+                <div class="w-40 shrink-0 px-2 py-1">Staff</div>
+                <div class="flex-1 relative h-6">
+                    {% for m in schedule.months %}
+                    <div class="absolute top-0 bottom-0 border-l border-[#e4dfd4] px-1 py-1" style="left: {{ m.left }}%; width: {{ m.width }}%;">{{ m.label }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% for emp in schedule.gantt_rows %}
+            <div class="flex items-stretch border-b border-[#e4dfd4] last:border-0">
+                <div class="w-40 shrink-0 px-2 py-1 text-xs font-medium truncate" title="{{ emp.name }}">{{ emp.name }}</div>
+                <div class="flex-1 gantt-track" style="--gutter: {{ (100 / schedule.months|length) if schedule.months else 8.33 }}%;">
+                    {% for trip in emp.trips %}
+                    <div class="gantt-bar {% if trip.status == 'pending' %}pending{% elif trip.leave_type == 'uae_holiday' %}holiday{% endif %}"
+                         style="left: {{ trip.left }}%; width: {{ trip.width }}%;"
+                         title="{{ trip.employee_name }} · {{ trip.bar_label }} · {{ trip.workdays }} workday(s)">
+                        {{ trip.bar_label }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-[10px] text-[#8a7a4b] mt-2">
+            Navy = approved vacation · Gold hatch = pending · Steel = UAE holiday. Timeline is the selected period only.
+        </p>
+        {% endif %}
+
+        {% if schedule.occupancy_hot %}
+        <h2 class="text-sm font-semibold tracking-[0.14em] uppercase text-[#1b2a4a] mt-8 mb-2">Coverage notes (2+ staff on leave)</h2>
+        <table class="vac-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>On leave</th>
+                    <th>Names</th>
+                    <th>On duty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in schedule.occupancy_hot %}
+                <tr>
+                    <td class="font-mono text-[11px]">{{ row.date.strftime("%a %d %b %Y") }}</td>
+                    <td class="font-mono">{{ row.count }}</td>
+                    <td>{{ row.names | join(", ") }}</td>
+                    <td class="font-mono">{{ row.on_duty }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        <section class="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-10 pt-4">
+            <div>
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Prepared by — SDC / FOSC timekeeping</p>
+                <div class="sig-line mt-6"></div>
+                <p class="text-xs text-[#5c5648] mt-1">Name / signature{% if schedule.prepared_by %} · {{ schedule.prepared_by }}{% endif %}</p>
+                <p class="text-xs text-[#5c5648]">Date: {{ schedule.as_of.strftime("%d %b %Y") }}</p>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Acknowledged by — Customer</p>
+                <div class="sig-line mt-6"></div>
+                <p class="text-xs text-[#5c5648] mt-1">Name / signature / office</p>
+                <p class="text-xs text-[#5c5648]">Date: ____________________</p>
+            </div>
+        </section>
+        <p class="text-[10px] text-[#8a7a4b] mt-8">
+            Working document for program coordination. Leave remains subject to operational requirements. Generated from SDC Time Tracker.
+        </p>
+    </article>
+</div>
+{% endblock %}

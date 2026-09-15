@@ -40,7 +40,7 @@ BEOD_MINIMUM_HOURS = 6.0
 
 # Application info
 APP_NAME = "SDC Time Tracker"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.2.0"
 
 # SMTP email settings (set via environment variables)
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
