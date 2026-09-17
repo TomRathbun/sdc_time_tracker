@@ -207,12 +207,11 @@ async def systems_engineering_page(request: Request, db: Session = Depends(get_d
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, db: Session = Depends(get_db)):
-    """Show employee list for login."""
-    # If already logged in, redirect to dashboard
-    emp = get_current_employee(request, db)
-    if emp:
-        return RedirectResponse(url="/", status_code=303)
+    """Show employee list for login.
 
+    Always serve the kiosk list — do not bounce an existing session to the
+    dashboard. Extra browser tabs need to keep taking PINs.
+    """
     employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
     status_map = _get_employee_status(db, employees)
     avg_times = _get_avg_times(db, employees)
@@ -254,11 +253,8 @@ def _get_random_weapon():
 
 @router.get("/login/{employee_id}", response_class=HTMLResponse)
 async def login_pin_page(employee_id: int, request: Request, db: Session = Depends(get_db)):
-    """Show PIN entry for a specific employee."""
-    emp = get_current_employee(request, db)
-    if emp:
-        return RedirectResponse(url="/", status_code=303)
-
+    """Show PIN entry for a specific employee. Keep this page even if another
+    tab already has a session cookie — otherwise the PIN field is wiped."""
     selected = db.query(Employee).filter(Employee.id == employee_id, Employee.is_active == True).first()
     if not selected:
         return RedirectResponse(url="/login", status_code=303)

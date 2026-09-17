@@ -279,27 +279,39 @@
     <script src="/static/js/app.js?v=9"></script>
     <script src="/static/js/onscreen_input.js?v=5"></script>
 
-    <!-- Tab Session Sync — Prevents "confused" tabs when multiple users log in -->
+    <!-- Tab session: never reload kiosk PIN pages. Guest tabs used to write
+         'guest' while a signed-in tab wrote the employee id, which ping-ponged
+         reloads and wiped PIN fields. -->
     <script>
             (function () {
-                const currentUserId = "{{ employee.id if employee else 'guest' }}";
-                const sessionKey = 'sdc_active_session_id';
+                var currentUserId = "{{ employee.id if employee else '' }}";
+                var sessionKey = 'sdc_active_session_id';
+                var path = location.pathname || '';
+                var isKiosk = path === '/login' || path.indexOf('/login/') === 0 || path === '/reset-pin';
 
-                // Set our state on load
-                localStorage.setItem(sessionKey, currentUserId);
+                function pinFieldActive() {
+                    var el = document.activeElement;
+                    if (!el || !el.matches) return false;
+                    return el.matches('#pin, #modal-pin, #new_pin, #confirm_pin, input[type="password"], input[data-numpad]');
+                }
 
-                // Listen for changes from other tabs
-                window.addEventListener('storage', (e) => {
-                    if (e.key === sessionKey && e.newValue !== currentUserId) {
-                        // Logic: If another tab switched users, we must reload to stay in sync
-                        // since cookies are shared across all tabs of the same origin.
-                        console.log('Session mismatch detected (expected ' + currentUserId + ', got ' + e.newValue + '). Syncing tab...');
-
-                        // Small delay to avoid race conditions with logout/login redirect sequences
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 100);
+                try {
+                    if (currentUserId) {
+                        localStorage.setItem(sessionKey, String(currentUserId));
+                    } else if (isKiosk) {
+                        // Do not broadcast 'guest' — that fights signed-in tabs.
                     }
+                } catch (err) { /* private mode */ }
+
+                window.addEventListener('storage', function (e) {
+                    if (e.key !== sessionKey) return;
+                    if (!e.newValue || e.newValue === currentUserId) return;
+                    // Extra kiosk tabs must keep their PIN field.
+                    if (isKiosk || !currentUserId || pinFieldActive()) return;
+                    setTimeout(function () {
+                        if (pinFieldActive()) return;
+                        window.location.reload();
+                    }, 250);
                 });
             })();
     </script>

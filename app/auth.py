@@ -54,8 +54,16 @@ def get_current_employee(request: Request, db: Session) -> Optional[Employee]:
         Employee.is_active == True
     ).first()
 
-    # Enforce PIN reset if required (skip for /reset-pin and /logout)
-    if employee and employee.pin_needs_reset and request.url.path not in ["/reset-pin", "/logout"]:
+    # Enforce PIN reset if required. Never hijack the kiosk login/PIN pages —
+    # extra tabs need to keep taking PINs for other people.
+    path = request.url.path or ""
+    if (
+        employee
+        and employee.pin_needs_reset
+        and path not in ("/reset-pin", "/logout")
+        and path != "/login"
+        and not path.startswith("/login/")
+    ):
         raise HTTPException(status_code=303, headers={"Location": "/reset-pin"})
 
     return employee
