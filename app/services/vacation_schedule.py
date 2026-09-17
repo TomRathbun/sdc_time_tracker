@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from io import BytesIO
 from typing import Iterable
+from calendar import monthrange
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -19,7 +20,12 @@ from app.services.leave_balance import count_workdays, get_leave_balance, iter_w
 
 CONTRACT_TITLE = "Follow-On Support Contract (FOSC)"
 DOCUMENT_TITLE = "Projected Vacation Schedule"
+NEXT_MONTH_TITLE = "Next Month of Team Leave"
 PROGRAM_LINE = "SDC In-Country Team"
+MONTH_NAMES = (
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+)
 
 
 @dataclass(frozen=True)
@@ -28,9 +34,20 @@ class Period:
     quarter: int | None
     start: date
     end: date
+    month: int | None = None
+
+    @property
+    def kind(self) -> str:
+        if self.month:
+            return "month"
+        if self.quarter:
+            return "quarter"
+        return "year"
 
     @property
     def label(self) -> str:
+        if self.month:
+            return f"{MONTH_NAMES[self.month - 1]} {self.year}"
         if self.quarter:
             return f"Q{self.quarter} {self.year}"
         return f"Calendar Year {self.year}"
@@ -43,12 +60,83 @@ class Period:
     def days(self) -> int:
         return (self.end - self.start).days + 1
 
+    @property
+    def file_slug(self) -> str:
+        if self.month:
+            return f"{MONTH_NAMES[self.month - 1][:3]}_{self.year}"
+        if self.quarter:
+            return f"Q{self.quarter}_{self.year}"
+        return f"FY_{self.year}"
 
-def resolve_period(year: int, quarter: int | None) -> Period:
+
+def next_calendar_month(as_of: date) -> date:
+    if as_of.month == 12:
+        return date(as_of.year + 1, 1, 1)
+    return date(as_of.year, as_of.month + 1, 1)
+
+
+def is_next_calendar_month(year: int, month: int | None, as_of: date) -> bool:
+    nxt = next_calendar_month(as_of)
+    return bool(month) and year == nxt.year and month == nxt.month
+
+
+def parse_period_params(
+    year: int | None,
+    quarter: str | int | None,
+    month: str | int | None,
+    period: str | None = None,
+    as_of: date | None = None,
+) -> tuple[int, int | None, int | None]:
+    """Resolve year/quarter/month from query params. No params → next calendar month."""
+    as_of = as_of or date.today()
+    token = (period or "").strip().lower()
+    if token == "next" or (not token and year is None and not quarter and not month):
+        nxt = next_calendar_month(as_of)
+        return nxt.year, None, nxt.month
+    if token.startswith("m-") and token[2:].isdigit():
+        mi = int(token[2:])
+        if 1 <= mi <= 12:
+            return (year or as_of.year), None, mi
+    if token.startswith("q-") and token[2:].isdigit():
+        qi = int(token[2:])
+        if 1 <= qi <= 4:
+            return (year or as_of.year), qi, None
+    if token == "y":
+        return (year or as_of.year), None, None
+
+    q = None
+    if quarter not in (None, ""):
+        try:
+            qi = int(quarter)
+            if 1 <= qi <= 4:
+                q = qi
+        except (TypeError, ValueError):
+            pass
+    m = None
+    if month not in (None, ""):
+        try:
+            mi = int(month)
+            if 1 <= mi <= 12:
+                m = mi
+        except (TypeError, ValueError):
+            pass
+    y = year if year is not None else as_of.year
+    if m:
+        return y, None, m
+    if q:
+        return y, q, None
+    return y, None, None
+
+
+def resolve_period(year: int, quarter: int | None, month: int | None = None) -> Period:
+    if month in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+        start = date(year, month, 1)
+        end = date(year, month, monthrange(year, month)[1])
+        return Period(year=year, quarter=None, start=start, end=end, month=month)
     if quarter in (1, 2, 3, 4):
         start, end = quarter_bounds(year, quarter)
-        return Period(year=year, quarter=quarter, start=start, end=end)
-    return Period(year=year, quarter=None, start=date(year, 1, 1), end=date(year, 12, 31))
+        return Period(year=year, quarter=quarter, start=start, end=end, month=None)
+    return Period(year=year, quarter=None, start=date(year, 1, 1), end=date(year, 12, 31), month=None)
 
 
 def _clip(start: date, end: date, period: Period) -> tuple[date, date] | None:
@@ -96,6 +184,33 @@ def _month_headers(period: Period) -> list[dict]:
     return months
 
 
+def _timeline_ticks(period: Period, as_of: date) -> list[dict]:
+    if period.kind != "month":
+        ticks = []
+        for m in _month_headers(period):
+            ticks.append({
+                **m,
+                "weekend": False,
+                "today": as_of.strftime("%Y-%m") == m["key"],
+            })
+        return ticks
+    ticks = []
+    for i in range(period.days):
+        d = period.start + timedelta(days=i)
+        left = _pct(d, period)
+        right = _pct(d, period, inclusive_end=True)
+        ticks.append({
+            "key": d.isoformat(),
+            "label": str(d.day),
+            "year": d.year,
+            "left": round(left, 3),
+            "width": round(max(0.0, right - left), 3),
+            "weekend": d.weekday() >= 5,
+            "today": d == as_of,
+        })
+    return ticks
+
+
 def _types(include_holidays: bool) -> list[LeaveType]:
     types = [LeaveType.vacation]
     if include_holidays:
@@ -115,13 +230,14 @@ def build_vacation_schedule(
     year: int,
     quarter: int | None = None,
     *,
+    month: int | None = None,
     include_pending: bool = False,
     include_holidays: bool = True,
     prepared_by: str | None = None,
     as_of: date | None = None,
 ) -> dict:
-    """Team projected vacation for a year or quarter, ready for print/Excel."""
-    period = resolve_period(year, quarter)
+    """Team projected vacation for a month, quarter, or year, ready for print/Excel."""
+    period = resolve_period(year, quarter, month)
     as_of = as_of or date.today()
     employees = (
         db.query(Employee)
@@ -207,6 +323,9 @@ def build_vacation_schedule(
 
     gantt_rows = [r for r in roster if r["trips"]]
     none_scheduled = [r["name"] for r in roster if not r["trips"]]
+    on_leave_count = len(gantt_rows)
+    next_month = is_next_calendar_month(year, period.month, as_of)
+    ticks = _timeline_ticks(period, as_of)
 
     occupancy_rows = [
         {
@@ -220,17 +339,22 @@ def build_vacation_schedule(
     ]
 
     return {
-        "title": DOCUMENT_TITLE,
+        "title": NEXT_MONTH_TITLE if next_month else DOCUMENT_TITLE,
         "contract": CONTRACT_TITLE,
         "program": PROGRAM_LINE,
         "period": period,
         "year": year,
         "quarter": period.quarter,
+        "month": period.month,
+        "is_next_month": next_month,
         "as_of": as_of,
         "prepared_by": prepared_by or "",
         "include_pending": include_pending,
         "include_holidays": include_holidays,
         "staff_count": len(employees),
+        "on_leave_count": on_leave_count,
+        "on_duty_count": len(employees) - on_leave_count,
+        "min_on_duty": len(employees) - peak_count,
         "trip_count": len(trips),
         "vacation_trip_count": sum(1 for t in trips if t["leave_type"] == LeaveType.vacation.value),
         "pending_count": sum(1 for t in trips if t["status"] == LeaveStatus.pending.value),
@@ -240,6 +364,8 @@ def build_vacation_schedule(
         "overlap_days": overlap_days,
         "overlap_count": len(overlap_days),
         "months": _month_headers(period),
+        "ticks": ticks,
+        "tick_kind": "day" if period.kind == "month" else "month",
         "trips": trips,
         "roster": roster,
         "gantt_rows": gantt_rows,
@@ -291,7 +417,7 @@ def build_vacation_schedule_workbook(schedule: dict) -> BytesIO:
     cover = wb.active
     cover.title = "Cover"
     cover.merge_cells("A1:F1")
-    cover["A1"] = DOCUMENT_TITLE
+    cover["A1"] = schedule.get("title") or DOCUMENT_TITLE
     cover["A1"].font = title_font
     cover["A1"].fill = navy
     cover["A1"].alignment = Alignment(horizontal="left", vertical="center")
@@ -302,13 +428,15 @@ def build_vacation_schedule_workbook(schedule: dict) -> BytesIO:
     cover["A6"] = f"Issued: {schedule['as_of'].strftime('%d %b %Y')}"
     if schedule.get("prepared_by"):
         cover["A7"] = f"Prepared by: {schedule['prepared_by']}"
-    cover["A9"] = f"Active staff: {schedule['staff_count']}"
+    cover["A9"] = f"On leave: {schedule.get('on_leave_count', schedule['staff_count'])} of {schedule['staff_count']}"
     cover["A10"] = f"Vacation periods in window: {schedule['vacation_trip_count']}"
     cover["A11"] = f"Peak concurrent leave: {schedule['peak_count']} staff"
     cover["A12"] = f"Peak dates: {format_date_list(schedule['peak_days'])}"
     cover["A13"] = f"Days with 2+ staff on leave: {schedule['overlap_count']}"
     if schedule["include_pending"]:
         cover["A15"] = "Includes pending requests (not yet approved)."
+    elif schedule.get("is_next_month"):
+        cover["A15"] = "Customer copy — next month of approved team leave."
     else:
         cover["A15"] = "Approved leave only (customer copy)."
     cover["A17"] = "Prepared by (SDC):"
@@ -329,8 +457,11 @@ def build_vacation_schedule_workbook(schedule: dict) -> BytesIO:
     ws.row_dimensions[1].height = 22
 
     row = 2
+    compact = period.kind == "month"
     for emp in schedule["roster"]:
         if not emp["trips"]:
+            if compact:
+                continue
             values = [
                 emp["name"], emp["role"], "—", "—", "—", "—", 0, "No projected vacation",
                 emp["vacation_remaining"],

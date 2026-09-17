@@ -14,6 +14,8 @@ from app.models import Employee, LeaveRequest, LeaveStatus, LeaveType, Role
 from app.services.vacation_schedule import (
     build_vacation_schedule,
     build_vacation_schedule_workbook,
+    next_calendar_month,
+    parse_period_params,
     resolve_period,
 )
 
@@ -68,6 +70,45 @@ class VacationScheduleTests(unittest.TestCase):
         p = resolve_period(2026, None)
         self.assertEqual(p.start, date(2026, 1, 1))
         self.assertEqual(p.end, date(2026, 12, 31))
+
+    def test_month_bounds(self):
+        p = resolve_period(2026, None, 10)
+        self.assertEqual(p.kind, "month")
+        self.assertEqual(p.start, date(2026, 10, 1))
+        self.assertEqual(p.end, date(2026, 10, 31))
+        self.assertEqual(p.label, "October 2026")
+        self.assertEqual(p.file_slug, "Oct_2026")
+        self.assertEqual(p.days, 31)
+
+    def test_next_calendar_month_and_parse_default(self):
+        self.assertEqual(next_calendar_month(date(2026, 9, 17)), date(2026, 10, 1))
+        self.assertEqual(next_calendar_month(date(2026, 12, 31)), date(2027, 1, 1))
+        y, q, m = parse_period_params(None, "", "", "", date(2026, 9, 17))
+        self.assertEqual((y, q, m), (2026, None, 10))
+        y, q, m = parse_period_params(2026, "", "", "next", date(2026, 9, 17))
+        self.assertEqual((y, q, m), (2026, None, 10))
+        y, q, m = parse_period_params(2026, "4", "", "", date(2026, 9, 17))
+        self.assertEqual((y, q, m), (2026, 4, None))
+        y, q, m = parse_period_params(2026, "", "", "m-11", date(2026, 9, 17))
+        self.assertEqual((y, q, m), (2026, None, 11))
+
+    def test_month_view_clips_and_compact_roster(self):
+        self._leave(self.tom, date(2026, 9, 28), date(2026, 10, 2), comments="US trip")
+        self._leave(self.omar, date(2026, 11, 8), date(2026, 11, 12))
+        sched = build_vacation_schedule(
+            self.db, 2026, None, month=10, include_holidays=False, as_of=date(2026, 9, 17)
+        )
+        self.assertTrue(sched["is_next_month"])
+        self.assertEqual(sched["tick_kind"], "day")
+        self.assertEqual(len(sched["ticks"]), 31)
+        self.assertEqual(sched["on_leave_count"], 1)
+        trips = sched["trips"]
+        self.assertEqual(len(trips), 1)
+        self.assertEqual(trips[0]["clipped_start"], date(2026, 10, 1))
+        self.assertEqual(trips[0]["clipped_end"], date(2026, 10, 2))
+        self.assertIn("Omar Eldeeb", sched["none_scheduled"])
+        self.assertIn("Manoj Nada", sched["none_scheduled"])
+        self.assertEqual(sched["title"], "Next Month of Team Leave")
 
     def test_clips_to_quarter_and_counts_workdays(self):
         # Mon 28 Sep – Fri 2 Oct 2026 spans Q3/Q4. Q4 clip is Thu 1 Oct + Fri 2 Oct = 2 workdays.

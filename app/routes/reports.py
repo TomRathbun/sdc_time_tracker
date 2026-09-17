@@ -122,46 +122,76 @@ async def vacation_schedule_page(
     request: Request,
     year: int = Query(None),
     quarter: str = Query(""),
+    month: str = Query(""),
+    period: str = Query(""),
     pending: str = Query("0"),
     holidays: str = Query("1"),
     db: Session = Depends(get_db),
 ):
-    """Printable projected vacation schedule for the customer."""
+    """Printable projected vacation schedule for the customer (defaults to next month)."""
     employee = get_current_employee(request, db)
     if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
     today = date.today()
-    if year is None:
-        year = today.year
-    q = None
-    if quarter and str(quarter).isdigit():
-        qi = int(quarter)
-        if 1 <= qi <= 4:
-            q = qi
+    from app.services.vacation_schedule import (
+        MONTH_NAMES,
+        build_vacation_schedule,
+        next_calendar_month,
+        parse_period_params,
+    )
+
+    year, q, m = parse_period_params(year, quarter, month, period, today)
     include_pending = _truthy(pending, False)
     include_holidays = _truthy(holidays, True)
-
-    from app.services.vacation_schedule import build_vacation_schedule
 
     schedule = build_vacation_schedule(
         db,
         year,
         q,
+        month=m,
         include_pending=include_pending,
         include_holidays=include_holidays,
         prepared_by=employee.name,
         as_of=today,
     )
+    nxt = next_calendar_month(today)
+    if schedule["is_next_month"]:
+        period_value = "next"
+    elif m:
+        period_value = f"m-{m}"
+    elif q:
+        period_value = f"q-{q}"
+    else:
+        period_value = "y"
     return templates.TemplateResponse("vacation_schedule.html", {
         "request": request,
         "employee": employee,
         "schedule": schedule,
         "year": year,
         "quarter": q,
+        "month": m,
+        "period_value": period_value,
+        "month_names": MONTH_NAMES,
+        "next_month_label": f"{MONTH_NAMES[nxt.month - 1]} {nxt.year}",
         "include_pending": include_pending,
         "include_holidays": include_holidays,
+        "export_qs": _vac_export_qs(year, q, m, include_pending, include_holidays, period_value),
     })
+
+
+def _vac_export_qs(year, quarter, month, pending, holidays, period_value) -> str:
+    parts = [
+        f"year={year}",
+        f"period={period_value}",
+        f"pending={1 if pending else 0}",
+        f"holidays={1 if holidays else 0}",
+    ]
+    if quarter:
+        parts.append(f"quarter={quarter}")
+    if month:
+        parts.append(f"month={month}")
+    return "&".join(parts)
 
 
 @router.get("/reports/export/vacation-schedule")
@@ -169,6 +199,8 @@ async def export_vacation_schedule(
     request: Request,
     year: int = Query(None),
     quarter: str = Query(""),
+    month: str = Query(""),
+    period: str = Query(""),
     pending: str = Query("0"),
     holidays: str = Query("1"),
     db: Session = Depends(get_db),
@@ -179,31 +211,25 @@ async def export_vacation_schedule(
         return RedirectResponse(url="/login", status_code=303)
 
     today = date.today()
-    if year is None:
-        year = today.year
-    q = None
-    if quarter and str(quarter).isdigit():
-        qi = int(quarter)
-        if 1 <= qi <= 4:
-            q = qi
-
     from app.services.vacation_schedule import (
         build_vacation_schedule,
         build_vacation_schedule_workbook,
+        parse_period_params,
     )
 
+    year, q, m = parse_period_params(year, quarter, month, period, today)
     schedule = build_vacation_schedule(
         db,
         year,
         q,
+        month=m,
         include_pending=_truthy(pending, False),
         include_holidays=_truthy(holidays, True),
         prepared_by=employee.name,
         as_of=today,
     )
     buf = build_vacation_schedule_workbook(schedule)
-    period = "Q" + str(q) if q else "FY"
-    filename = f"FOSC_{period}_{year}_Projected_Vacation_Schedule.xlsx"
+    filename = f"FOSC_{schedule['period'].file_slug}_Projected_Vacation_Schedule.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

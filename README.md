@@ -20,7 +20,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - **Leave types** — vacation, sick, COVID sick, UAE national holiday  
   Full leave day = target hours for that weekday (9h or 4h Friday)
 - **Leave balances** — defaults (e.g. 30 vacation / 10 sick) with pending requests reserving days
-- **Projected vacation schedule** — printable customer copy + Excel (`/reports/vacation-schedule`): roster, timeline, coverage overlap, signature block. Approved-only by default; pending optional.
+- **Projected vacation schedule** — printable customer copy + Excel (`/reports/vacation-schedule`): defaults to the **next calendar month** of team leave (day timeline, coverage overlap, signature block). Quarters/year still available. Approved-only by default; pending optional.
 - **Declared vs submission** — when declared time differs from device submission beyond a threshold, the employee picks a **canned reason** (or Other). Managers see the reason on hover, then **Approve** (keep declared time) or **Reject** (revert to actual punch time). Reasons are configurable in Admin → Configuration.
 
 ### Manager / admin

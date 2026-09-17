@@ -66,6 +66,22 @@
     .gantt-bar.holiday {
         background: #4a6a88;
     }
+    .gantt-day .gantt-tick {
+        font-family: ui-monospace, monospace;
+        font-size: 9px;
+        letter-spacing: 0;
+        text-transform: none;
+        text-align: center;
+        padding: 6px 0;
+    }
+    .gantt-day .gantt-tick.weekend {
+        color: #5c5648;
+        background: rgba(197, 192, 181, 0.28);
+    }
+    .gantt-day .gantt-track-wrap,
+    .gantt-day .gantt-track {
+        min-width: 720px;
+    }
     .sig-line { border-bottom: 1px solid #1a1f2b; height: 28px; }
     @media print {
         nav, .collage-bg, .scanlines, .tz-clock-panel, #mobile-menu, .no-print { display: none !important; }
@@ -86,11 +102,11 @@
 <div class="max-w-6xl mx-auto">
     <div class="no-print mb-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-white">Projected vacation schedule</h1>
-            <p class="text-gray-400 mt-1 text-sm">Printable customer copy of approved (and optional pending) leave for the FOSC in-country team.</p>
+            <h1 class="text-2xl font-bold text-white">{% if schedule.is_next_month %}Next month of team leave{% else %}Projected vacation schedule{% endif %}</h1>
+            <p class="text-gray-400 mt-1 text-sm">Printable customer copy of the next month of approved team leave for the FOSC in-country team.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <a href="/reports/export/vacation-schedule?year={{ year }}{% if quarter %}&quarter={{ quarter }}{% endif %}&pending={{ 1 if include_pending else 0 }}&holidays={{ 1 if include_holidays else 0 }}"
+            <a href="/reports/export/vacation-schedule?{{ export_qs }}"
                class="btn-secondary px-4" id="btn-export-vac-xlsx">Download Excel</a>
             <button type="button" onclick="window.print()" class="btn-primary px-5" id="btn-print-vac">
                 Print customer copy
@@ -105,11 +121,21 @@
         </div>
         <div>
             <label class="block text-xs text-gray-500 mb-1">Period</label>
-            <select name="quarter" class="form-select text-sm w-40">
-                <option value="" {% if not quarter %}selected{% endif %}>Full year</option>
-                {% for q in [1, 2, 3, 4] %}
-                <option value="{{ q }}" {% if quarter == q %}selected{% endif %}>Q{{ q }}</option>
-                {% endfor %}
+            <select name="period" class="form-select text-sm w-56">
+                <optgroup label="Customer copy">
+                    <option value="next" {% if period_value == 'next' %}selected{% endif %}>Next month — {{ next_month_label }}</option>
+                </optgroup>
+                <optgroup label="Months {{ year }}">
+                    {% for name in month_names %}
+                    <option value="m-{{ loop.index }}" {% if period_value == 'm-' ~ loop.index %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </optgroup>
+                <optgroup label="Quarters / year">
+                    {% for q in [1, 2, 3, 4] %}
+                    <option value="q-{{ q }}" {% if period_value == 'q-' ~ q %}selected{% endif %}>Q{{ q }}</option>
+                    {% endfor %}
+                    <option value="y" {% if period_value == 'y' %}selected{% endif %}>Full year</option>
+                </optgroup>
             </select>
         </div>
         <div>
@@ -135,7 +161,7 @@
             <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mt-2 mb-3">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-[#1b2a4a]">{{ schedule.title }}</h1>
-                    <p class="text-sm text-[#5c5648] mt-1">{{ schedule.program }} · {{ schedule.period.label }}</p>
+                    <p class="text-sm text-[#5c5648] mt-1">{{ schedule.program }} · {{ schedule.period.label }}{% if schedule.is_next_month %} · customer copy{% endif %}</p>
                 </div>
                 <div class="text-xs text-[#5c5648] sm:text-right font-mono">
                     <p>{{ schedule.period.span_label }}</p>
@@ -149,8 +175,9 @@
 
         <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 my-5 text-[#1a1f2b]">
             <div class="border border-[#e4dfd4] p-3">
-                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Active staff</p>
-                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.staff_count }}</p>
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">On leave</p>
+                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.on_leave_count }}</p>
+                <p class="text-[10px] text-[#5c5648] mt-0.5">of {{ schedule.staff_count }} staff</p>
             </div>
             <div class="border border-[#e4dfd4] p-3">
                 <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Leave periods</p>
@@ -161,14 +188,18 @@
                 <p class="text-xl font-semibold font-mono mt-1">{{ schedule.peak_count }}</p>
             </div>
             <div class="border border-[#e4dfd4] p-3">
-                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Overlap workdays</p>
-                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.overlap_count }}</p>
+                <p class="text-[10px] uppercase tracking-widest text-[#8a7a4b]">Min. on duty</p>
+                <p class="text-xl font-semibold font-mono mt-1">{{ schedule.min_on_duty }}</p>
             </div>
         </section>
 
         <p class="text-xs text-[#5c5648] mb-4">
             {% if include_pending %}
             This copy includes <strong>pending</strong> requests (gold / hatched). Remove the pending filter before handing to the customer if only approved leave should appear.
+            {% elif schedule.is_next_month %}
+            Customer copy — <strong>next month of approved team leave</strong> ({{ schedule.period.span_label }}). Full-day FOSC vacation (9h Mon–Thu, 4h Friday).
+            {% elif schedule.period.kind == 'month' %}
+            Customer copy — approved team leave for <strong>{{ schedule.period.label }}</strong>. Full-day FOSC vacation (9h Mon–Thu, 4h Friday).
             {% else %}
             Customer copy — <strong>approved leave only</strong>. Full-day FOSC vacation (9h Mon–Thu, 4h Friday). UAE national holidays are shown separately when enabled.
             {% endif %}
@@ -177,7 +208,7 @@
             {% endif %}
         </p>
 
-        <h2 class="text-sm font-semibold tracking-[0.14em] uppercase text-[#1b2a4a] mb-2">Roster</h2>
+        <h2 class="text-sm font-semibold tracking-[0.14em] uppercase text-[#1b2a4a] mb-2">{% if schedule.period.kind == 'month' %}Team leave — {{ schedule.period.label }}{% else %}Roster{% endif %}</h2>
         <div class="overflow-x-auto">
             <table class="vac-table">
                 <thead>
@@ -207,7 +238,7 @@
                                 <td class="text-[#5c5648]">{{ trip.comments }}</td>
                             </tr>
                             {% endfor %}
-                        {% else %}
+                        {% elif schedule.period.kind != 'month' %}
                             <tr>
                                 <td class="font-medium">{{ emp.name }}</td>
                                 <td class="capitalize text-[#5c5648]">{{ emp.role }}</td>
@@ -216,25 +247,37 @@
                             </tr>
                         {% endif %}
                     {% endfor %}
+                    {% if schedule.period.kind == 'month' and schedule.trip_count == 0 %}
+                            <tr>
+                                <td class="text-[#8a7a4b]" colspan="7">No projected vacation in {{ schedule.period.label }}</td>
+                            </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
 
+        {% if schedule.period.kind == 'month' and schedule.none_scheduled %}
+        <p class="text-xs text-[#5c5648] mt-3 leading-relaxed">
+            <strong class="text-[#1b2a4a]">On duty all month ({{ schedule.none_scheduled|length }}):</strong>
+            {{ schedule.none_scheduled | join(" · ") }}
+        </p>
+        {% endif %}
+
         {% if schedule.gantt_rows %}
         <h2 class="text-sm font-semibold tracking-[0.14em] uppercase text-[#1b2a4a] mt-8 mb-2">Timeline</h2>
-        <div class="border border-[#e4dfd4]">
-            <div class="flex text-[10px] uppercase tracking-wider text-[#8a7a4b] border-b border-[#e4dfd4]">
+        <div class="border border-[#e4dfd4] overflow-x-auto {% if schedule.tick_kind == 'day' %}gantt-day{% endif %}">
+            <div class="flex text-[10px] uppercase tracking-wider text-[#8a7a4b] border-b border-[#e4dfd4] min-w-max">
                 <div class="w-40 shrink-0 px-2 py-1">Staff</div>
-                <div class="flex-1 relative h-6">
-                    {% for m in schedule.months %}
-                    <div class="absolute top-0 bottom-0 border-l border-[#e4dfd4] px-1 py-1" style="left: {{ m.left }}%; width: {{ m.width }}%;">{{ m.label }}</div>
+                <div class="flex-1 relative h-6 gantt-track-wrap">
+                    {% for m in schedule.ticks %}
+                    <div class="gantt-tick absolute top-0 bottom-0 border-l border-[#e4dfd4] px-1 py-1{% if m.weekend %} weekend{% endif %}" style="left: {{ m.left }}%; width: {{ m.width }}%;">{{ m.label }}</div>
                     {% endfor %}
                 </div>
             </div>
             {% for emp in schedule.gantt_rows %}
-            <div class="flex items-stretch border-b border-[#e4dfd4] last:border-0">
+            <div class="flex items-stretch border-b border-[#e4dfd4] last:border-0 min-w-max">
                 <div class="w-40 shrink-0 px-2 py-1 text-xs font-medium truncate" title="{{ emp.name }}">{{ emp.name }}</div>
-                <div class="flex-1 gantt-track" style="--gutter: {{ (100 / schedule.months|length) if schedule.months else 8.33 }}%;">
+                <div class="flex-1 gantt-track" style="--gutter: {{ (100 / schedule.ticks|length) if schedule.ticks else 8.33 }}%;">
                     {% for trip in emp.trips %}
                     <div class="gantt-bar {% if trip.status == 'pending' %}pending{% elif trip.leave_type == 'uae_holiday' %}holiday{% endif %}"
                          style="left: {{ trip.left }}%; width: {{ trip.width }}%;"
@@ -247,7 +290,7 @@
             {% endfor %}
         </div>
         <p class="text-[10px] text-[#8a7a4b] mt-2">
-            Navy = approved vacation · Gold hatch = pending · Steel = UAE holiday. Timeline is the selected period only.
+            Navy = approved vacation · Gold hatch = pending · Steel = UAE holiday.{% if schedule.tick_kind == 'day' %} Day grid is the selected month (weekends muted).{% else %} Timeline is the selected period only.{% endif %}
         </p>
         {% endif %}
 
