@@ -1287,6 +1287,19 @@ async def partial_leave_submit(
 
 # ── Phone support (FOSC additive hours) ───────────────────────────────
 
+def _phone_support_ctx(employee, work_date, existing, error=None):
+    today = date.today()
+    return {
+        "employee": employee,
+        "today": work_date or today,
+        "min_date": today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS),
+        "max_date": today,
+        "lookback_days": PAST_DAY_MAX_LOOKBACK_DAYS,
+        "existing": existing,
+        "error": error,
+    }
+
+
 @router.get("/time/phone-support", response_class=HTMLResponse)
 async def phone_support_page(request: Request, db: Session = Depends(get_db)):
     """Log phone / after-hours support hours."""
@@ -1303,10 +1316,7 @@ async def phone_support_page(request: Request, db: Session = Depends(get_db)):
     )
     return templates.TemplateResponse("phone_support.html", {
         "request": request,
-        "employee": employee,
-        "today": today,
-        "existing": existing,
-        "error": None,
+        **_phone_support_ctx(employee, today, existing),
     })
 
 
@@ -1340,27 +1350,21 @@ async def phone_support_submit(
     if hours <= 0 or hours > 24:
         return templates.TemplateResponse("phone_support.html", {
             "request": request,
-            "employee": employee,
-            "today": work_date,
-            "existing": existing,
-            "error": "Hours must be between 0 and 24.",
+            **_phone_support_ctx(employee, work_date, existing, "Hours must be between 0 and 24."),
         })
 
     if work_date > today:
         return templates.TemplateResponse("phone_support.html", {
             "request": request,
-            "employee": employee,
-            "today": today,
-            "existing": existing,
-            "error": "Cannot log phone support for a future date.",
+            **_phone_support_ctx(employee, today, existing, "Cannot log phone support for a future date."),
         })
     if work_date < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
         return templates.TemplateResponse("phone_support.html", {
             "request": request,
-            "employee": employee,
-            "today": today,
-            "existing": existing,
-            "error": f"Phone support is limited to the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.",
+            **_phone_support_ctx(
+                employee, today, existing,
+                f"Phone support is limited to the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.",
+            ),
         })
 
     entry = PhoneSupportEntry(
