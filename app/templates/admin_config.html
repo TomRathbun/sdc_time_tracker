@@ -380,17 +380,30 @@
                             </div>
                             <div>
                                 <p class="font-medium text-gray-200 text-sm">Checked-in surface time</p>
-                                <p class="text-xs text-gray-500">{{ settings.login_surface_checked_in_after.description }}</p>
+                                <p class="text-xs text-gray-500">When people who are checked in move to the top of the login list. Friday is earlier because it is a short day.</p>
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center gap-3 pl-13">
-                        <div class="relative flex-1 max-w-[200px]">
-                            <input type="text" name="login_surface_checked_in_after" id="login_surface_checked_in_after"
-                                value="{{ settings.login_surface_checked_in_after.value }}"
-                                inputmode="numeric" maxlength="5" pattern="[0-9:]{3,5}"
-                                class="form-input text-lg font-mono py-2 text-center" placeholder="1300">
-                            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">HHMM</div>
+                    <div class="flex flex-wrap items-end gap-6 pl-13">
+                        <div>
+                            <label for="login_surface_checked_in_after" class="text-xs text-gray-500 mb-1.5 block">Monday–Thursday</label>
+                            <div class="relative max-w-[200px]">
+                                <input type="text" name="login_surface_checked_in_after" id="login_surface_checked_in_after"
+                                    value="{{ settings.login_surface_checked_in_after.value }}"
+                                    inputmode="numeric" maxlength="5" pattern="[0-9:]{3,5}"
+                                    class="form-input text-lg font-mono py-2 text-center" placeholder="1300">
+                                <div class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">HHMM</div>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="login_surface_checked_in_after_friday" class="text-xs text-gray-500 mb-1.5 block">Friday</label>
+                            <div class="relative max-w-[200px]">
+                                <input type="text" name="login_surface_checked_in_after_friday" id="login_surface_checked_in_after_friday"
+                                    value="{{ settings.login_surface_checked_in_after_friday.value }}"
+                                    inputmode="numeric" maxlength="5" pattern="[0-9:]{3,5}"
+                                    class="form-input text-lg font-mono py-2 text-center" placeholder="0900">
+                                <div class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">HHMM</div>
+                            </div>
                         </div>
                     </div>
                 </div>

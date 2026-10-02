@@ -134,9 +134,10 @@ def _is_on_leave_today(db: Session, emp_id: int) -> bool:
 def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_minutes, surface_after_minutes):
     """Sort employee list intelligently.
 
-    Before surface_after_minutes (default 13:00), people who have not checked
-    in stay on top. At and after that time, people who are checked in move to
-    the top so the afternoon list is who is still here.
+    Before surface_after_minutes, people who have not checked in stay on top.
+    At and after that time, people who are checked in move to the top so the
+    list is who is still here. Callers pass 13:00 Monday–Thursday and 09:00
+    on Friday (both configurable).
 
     Tiers (lower = higher in list), morning / afternoon:
       0 — Not checked in / Checked in
@@ -230,7 +231,12 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
     avg_times = _get_avg_times(db, employees)
     on_leave_map = {e.id: _is_on_leave_today(db, e.id) for e in employees}
     now = datetime.now()
-    surface_after = parse_hhmm_setting(get_setting(db, "login_surface_checked_in_after"))
+    surface_key = (
+        "login_surface_checked_in_after_friday"
+        if now.weekday() == 4
+        else "login_surface_checked_in_after"
+    )
+    surface_after = parse_hhmm_setting(get_setting(db, surface_key))
     sorted_employees = _smart_sort_employees(
         employees, status_map, avg_times, on_leave_map,
         now.hour * 60 + now.minute,

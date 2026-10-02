@@ -43,7 +43,11 @@ FEATURE_DEFAULTS = {
     },
     "login_surface_checked_in_after": {
         "value": "1300",
-        "description": "Time of day (24-hour HHMM) when people who are checked in move to the top of the login list. Before this, people who have not checked in stay on top.",
+        "description": "Monday–Thursday time (24-hour HHMM) when people who are checked in move to the top of the login list. Before this, people who have not checked in stay on top.",
+    },
+    "login_surface_checked_in_after_friday": {
+        "value": "0900",
+        "description": "Friday time (24-hour HHMM) when checked-in people move to the top. Friday is a short day, so this is earlier than the Monday–Thursday time.",
     },
     "beod_blanket_approval": {
         "value": "true",
