@@ -41,6 +41,10 @@ FEATURE_DEFAULTS = {
         "value": "10",
         "description": "Number of names to show in the login list before scrolling (approximate)",
     },
+    "login_surface_checked_in_after": {
+        "value": "1300",
+        "description": "Time of day (24-hour HHMM) when people who are checked in move to the top of the login list. Before this, people who have not checked in stay on top.",
+    },
     "beod_blanket_approval": {
         "value": "true",
         "description": "BEOD (break end of day): auto-approve when employee checks the box (no manager step). Off = individual approval after checkout.",
@@ -86,6 +90,40 @@ def get_setting(db: Session, key: str) -> str:
 def get_bool_setting(db: Session, key: str) -> bool:
     """Get a boolean setting (true/false string → bool)."""
     return get_setting(db, key).lower() == "true"
+
+
+def parse_hhmm_setting(raw: str, default_hhmm: str = "1300") -> int:
+    """Parse 1300 or 13:00 into minutes from midnight. Invalid input uses the default."""
+    def _minutes(text: str):
+        text = (text or "").strip()
+        if ":" in text:
+            parts = text.split(":")
+            if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+                return None
+            hour, minute = int(parts[0]), int(parts[1])
+        else:
+            digits = text
+            if not digits.isdigit() or len(digits) not in (3, 4):
+                return None
+            if len(digits) == 3:
+                hour, minute = int(digits[0]), int(digits[1:])
+            else:
+                hour, minute = int(digits[:2]), int(digits[2:])
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            return None
+        return hour * 60 + minute
+
+    parsed = _minutes(raw)
+    if parsed is None:
+        parsed = _minutes(default_hhmm)
+    return 13 * 60 if parsed is None else parsed
+
+
+def format_hhmm_setting(raw: str, default_hhmm: str = "1300") -> str:
+    """Normalize a config time to 4-digit HHMM (1300)."""
+    minutes = parse_hhmm_setting(raw, default_hhmm)
+    hour, minute = divmod(minutes, 60)
+    return f"{hour:02d}{minute:02d}"
 
 
 def set_setting(db: Session, key: str, value: str):

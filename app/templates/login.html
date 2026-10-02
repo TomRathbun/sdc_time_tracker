@@ -985,8 +985,18 @@
         if (document.getElementById('pin')) {
             updateRegularLoginButton();
         }
-        // Kiosk: drop yesterday's In/Out and projected checkout after midnight
+        // Kiosk: refresh when checked-in names should rise, and again after midnight
         var now = new Date();
+        var surface = '{{ surface_after|default("1300") }}';
+        if (document.getElementById('employee-list') && surface.length >= 3) {
+            var sh = parseInt(surface.length === 3 ? surface.charAt(0) : surface.slice(0, 2), 10);
+            var sm = parseInt(surface.length === 3 ? surface.slice(1) : surface.slice(2), 10);
+            var surfaceAt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 5);
+            var surfaceWait = surfaceAt.getTime() - now.getTime();
+            if (surfaceWait > 0) {
+                setTimeout(function () { window.location.reload(); }, surfaceWait);
+            }
+        }
         var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
         setTimeout(function () { window.location.reload(); }, nextMidnight.getTime() - now.getTime());
     });

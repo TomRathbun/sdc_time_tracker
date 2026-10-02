@@ -368,6 +368,33 @@
                     </div>
                 </div>
 
+                <!-- Checked-in surface time -->
+                <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-success-500/10 flex items-center justify-center">
+                                <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-medium text-gray-200 text-sm">Checked-in surface time</p>
+                                <p class="text-xs text-gray-500">{{ settings.login_surface_checked_in_after.description }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3 pl-13">
+                        <div class="relative flex-1 max-w-[200px]">
+                            <input type="text" name="login_surface_checked_in_after" id="login_surface_checked_in_after"
+                                value="{{ settings.login_surface_checked_in_after.value }}"
+                                inputmode="numeric" maxlength="5" pattern="[0-9:]{3,5}"
+                                class="form-input text-lg font-mono py-2 text-center" placeholder="1300">
+                            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">HHMM</div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Variance reasons -->
                 <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5 transition-all">
                     <div class="flex items-center gap-3 mb-4">

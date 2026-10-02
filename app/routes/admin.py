@@ -869,6 +869,9 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
         else:
             # Regular text/number input
             value = form.get(key, info["value"])
+            if key == "login_surface_checked_in_after":
+                from app.services.settings import format_hhmm_setting
+                value = format_hhmm_setting(str(value or ""))
         set_setting(db, key, value)
 
     log_action(

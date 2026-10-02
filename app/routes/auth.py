@@ -13,7 +13,7 @@ from app.auth import verify_pin, create_session_token, get_current_employee
 from app.config import SESSION_COOKIE_NAME
 from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
 from app.services.audit import log_action
-from app.services.settings import get_setting
+from app.services.settings import get_setting, parse_hhmm_setting
 from app.services.time_calc import projected_checkout_from_entries
 
 router = APIRouter()
@@ -131,17 +131,22 @@ def _is_on_leave_today(db: Session, emp_id: int) -> bool:
     return summary is not None
 
 
-def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_hour):
+def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_minutes, surface_after_minutes):
     """Sort employee list intelligently.
 
-    Tiers (lower = higher in list):
-      0 — Not checked in today: sort by avg check-in time
-      1 — Already checked in today: sort by actual check-in time today (earliest first)
-      2 — Already checked out today: sort by actual check-in time today
+    Before surface_after_minutes (default 13:00), people who have not checked
+    in stay on top. At and after that time, people who are checked in move to
+    the top so the afternoon list is who is still here.
+
+    Tiers (lower = higher in list), morning / afternoon:
+      0 — Not checked in / Checked in
+      1 — Checked in / Not checked in
+      2 — Already checked out
       3 — On leave
       4 — Supervisors (don't track time)
     """
     LARGE_VAL = 9999
+    afternoon = now_minutes >= surface_after_minutes
 
     def sort_key(emp):
         eid = emp.id
@@ -161,16 +166,17 @@ def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_ho
 
         # 3. Time-tracking roles
         if status == "not_started":
-            # Tier 0: Not checked in yet. Sort by their typical (average) start time.
+            # Morning: top. Afternoon: below people who are still checked in.
             avg_ci = avg.get("avg_checkin")
-            return (0, avg_ci if avg_ci is not None else LARGE_VAL, emp.name.lower())
-        
+            tier = 1 if afternoon else 0
+            return (tier, avg_ci if avg_ci is not None else LARGE_VAL, emp.name.lower())
+
         if status == "checked_in":
-            # Tier 1: Working. Sort by when they started today.
-            return (1, actual_mins if actual_mins is not None else LARGE_VAL, emp.name.lower())
-        
+            # Morning: below people still expected. Afternoon: top of the list.
+            tier = 0 if afternoon else 1
+            return (tier, actual_mins if actual_mins is not None else LARGE_VAL, emp.name.lower())
+
         if status == "checked_out":
-            # Tier 2: Finished.
             return (2, actual_mins if actual_mins is not None else LARGE_VAL, emp.name.lower())
 
         return (5, LARGE_VAL, emp.name.lower())
@@ -223,9 +229,13 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
     status_map = _get_employee_status(db, employees)
     avg_times = _get_avg_times(db, employees)
     on_leave_map = {e.id: _is_on_leave_today(db, e.id) for e in employees}
-    now_hour = datetime.now().hour
-
-    sorted_employees = _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_hour)
+    now = datetime.now()
+    surface_after = parse_hhmm_setting(get_setting(db, "login_surface_checked_in_after"))
+    sorted_employees = _smart_sort_employees(
+        employees, status_map, avg_times, on_leave_map,
+        now.hour * 60 + now.minute,
+        surface_after,
+    )
 
     display_count = int(get_setting(db, "login_names_display_count"))
 
@@ -239,6 +249,7 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
         "weapon": _get_random_weapon(),
         "display_count": display_count,
         "comment_threshold": _comment_threshold(db),
+        "surface_after": f"{surface_after // 60:02d}{surface_after % 60:02d}",
     })
 
 
