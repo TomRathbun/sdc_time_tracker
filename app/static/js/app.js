@@ -133,4 +133,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateBrandClocks();
     setInterval(updateBrandClocks, 100);
+
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('.bc-sweep-spin').forEach(function (node) {
+            if (typeof node.beginElement === 'function') node.beginElement();
+        });
+    }
 });

@@ -804,15 +804,9 @@
     height: 100%;
 }
 
-.brand-clock-svg .bc-sweep {
-    transform-origin: 50px 50px;
-    transform-box: view-box;
-    animation: radar-sweep 4.5s linear infinite;
-}
-
-/* Hands use SVG transform="rotate(deg 50 50)" only — CSS transform-origin
-   on <line> makes Chromium/Opera orbit the stroke bbox, so the second
-   hand is visible at 12 o'clock and clipped the rest of the way around. */
+/* Sweep rotation is SVG animateTransform around 50 50. A CSS transform
+   origin in pixels orbits off the hub on the 48/64/80px clocks and clips
+   the wedge against overflow:hidden. */
 
 .lm-mark-gif {
     display: block;
@@ -841,11 +835,9 @@
     z-index: 1;
 }
 
-@keyframes radar-sweep {
-    to {
-        transform: rotate(360deg);
-    }
-}
+/* Hands use SVG transform="rotate(deg 50 50)" only — CSS transform-origin
+   on <line> makes Chromium/Opera orbit the stroke bbox, so the second
+   hand is visible at 12 o'clock and clipped the rest of the way around. */
 
 /* Timesheet punch reason hover */
 .punch-reason-tip {
@@ -875,8 +867,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .brand-clock-svg .bc-sweep {
-        animation: none;
+    .brand-clock-svg .bc-sweep-spin {
+        display: none;
     }
 
     .lm-mark-gif {
