@@ -21,7 +21,11 @@ from app.services.time_state import (
     last_checkout_entry, STATUS_CHECKED_OUT,
     RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT,
 )
-from app.services.time_offset import offset_approved_default
+from app.services.time_offset import (
+    offset_approved_default,
+    get_comment_threshold_minutes,
+    offset_minutes,
+)
 from app.services.audit import log_action
 from app.services.settings import get_bool_setting
 
@@ -50,8 +54,71 @@ def round_up_5(dt: datetime) -> datetime:
     return dt.replace(minute=new_minute, second=0, microsecond=0)
 
 
+def _parse_hhmm(value: str):
+    """Parse 'HH:MM' into (hour, minute), or None if blank/invalid."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    parts = text.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour, minute
+
+
+def resolve_quick_declared(db: Session, now: datetime, declared_hhmm: str):
+    """Turn an optional quick-screen time into a declared datetime.
+
+    Returns (datetime, None) or (None, error).
+    Blank means "use the automatic rounding" — caller keeps its default.
+    A supplied time must be today, on a 5-minute mark, and within
+    comment_threshold_minutes of the actual submission time (no reason).
+    """
+    parsed = _parse_hhmm(declared_hhmm)
+    if parsed is None:
+        if (declared_hhmm or "").strip():
+            return None, "Time must be HH:MM."
+        return None, None
+    hour, minute = parsed
+    if minute % 5 != 0:
+        return None, "Time must be in 5-minute steps."
+    declared = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if declared.date() != now.date():
+        return None, "Quick check can only record a time today."
+    threshold = get_comment_threshold_minutes(db)
+    if offset_minutes(declared, now) > threshold:
+        return None, (
+            f"Quick check can only move the time by up to {threshold} minutes "
+            "without a reason. Sign in to record a larger change."
+        )
+    return declared, None
+
+
+def _note_adjusted(comment: str, adjusted: bool) -> str:
+    if adjusted and "(adjusted)" not in comment:
+        return comment + " (adjusted)"
+    return comment
+
+
 def _had_checkout_today(db: Session, emp_id: int, today: date) -> bool:
     return last_checkout_entry(db, emp_id, today) is not None
+
+
+@router.get("/quick-clock")
+async def quick_clock(db: Session = Depends(get_db)):
+    """Server clock plus the default rounded punch and the no-reason window."""
+    now = datetime.now()
+    return JSONResponse({
+        "now": now.strftime("%H:%M:%S"),
+        "checkin_time": round_down_5(now).strftime("%H:%M"),
+        "checkout_time": round_up_5(now).strftime("%H:%M"),
+        "threshold_minutes": get_comment_threshold_minutes(db),
+    })
 
 
 @router.post("/quick-checkin")
@@ -59,6 +126,7 @@ async def quick_checkin(
     request: Request,
     employee_id: int = Form(...),
     pin: str = Form(...),
+    declared_time: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Quick check-in: verify PIN, record rounded-down time.
@@ -83,14 +151,30 @@ async def quick_checkin(
     if state_err:
         return JSONResponse({"ok": False, "error": state_err}, status_code=400)
 
-    rounded_time = round_down_5(now)
+    chosen, time_err = resolve_quick_declared(db, now, declared_time)
+    if time_err:
+        return JSONResponse({"ok": False, "error": time_err}, status_code=400)
+    adjusted = chosen is not None
+    rounded_time = chosen if adjusted else round_down_5(now)
     returning = _had_checkout_today(db, emp.id, today)
 
     # Prevent check-in from being earlier than the last check-out
     last_checkout = last_checkout_entry(db, emp.id, today)
     if last_checkout and rounded_time < last_checkout.declared_time:
+        if adjusted:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": (
+                        "Check-in cannot be earlier than your last check-out "
+                        f"({last_checkout.declared_time.strftime('%H:%M')})."
+                    ),
+                },
+                status_code=400,
+            )
         rounded_time = last_checkout.declared_time
 
+    comment = RETURN_CHECKIN_COMMENT if returning else "Quick check-in"
     entry = TimeEntry(
         employee_id=emp.id,
         date=today,
@@ -99,7 +183,7 @@ async def quick_checkin(
         entry_type=EntryType.check_in,
         location_type=LocationType.office,
         is_remote=False,
-        comments=RETURN_CHECKIN_COMMENT if returning else "Quick check-in",
+        comments=_note_adjusted(comment, adjusted),
         offset_approved=True if returning else offset_approved_default(db, rounded_time, now),
     )
     db.add(entry)
@@ -165,11 +249,12 @@ async def quick_checkin(
     })
 
 
-def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
+def _checkout_preview_payload(db: Session, emp_id: int, checkout_time: datetime = None) -> dict:
     """Hours/time that will be recorded for a quick checkout right now."""
     today = date.today()
     now = datetime.now()
-    checkout_time = round_up_5(now)
+    if checkout_time is None:
+        checkout_time = round_up_5(now)
     status = current_status(db, emp_id, today)
     is_recheckout = status == STATUS_CHECKED_OUT
 
@@ -263,15 +348,28 @@ def _checkout_preview_payload(db: Session, emp_id: int) -> dict:
 
 
 @router.get("/checkout-preview/{employee_id}")
-async def checkout_preview(employee_id: int, db: Session = Depends(get_db)):
-    """Preview quick-checkout time and FOSC hours (no PIN required)."""
+async def checkout_preview(
+    employee_id: int,
+    time: str = "",
+    db: Session = Depends(get_db),
+):
+    """Preview quick-checkout time and FOSC hours (no PIN required).
+
+    Optional `time` (HH:MM) previews an adjusted punch inside the no-reason window.
+    """
     emp = db.query(Employee).filter(
         Employee.id == employee_id,
         Employee.is_active == True,
     ).first()
     if not emp:
         return JSONResponse({"ok": False, "error": "Employee not found."}, status_code=404)
-    return JSONResponse(_checkout_preview_payload(db, emp.id))
+    override = None
+    if (time or "").strip():
+        now = datetime.now()
+        override, time_err = resolve_quick_declared(db, now, time)
+        if time_err:
+            return JSONResponse({"ok": False, "error": time_err}, status_code=400)
+    return JSONResponse(_checkout_preview_payload(db, emp.id, override))
 
 
 def _record_recheckout(
@@ -282,6 +380,7 @@ def _record_recheckout(
     rounded_time: datetime,
     claim_beod: bool,
     request: Request,
+    adjusted: bool = False,
 ):
     """Insert return check-in at last checkout + new checkout at rounded_time."""
     last_co = last_checkout_entry(db, emp.id, today)
@@ -306,7 +405,10 @@ def _record_recheckout(
         entry_type=EntryType.check_out,
         location_type=LocationType.office,
         is_remote=False,
-        comments=RECHECKOUT_COMMENT + (" + BEOD" if claim_beod else ""),
+        comments=_note_adjusted(
+            RECHECKOUT_COMMENT + (" + BEOD" if claim_beod else ""),
+            adjusted,
+        ),
         offset_approved=offset_approved_default(db, rounded_time, now),
     )
     db.add(return_ci)
@@ -343,6 +445,7 @@ async def quick_checkout(
     employee_id: int = Form(...),
     pin: str = Form(...),
     beod: str = Form("false"),
+    declared_time: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Quick check-out: verify PIN, record rounded-up time; optional BEOD claim.
@@ -363,7 +466,11 @@ async def quick_checkout(
 
     today = date.today()
     now = datetime.now()
-    rounded_time = round_up_5(now)
+    chosen, time_err = resolve_quick_declared(db, now, declared_time)
+    if time_err:
+        return JSONResponse({"ok": False, "error": time_err}, status_code=400)
+    adjusted = chosen is not None
+    rounded_time = chosen if adjusted else round_up_5(now)
     claim_beod = str(beod).lower() in ("true", "1", "on", "yes")
     if not beod_offered_on(today):
         claim_beod = False
@@ -374,7 +481,7 @@ async def quick_checkout(
         if state_err:
             return JSONResponse({"ok": False, "error": state_err}, status_code=400)
         summary, extra_h, return_time = _record_recheckout(
-            db, emp, today, now, rounded_time, claim_beod, request,
+            db, emp, today, now, rounded_time, claim_beod, request, adjusted,
         )
         msg = (
             f"Re-checked out at {rounded_time.strftime('%H:%M')} "
@@ -409,7 +516,10 @@ async def quick_checkout(
         entry_type=EntryType.check_out,
         location_type=LocationType.office,
         is_remote=False,
-        comments="Quick check-out" + (" + BEOD" if claim_beod else ""),
+        comments=_note_adjusted(
+            "Quick check-out" + (" + BEOD" if claim_beod else ""),
+            adjusted,
+        ),
         offset_approved=offset_approved_default(db, rounded_time, now),
     )
     db.add(entry)

@@ -274,7 +274,7 @@
 <div id="quick-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm"
     onclick="if(event.target===this) closeQuickModal()">
 
-    <div class="bg-surface-800/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl w-full max-w-sm mx-4 transform transition-all duration-200 scale-95 opacity-0"
+    <div class="bg-surface-800/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6 shadow-2xl w-full max-w-sm mx-4 max-h-[92vh] overflow-y-auto transform transition-all duration-200 scale-95 opacity-0"
         id="quick-modal-content">
 
         <!-- Modal Header -->
@@ -304,6 +304,21 @@
                 placeholder="••••"
                 onkeydown="if(event.key==='Enter' && !document.getElementById('modal-submit').disabled) submitQuickAction()"
                 oninput="updateQuickButton()">
+        </div>
+
+        <!-- Time adjuster: within the no-reason allowance -->
+        <div id="modal-time-adjust" class="mb-4 p-3 rounded-xl bg-surface-900/60 border border-white/10">
+            <div class="flex items-center justify-between gap-2">
+                <button type="button" id="time-minus" onclick="nudgeQuickTime(-5)" aria-label="Earlier"
+                    class="w-11 h-11 rounded-xl bg-surface-900 border border-white/10 text-white text-2xl leading-none font-bold hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-surface-900">−</button>
+                <div class="text-center min-w-0">
+                    <p class="text-[10px] uppercase tracking-wider text-gray-500" id="time-adjust-label">Recorded time</p>
+                    <p id="time-adjust-value" class="font-mono font-bold text-white text-2xl leading-tight">--:--</p>
+                </div>
+                <button type="button" id="time-plus" onclick="nudgeQuickTime(5)" aria-label="Later"
+                    class="w-11 h-11 rounded-xl bg-surface-900 border border-white/10 text-white text-2xl leading-none font-bold hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-surface-900">+</button>
+            </div>
+            <p id="time-adjust-help" class="text-[11px] text-gray-500 text-center mt-2"></p>
         </div>
 
         <!-- Error message -->
@@ -429,6 +444,11 @@
     let currentEmployeeId = null;
     let currentAction = null;
     let currentLastPunch = '';
+    var QUICK_THRESHOLD = {{ comment_threshold|default(30) }};
+    var _adjustTime = null;
+    var _adjustDirty = false;
+    var _shownHHMM = '';
+    var _quickClockTimer = null;
 
     function showEl(el) { el.style.display = 'flex'; }
     function hideEl(el) { el.style.display = 'none'; }
@@ -464,6 +484,11 @@
         var beodCb = document.getElementById('modal-beod');
         if (beodCb) beodCb.checked = false;
         if (previewEl) previewEl.style.display = 'none';
+        _adjustDirty = false;
+        _adjustTime = null;
+        _shownHHMM = '';
+        _checkoutPreview = null;
+        startQuickClock();
 
         if (action === 'checkin') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-success-500/10';
@@ -475,13 +500,11 @@
             icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
             title.textContent = 'Re-Check Out';
             subtitle.textContent = empName + (currentLastPunch ? ' · extra time after ' + currentLastPunch : ' · called back');
-            loadCheckoutPreview(empId);
         } else {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-danger-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
             title.textContent = 'Quick Check Out';
             subtitle.textContent = empName;
-            loadCheckoutPreview(empId);
         }
 
         // Fetch random weapon for spotlight
@@ -519,7 +542,149 @@
         setTimeout(function () {
             modal.classList.remove('flex');
             modal.classList.add('hidden');
+            stopQuickClock();
         }, 200);
+    }
+
+    function pad2(n) { return (n < 10 ? '0' : '') + n; }
+    function fmtHM(d) { return pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+
+    function floor5(d) {
+        var x = new Date(d.getTime());
+        x.setSeconds(0, 0);
+        x.setMinutes(x.getMinutes() - (x.getMinutes() % 5));
+        return x;
+    }
+
+    function ceil5(d) {
+        var x = new Date(d.getTime());
+        if (x.getMinutes() % 5 === 0 && x.getSeconds() === 0 && x.getMilliseconds() === 0) {
+            return x;
+        }
+        var add = 5 - (x.getMinutes() % 5);
+        x.setSeconds(0, 0);
+        x.setMinutes(x.getMinutes() + add);
+        return x;
+    }
+
+    function sameDay(a, b) {
+        return a.getFullYear() === b.getFullYear()
+            && a.getMonth() === b.getMonth()
+            && a.getDate() === b.getDate();
+    }
+
+    function parseTodayHHMM(hhmm) {
+        if (!hhmm || hhmm.indexOf(':') < 0) return null;
+        var parts = hhmm.split(':');
+        var h = parseInt(parts[0], 10);
+        var m = parseInt(parts[1], 10);
+        if (isNaN(h) || isNaN(m)) return null;
+        var d = new Date();
+        d.setHours(h, m, 0, 0);
+        return d;
+    }
+
+    function liveDefaultTime() {
+        var now = new Date();
+        return currentAction === 'checkin' ? floor5(now) : ceil5(now);
+    }
+
+    function displayedQuickTime() {
+        return _adjustDirty && _adjustTime ? _adjustTime : liveDefaultTime();
+    }
+
+    function minBoundTime() {
+        var hhmm = null;
+        if (currentAction === 'checkin') {
+            hhmm = currentLastPunch || null;
+        } else if (_checkoutPreview) {
+            hhmm = _checkoutPreview.recheckout
+                ? _checkoutPreview.last_checkout_time
+                : _checkoutPreview.checkin_time;
+        }
+        return parseTodayHHMM(hhmm);
+    }
+
+    function stepAllowed(candidate) {
+        var now = new Date();
+        if (!sameDay(candidate, now)) return false;
+        if (Math.abs(candidate.getTime() - now.getTime()) / 60000 > QUICK_THRESHOLD + 0.001) return false;
+        var floor = minBoundTime();
+        if (!floor) return true;
+        if (currentAction === 'checkin') return candidate.getTime() >= floor.getTime();
+        return candidate.getTime() > floor.getTime();
+    }
+
+    function paintQuickTime() {
+        var shown = displayedQuickTime();
+        var label = document.getElementById('time-adjust-value');
+        var help = document.getElementById('time-adjust-help');
+        var minus = document.getElementById('time-minus');
+        var plus = document.getElementById('time-plus');
+        var caption = document.getElementById('time-adjust-label');
+        if (!label) return;
+        label.textContent = fmtHM(shown);
+        if (caption) {
+            caption.textContent = _adjustDirty ? 'Adjusted time' : 'Recorded time';
+        }
+        if (help) {
+            if (_adjustDirty && !stepAllowed(shown)) {
+                help.textContent = 'That time is more than ' + QUICK_THRESHOLD
+                    + ' min from now. Move it closer, or sign in for a larger change.';
+                help.className = 'text-[11px] text-warning-400 text-center mt-2';
+            } else {
+                help.textContent = 'Adjust up to ' + QUICK_THRESHOLD
+                    + ' min from now. No reason needed.';
+                help.className = 'text-[11px] text-gray-500 text-center mt-2';
+            }
+        }
+        var earlier = new Date(shown.getTime() - 5 * 60000);
+        var later = new Date(shown.getTime() + 5 * 60000);
+        if (minus) minus.disabled = !stepAllowed(earlier);
+        if (plus) plus.disabled = !stepAllowed(later);
+        var previewTime = document.getElementById('preview-checkout-time');
+        if (previewTime && currentAction !== 'checkin') previewTime.textContent = fmtHM(shown);
+
+        var hhmm = fmtHM(shown);
+        if (hhmm !== _shownHHMM) {
+            _shownHHMM = hhmm;
+            if (currentAction === 'checkout' || currentAction === 'recheckout') {
+                loadCheckoutPreview(currentEmployeeId, _adjustDirty ? hhmm : '');
+            }
+        }
+    }
+
+    function nudgeQuickTime(deltaMin) {
+        var base = displayedQuickTime();
+        var next = new Date(base.getTime() + deltaMin * 60000);
+        if (!stepAllowed(next)) return;
+        _adjustDirty = true;
+        _adjustTime = next;
+        paintQuickTime();
+    }
+
+    function startQuickClock() {
+        stopQuickClock();
+        paintQuickTime();
+        fetch('/api/quick-clock')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (typeof data.threshold_minutes === 'number') {
+                    QUICK_THRESHOLD = data.threshold_minutes;
+                }
+                paintQuickTime();
+            })
+            .catch(function () {});
+        _quickClockTimer = setInterval(function () {
+            paintQuickTime();
+        }, 1000);
+    }
+
+    function stopQuickClock() {
+        if (_quickClockTimer) {
+            clearInterval(_quickClockTimer);
+            _quickClockTimer = null;
+        }
     }
 
     function submitQuickAction() {
@@ -537,6 +702,13 @@
             return;
         }
 
+        if (_adjustDirty && _adjustTime && !stepAllowed(_adjustTime)) {
+            showEl(errorEl);
+            errorText.textContent = 'That time is more than ' + QUICK_THRESHOLD
+                + ' minutes from now. Move it closer, or sign in to record a larger change.';
+            return;
+        }
+
         hideEl(errorEl);
         hideEl(successEl);
         btn.disabled = true;
@@ -550,6 +722,9 @@
         if (currentAction === 'checkout' || currentAction === 'recheckout') {
             var beodEl = document.getElementById('modal-beod');
             formData.append('beod', (beodEl && beodEl.checked) ? 'true' : 'false');
+        }
+        if (_adjustDirty && _adjustTime) {
+            formData.append('declared_time', fmtHM(_adjustTime));
         }
 
         fetch(url, { method: 'POST', body: formData })
@@ -586,19 +761,27 @@
 
     var _checkoutPreview = null;
 
-    function loadCheckoutPreview(empId) {
+    var _previewReq = 0;
+
+    function loadCheckoutPreview(empId, hhmm) {
         var previewEl = document.getElementById('modal-checkout-preview');
-        if (!previewEl) return;
+        if (!previewEl || !empId) return;
+        var req = ++_previewReq;
         previewEl.style.display = 'block';
-        document.getElementById('preview-checkout-time').textContent = '…';
-        document.getElementById('preview-fosc').textContent = 'Loading…';
-        document.getElementById('preview-detail').textContent = '';
+        if (!hhmm) {
+            document.getElementById('preview-checkout-time').textContent = '…';
+            document.getElementById('preview-fosc').textContent = 'Loading…';
+            document.getElementById('preview-detail').textContent = '';
+        }
         document.getElementById('preview-beod-result').classList.add('hidden');
         document.getElementById('preview-beod-wrap').style.display = 'none';
 
-        fetch('/api/checkout-preview/' + empId)
+        var url = '/api/checkout-preview/' + empId;
+        if (hhmm) url += '?time=' + encodeURIComponent(hhmm);
+        fetch(url)
             .then(function (r) { return r.json(); })
             .then(function (data) {
+                if (req !== _previewReq) return;
                 _checkoutPreview = data;
                 if (!data.ok && data.error) {
                     document.getElementById('preview-fosc').textContent = '—';

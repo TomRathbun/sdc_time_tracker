@@ -27,7 +27,7 @@ FEATURE_DEFAULTS = {
     },
     "comment_threshold_minutes": {
         "value": "30",
-        "description": "Require comments if set time and actual time differ by more than this many minutes",
+        "description": "Minutes an employee may move a punch from the actual time with no reason. Over this, a signed-in entry needs a variance reason. Quick check-in and check-out can be adjusted up to this same limit.",
     },
     "manager_policy_alert_enabled": {
         "value": "false",
@@ -69,6 +69,8 @@ def seed_settings(db: Session):
                 description=info["description"],
             )
             db.add(setting)
+        elif existing.description != info["description"]:
+            existing.description = info["description"]
     db.commit()
 
 

@@ -20,6 +20,13 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _comment_threshold(db: Session) -> int:
+    try:
+        return int(get_setting(db, "comment_threshold_minutes"))
+    except (ValueError, TypeError):
+        return 30
+
+
 def _empty_status(**overrides):
     base = {
         "status": "not_started",
@@ -231,6 +238,7 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
         "on_leave_map": on_leave_map,
         "weapon": _get_random_weapon(),
         "display_count": display_count,
+        "comment_threshold": _comment_threshold(db),
     })
 
 
@@ -268,6 +276,7 @@ async def login_pin_page(employee_id: int, request: Request, db: Session = Depen
         "error": None,
         "weapon": _get_random_weapon(),
         "display_count": display_count,
+        "comment_threshold": _comment_threshold(db),
     })
 
 
@@ -291,6 +300,7 @@ async def login_submit(
             "error": "Invalid PIN. Please try again.",
             "weapon": _get_random_weapon(),
             "display_count": display_count,
+            "comment_threshold": _comment_threshold(db),
         })
 
     matched = selected
