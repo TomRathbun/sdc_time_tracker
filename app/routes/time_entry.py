@@ -705,7 +705,45 @@ async def offsite_gap_submit(
     return RedirectResponse(url="/", status_code=303)
 
 
-def _render_past_day(request, db, employee, selected_date, error=None, success=None):
+def _snap_hm(dt):
+    """Nearest 5-minute hour/minute so a select can show a recorded punch."""
+    if dt is None:
+        return None
+    snapped = int(round((dt.hour * 60 + dt.minute) / 5.0) * 5)
+    if snapped < 0:
+        snapped = 0
+    if snapped >= 24 * 60:
+        snapped = 23 * 60 + 55
+    return snapped // 60, snapped % 60
+
+
+def _primary_office_pair(entries):
+    """First check-in and the check-out that closes that session."""
+    checkin = None
+    checkout = None
+    for entry in entries:
+        if checkin is None and entry.entry_type == EntryType.check_in:
+            checkin = entry.declared_time
+            continue
+        if checkin is not None and entry.entry_type == EntryType.check_out:
+            checkout = entry.declared_time
+            break
+    return checkin, checkout
+
+
+def _hour_choices(*hours):
+    """Workday hours, plus any recorded hour that falls outside 05–21."""
+    vals = set(range(5, 22))
+    for hour in hours:
+        if hour is not None and 0 <= hour <= 23:
+            vals.add(hour)
+    return sorted(vals)
+
+
+def _render_past_day(
+    request, db, employee, selected_date, error=None, success=None,
+    preset_checkin=None, preset_checkout=None,
+):
     """Build past-day form context and template response."""
     from app.models import DailySummary
 
@@ -742,6 +780,10 @@ def _render_past_day(request, db, employee, selected_date, error=None, success=N
             can_add_extra = True
             last_co = last
 
+    recorded_ci, recorded_co = _primary_office_pair(existing_checkins)
+    ci_hm = _snap_hm(preset_checkin if preset_checkin is not None else recorded_ci) or (7, 0)
+    co_hm = _snap_hm(preset_checkout if preset_checkout is not None else recorded_co) or (16, 0)
+
     return templates.TemplateResponse("past_day.html", {
         "request": request,
         "employee": employee,
@@ -757,7 +799,13 @@ def _render_past_day(request, db, employee, selected_date, error=None, success=N
         "can_add_extra": can_add_extra,
         "last_checkout_display": last_co.declared_time.strftime("%H:%M") if last_co else None,
         "last_checkout_hour": last_co.declared_time.hour if last_co else 16,
-        "last_checkout_minute": last_co.declared_time.minute if last_co else 0,
+        "last_checkout_minute": (last_co.declared_time.minute // 5) * 5 if last_co else 0,
+        "office_checkin_hour": ci_hm[0],
+        "office_checkin_minute": ci_hm[1],
+        "office_checkout_hour": co_hm[0],
+        "office_checkout_minute": co_hm[1],
+        "office_prefilled": recorded_ci is not None or recorded_co is not None,
+        "office_hours": _hour_choices(ci_hm[0], co_hm[0]),
     })
 
 
@@ -831,18 +879,6 @@ async def past_day_submit(
             error="Invalid date.",
         )
 
-    date_err = _validate_past_day_date(selected_date)
-    if date_err:
-        return _render_past_day(request, db, employee, selected_date, error=date_err)
-
-    # Comments are mandatory for past day entries
-    if not comments or not comments.strip():
-        return _render_past_day(
-            request, db, employee, selected_date,
-            error="Comments are required for past day entries.",
-        )
-
-    # Build datetimes
     checkin_time = datetime(
         selected_date.year, selected_date.month, selected_date.day,
         checkin_hour, checkin_minute,
@@ -852,11 +888,22 @@ async def past_day_submit(
         checkout_hour, checkout_minute,
     )
 
-    if checkout_time <= checkin_time:
+    def _reject(message):
         return _render_past_day(
-            request, db, employee, selected_date,
-            error="Check-out time must be after check-in time.",
+            request, db, employee, selected_date, error=message,
+            preset_checkin=checkin_time, preset_checkout=checkout_time,
         )
+
+    date_err = _validate_past_day_date(selected_date)
+    if date_err:
+        return _reject(date_err)
+
+    # Comments are mandatory for past day entries
+    if not comments or not comments.strip():
+        return _reject("Comments are required for past day entries.")
+
+    if checkout_time <= checkin_time:
+        return _reject("Check-out time must be after check-in time.")
 
     # Optional offsite — must not overlap the clock interval (would double-count)
     offsite_start = None
@@ -877,9 +924,7 @@ async def past_day_submit(
             extra_clock_intervals=[(checkin_time, checkout_time)],
         )
         if offsite_err:
-            return _render_past_day(
-                request, db, employee, selected_date, error=offsite_err,
-            )
+            return _reject(offsite_err)
 
     # CAPTURE OLD STATE BEFORE DELETING
     old_entries = db.query(TimeEntry).filter(

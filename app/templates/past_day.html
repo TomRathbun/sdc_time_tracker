@@ -163,18 +163,21 @@
                     </svg>
                     Office Hours
                 </h3>
+                {% if office_prefilled %}
+                <p class="text-[11px] text-gray-500 mb-3">Filled from the recorded check-in and check-out. Change only what is wrong.{% if existing_entries|length > 2 %} Submitting replaces the whole day, including later sessions.{% endif %}</p>
+                {% endif %}
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="text-xs text-gray-500 mb-1.5 block">Check-in Time</label>
                         <div class="flex gap-2">
                             <select name="checkin_hour" class="form-select flex-1">
-                                {% for h in range(5, 22) %}
-                                <option value="{{ h }}" {% if h==7 %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+                                {% for h in office_hours %}
+                                <option value="{{ h }}" {% if h==office_checkin_hour %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
                                 {% endfor %}
                             </select>
                             <select name="checkin_minute" class="form-select flex-1">
                                 {% for m in range(0, 60, 5) %}
-                                <option value="{{ m }}" {% if m==0 %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                                <option value="{{ m }}" {% if m==office_checkin_minute %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -183,14 +186,14 @@
                         <label class="text-xs text-gray-500 mb-1.5 block">Check-out Time</label>
                         <div class="flex gap-2">
                             <select name="checkout_hour" class="form-select flex-1">
-                                {% for h in range(5, 22) %}
-                                <option value="{{ h }}" {% if h==16 %}selected{% endif %}>{{ "%02d"|format(h) }}
+                                {% for h in office_hours %}
+                                <option value="{{ h }}" {% if h==office_checkout_hour %}selected{% endif %}>{{ "%02d"|format(h) }}
                                 </option>
                                 {% endfor %}
                             </select>
                             <select name="checkout_minute" class="form-select flex-1">
                                 {% for m in range(0, 60, 5) %}
-                                <option value="{{ m }}" {% if m==0 %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                                <option value="{{ m }}" {% if m==office_checkout_minute %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
                                 {% endfor %}
                             </select>
                         </div>
