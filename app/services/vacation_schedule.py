@@ -446,7 +446,7 @@ def build_vacation_schedule_workbook(schedule: dict) -> BytesIO:
     ws = wb.create_sheet("Roster")
     headers = [
         "Employee", "Role", "Type", "Status", "Start", "End",
-        "Workdays", "Comments", "Vacation remaining (year)",
+        "Workdays", "Comments", "Vacation remaining (hours)",
     ]
     for i, h in enumerate(headers, 1):
         cell = ws.cell(1, i, h)

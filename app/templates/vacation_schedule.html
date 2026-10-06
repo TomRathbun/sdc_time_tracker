@@ -243,7 +243,7 @@
                                 <td class="font-medium">{{ emp.name }}</td>
                                 <td class="capitalize text-[#5c5648]">{{ emp.role }}</td>
                                 <td class="text-[#8a7a4b]" colspan="4">No projected vacation in this period</td>
-                                <td class="font-mono text-[#5c5648]">{{ emp.vacation_remaining }}d remaining</td>
+                                <td class="font-mono text-[#5c5648]">{{ '%g'|format(emp.vacation_remaining) }}h remaining</td>
                             </tr>
                         {% endif %}
                     {% endfor %}

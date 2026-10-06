@@ -1200,10 +1200,12 @@ async def partial_leave_page(
 
     # Get current daily summary for that date
     from app.models import DailySummary
+    from app.services.leave_balance import get_leave_balance
     summary = db.query(DailySummary).filter(
         DailySummary.employee_id == employee.id,
         DailySummary.date == selected_date,
     ).first()
+    balance = get_leave_balance(db, employee, year=selected_date.year)
 
     # Build list of recent workdays for the date picker
     recent_days = []
@@ -1224,6 +1226,7 @@ async def partial_leave_page(
         "current_leave_approved": summary.leave_approved if summary else False,
         "current_worked": summary.total_hours if summary else 0.0,
         "recent_days": recent_days,
+        "balance": balance,
         "error": None,
     })
 
@@ -1251,13 +1254,26 @@ async def partial_leave_submit(
     target = get_target_hours(selected_date)
 
     from app.models import DailySummary
+    from app.services.leave_balance import get_leave_balance, partial_pto_error
     summary = db.query(DailySummary).filter(
         DailySummary.employee_id == employee.id,
         DailySummary.date == selected_date,
     ).first()
 
-    # Validate hours (0 is allowed — it clears PTO)
+    old_hrs = summary.leave_hours if summary else 0.0
+    old_type = summary.leave_type.value if summary and summary.leave_type else "None"
+    if leave_type not in ("vacation", "sick"):
+        leave_type = "vacation"
+
+    error = None
     if leave_hours < 0 or leave_hours > target:
+        error = f"PTO hours must be between 0 and {target}."
+    else:
+        error = partial_pto_error(
+            db, employee, leave_type, selected_date, leave_hours, old_hrs, old_type,
+        )
+
+    if error:
         recent_days = []
         for i in range(14):
             d = today - timedelta(days=i)
@@ -1275,16 +1291,9 @@ async def partial_leave_submit(
             "current_leave_approved": summary.leave_approved if summary else False,
             "current_worked": summary.total_hours if summary else 0.0,
             "recent_days": recent_days,
-            "error": f"PTO hours must be between 0 and {target}.",
+            "balance": get_leave_balance(db, employee, year=selected_date.year),
+            "error": error,
         })
-
-    # Validate leave_type
-    if leave_type not in ("vacation", "sick"):
-        leave_type = "vacation"
-
-    # Update daily summary with PTO
-    old_hrs = summary.leave_hours if summary else 0.0
-    old_type = summary.leave_type.value if summary and summary.leave_type else "None"
 
     update_daily_summary(
         db, employee.id, selected_date,

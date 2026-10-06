@@ -31,9 +31,13 @@ WEEKDAY_HOURS = {
 # Past-day entry: only allow strictly prior workdays within this lookback window
 PAST_DAY_MAX_LOOKBACK_DAYS = 14
 
-# FOSC leave entitlements (defaults; overridable per employee)
-DEFAULT_VACATION_DAYS_PER_YEAR = 30.0
-DEFAULT_SICK_DAYS_PER_YEAR = 10.0
+# FOSC leave entitlements (defaults; overridable per employee).
+# Stated in work days. The bank is hours: one work day of entitlement is the
+# weekly average (9+9+9+9+4) / 5 = 8h. A day actually taken charges that
+# weekday's target (9h Mon–Thu, 4h Friday). Partial PTO charges the hours entered.
+DEFAULT_VACATION_DAYS_PER_YEAR = 22.0
+DEFAULT_SICK_DAYS_PER_YEAR = 15.0
+LEAVE_HOURS_PER_WORK_DAY = 8.0
 
 # BEOD (Break at End of Day): minimum real work hours before +1h paid lunch credit
 BEOD_MINIMUM_HOURS = 6.0

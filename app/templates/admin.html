@@ -201,7 +201,7 @@
                             <div class="flex items-center gap-1 justify-end">
                                 <!-- Edit -->
                                 <button
-                                    onclick="openEditModal({{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 30 }}, {{ emp.sick_days_per_year or 10 }})"
+                                    onclick="openEditModal({{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 22 }}, {{ emp.sick_days_per_year or 15 }})"
                                     class="p-1.5 rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 transition-colors"
                                     title="Edit" id="btn-edit-{{ emp.id }}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -287,14 +287,15 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs text-gray-500 mb-1">Vacation days / year</label>
-                        <input type="number" name="vacation_days" id="edit-vacation" class="form-input" min="0" step="1" value="30">
+                        <label class="block text-xs text-gray-500 mb-1">Vacation work days / year</label>
+                        <input type="number" name="vacation_days" id="edit-vacation" class="form-input" min="0" step="1" value="22">
                     </div>
                     <div>
-                        <label class="block text-xs text-gray-500 mb-1">Sick days / year</label>
-                        <input type="number" name="sick_days" id="edit-sick" class="form-input" min="0" step="1" value="10">
+                        <label class="block text-xs text-gray-500 mb-1">Sick work days / year</label>
+                        <input type="number" name="sick_days" id="edit-sick" class="form-input" min="0" step="1" value="15">
                     </div>
                 </div>
+                <p class="text-[11px] text-gray-500">Tracked in hours. 1 work day of allowance = 8h. A day taken charges 9h Mon–Thu or 4h Friday. Defaults: 22 vacation days (176h), 15 sick days (120h).</p>
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">Reset PIN <span class="text-gray-600">(leave blank
                             to keep current)</span></label>
@@ -321,8 +322,8 @@
     function openEditModal(id, name, email, role, vacationDays, sickDays) {
         document.getElementById('edit-form').action = '/admin/employee/' + id + '/edit';
         document.getElementById('edit-name').value = name;
-        document.getElementById('edit-vacation').value = vacationDays != null ? vacationDays : 30;
-        document.getElementById('edit-sick').value = sickDays != null ? sickDays : 10;
+        document.getElementById('edit-vacation').value = vacationDays != null ? vacationDays : 22;
+        document.getElementById('edit-sick').value = sickDays != null ? sickDays : 15;
         document.getElementById('edit-email').value = email;
         document.getElementById('edit-role').value = role;
         document.getElementById('edit-pin').value = '';

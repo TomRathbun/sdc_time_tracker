@@ -156,8 +156,8 @@ async def edit_employee(
     email: str = Form(""),
     role: str = Form("employee"),
     reset_pin: str = Form(""),
-    vacation_days: float = Form(30.0),
-    sick_days: float = Form(10.0),
+    vacation_days: float = Form(22.0),
+    sick_days: float = Form(15.0),
     db: Session = Depends(get_db),
 ):
     """Edit an employee's details."""

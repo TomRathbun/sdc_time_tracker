@@ -140,21 +140,23 @@
         <div class="glass-card p-4 border-l-4 border-primary-400">
             <p class="text-[10px] uppercase tracking-wider text-gray-500">Vacation</p>
             <p class="text-xl font-bold text-white font-mono mt-0.5">
-                {{ leave_balance.vacation.remaining|int }}
-                <span class="text-xs font-normal text-gray-400">/ {{ leave_balance.vacation.entitlement|int }}d</span>
+                {{ '%g'|format(leave_balance.vacation.remaining) }}h
+                <span class="text-xs font-normal text-gray-400">/ {{ '%g'|format(leave_balance.vacation.entitlement) }}h</span>
             </p>
             <p class="text-[11px] text-gray-500 mt-0.5">
-                {{ leave_balance.vacation.used|int }} used{% if leave_balance.vacation.pending %} · {{ leave_balance.vacation.pending|int }} pend.{% endif %}
+                {{ '%g'|format(leave_balance.vacation.entitlement_days) }} days
+                · {{ '%g'|format(leave_balance.vacation.used) }}h used{% if leave_balance.vacation.pending %} · {{ '%g'|format(leave_balance.vacation.pending) }}h pend.{% endif %}
             </p>
         </div>
         <div class="glass-card p-4 border-l-4 border-danger-400">
             <p class="text-[10px] uppercase tracking-wider text-gray-500">Sick</p>
             <p class="text-xl font-bold text-white font-mono mt-0.5">
-                {{ leave_balance.sick.remaining|int }}
-                <span class="text-xs font-normal text-gray-400">/ {{ leave_balance.sick.entitlement|int }}d</span>
+                {{ '%g'|format(leave_balance.sick.remaining) }}h
+                <span class="text-xs font-normal text-gray-400">/ {{ '%g'|format(leave_balance.sick.entitlement) }}h</span>
             </p>
             <p class="text-[11px] text-gray-500 mt-0.5">
-                {{ leave_balance.sick.used|int }} used{% if leave_balance.sick.pending %} · {{ leave_balance.sick.pending|int }} pend.{% endif %}
+                {{ '%g'|format(leave_balance.sick.entitlement_days) }} days
+                · {{ '%g'|format(leave_balance.sick.used) }}h used{% if leave_balance.sick.pending %} · {{ '%g'|format(leave_balance.sick.pending) }}h pend.{% endif %}
             </p>
         </div>
     </div>

@@ -76,6 +76,26 @@ def _run_migrations():
         )
         print("✅ Migration: Added sick_days_per_year to employees")
 
+    # Old contract defaults were 30 vacation / 10 sick days. Current policy is
+    # 22 vacation / 15 sick work days (tracked in hours). Only rows still on
+    # the old defaults are moved; a manager-set custom allowance is left alone.
+    if "vacation_days_per_year" in _cols("employees"):
+        cursor.execute(
+            "UPDATE employees SET vacation_days_per_year = ? "
+            "WHERE vacation_days_per_year = 30",
+            (DEFAULT_VACATION_DAYS_PER_YEAR,),
+        )
+        if cursor.rowcount:
+            print(f"✅ Migration: Vacation allowance 30 → {DEFAULT_VACATION_DAYS_PER_YEAR} days ({cursor.rowcount} employees)")
+    if "sick_days_per_year" in _cols("employees"):
+        cursor.execute(
+            "UPDATE employees SET sick_days_per_year = ? "
+            "WHERE sick_days_per_year = 10",
+            (DEFAULT_SICK_DAYS_PER_YEAR,),
+        )
+        if cursor.rowcount:
+            print(f"✅ Migration: Sick allowance 10 → {DEFAULT_SICK_DAYS_PER_YEAR} days ({cursor.rowcount} employees)")
+
     # daily_summaries breakdown columns
     if "daily_summaries" in [
         r[0] for r in cursor.execute(

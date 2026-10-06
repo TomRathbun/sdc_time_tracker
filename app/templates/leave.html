@@ -30,7 +30,7 @@
 <div class="max-w-4xl mx-auto">
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-white">Leave Management</h1>
-        <p class="text-gray-400 mt-1">Book advance vacation, sick, COVID sick, or UAE holiday. Full day = FOSC target (9h Mon–Thu, 4h Fri).</p>
+        <p class="text-gray-400 mt-1">Book advance vacation, sick, COVID sick, or UAE holiday. Balances are hours. A full day charges that day's target (9h Mon–Thu, 4h Fri).</p>
     </div>
 
     {% if error %}
@@ -44,17 +44,17 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <div class="glass-card p-5 border-l-4 border-primary-400">
             <p class="text-xs uppercase tracking-wider text-gray-500">Vacation remaining</p>
-            <p class="text-2xl font-bold text-white font-mono mt-1">{{ balance.vacation.remaining|int }}
-                <span class="text-sm text-gray-400 font-normal">/ {{ balance.vacation.entitlement|int }} days</span>
+            <p class="text-2xl font-bold text-white font-mono mt-1">{{ '%g'|format(balance.vacation.remaining) }}h
+                <span class="text-sm text-gray-400 font-normal">/ {{ '%g'|format(balance.vacation.entitlement) }}h</span>
             </p>
-            <p class="text-xs text-gray-500 mt-1">{{ balance.vacation.used|int }} used · {{ balance.vacation.pending|int }} pending</p>
+            <p class="text-xs text-gray-500 mt-1">{{ '%g'|format(balance.vacation.entitlement_days) }} work days · {{ '%g'|format(balance.vacation.used) }}h used · {{ '%g'|format(balance.vacation.pending) }}h pending</p>
         </div>
         <div class="glass-card p-5 border-l-4 border-danger-400">
             <p class="text-xs uppercase tracking-wider text-gray-500">Sick remaining (incl. COVID)</p>
-            <p class="text-2xl font-bold text-white font-mono mt-1">{{ balance.sick.remaining|int }}
-                <span class="text-sm text-gray-400 font-normal">/ {{ balance.sick.entitlement|int }} days</span>
+            <p class="text-2xl font-bold text-white font-mono mt-1">{{ '%g'|format(balance.sick.remaining) }}h
+                <span class="text-sm text-gray-400 font-normal">/ {{ '%g'|format(balance.sick.entitlement) }}h</span>
             </p>
-            <p class="text-xs text-gray-500 mt-1">{{ balance.sick.used|int }} used · {{ balance.sick.pending|int }} pending</p>
+            <p class="text-xs text-gray-500 mt-1">{{ '%g'|format(balance.sick.entitlement_days) }} work days · {{ '%g'|format(balance.sick.used) }}h used · {{ '%g'|format(balance.sick.pending) }}h pending</p>
         </div>
     </div>
     {% endif %}
@@ -63,7 +63,7 @@
         <!-- Vacation Request -->
         <div class="glass-card p-6">
             <h2 class="text-lg font-semibold text-white mb-2">Request Vacation</h2>
-            <p class="text-xs text-gray-500 mb-4">Advance multi-day OK. Each workday uses 1 vacation day (9h or 4h Fri charged).</p>
+            <p class="text-xs text-gray-500 mb-4">Advance multi-day OK. Each workday charges that day's hours (9h Mon–Thu, 4h Friday) against the {{ '%g'|format(balance.vacation.entitlement_days) if balance else 22 }}-day hour bank.</p>
             <form method="POST" action="/leave/vacation" id="vacation-form">
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
@@ -93,7 +93,7 @@
         <!-- Sick Leave -->
         <div class="glass-card p-6">
             <h2 class="text-lg font-semibold text-white mb-2">Record Sick Leave</h2>
-            <p class="text-xs text-gray-500 mb-4">Uses sick day balance. Full day = FOSC target hours.</p>
+            <p class="text-xs text-gray-500 mb-4">Charges sick hours. Full day = that day's target (9h or 4h Friday). Allowance is {{ '%g'|format(balance.sick.entitlement_days) if balance else 15 }} work days.</p>
             <form method="POST" action="/leave/sick" id="sick-form">
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
@@ -123,7 +123,7 @@
         <!-- COVID Sick -->
         <div class="glass-card p-6">
             <h2 class="text-lg font-semibold text-white mb-2">COVID Sick Hours</h2>
-            <p class="text-xs text-gray-500 mb-4">Tracked separately; counts against sick balance.</p>
+            <p class="text-xs text-gray-500 mb-4">Counts against the sick hour bank (same {{ '%g'|format(balance.sick.entitlement_days) if balance else 15 }} work days).</p>
             <form method="POST" action="/leave/covid-sick" id="covid-form">
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
