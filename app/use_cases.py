@@ -46,7 +46,7 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "actions": [
                     {"text": "On the login list, tap your name", "href": "/login", "screen": "Login"},
                     {"text": "Enter the initial PIN (1234)"},
-                    {"text": "Set a new 4–8 digit PIN when prompted", "href": "/reset-pin", "screen": "Reset PIN"},
+                    {"text": "Set a new 4-digit PIN when prompted", "href": "/reset-pin", "screen": "Reset PIN"},
                 ],
                 "notes": "Quick check-in/out arrows stay hidden until the PIN is changed.",
             },

@@ -33,7 +33,7 @@
                     <!-- Instructions -->
                     <div class="p-4 rounded-xl bg-primary-500/5 border border-primary-500/20">
                         <p class="text-xs text-primary-300 text-center">
-                            For security, first-time users must change their default PIN. Use 4–8 digits.
+                            For security, first-time users must change their default PIN. Use 4 digits.
                         </p>
                     </div>
 
@@ -48,12 +48,12 @@
                                         d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
                             </div>
-                            <input type="password" name="new_pin" id="new_pin" inputmode="numeric" pattern="[0-9]*"
+                            <input type="password" name="new_pin" id="new_pin" inputmode="numeric" pattern="[0-9]{4}" minlength="4"
                                 autofocus required
                                 autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                 class="w-full bg-surface-900/50 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                placeholder="••••" maxlength="8">
+                                placeholder="••••" maxlength="4">
                         </div>
                     </div>
 
@@ -70,11 +70,11 @@
                                 </svg>
                             </div>
                             <input type="password" name="confirm_pin" id="confirm_pin" inputmode="numeric"
-                                pattern="[0-9]*" required
+                                pattern="[0-9]{4}" minlength="4" required
                                 autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false"
                                 data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"
                                 class="w-full bg-surface-900/50 border border-white/10 rounded-xl pl-12 pr-4 py-3.5 text-white text-center text-2xl tracking-[0.5em] font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                                placeholder="••••" maxlength="8">
+                                placeholder="••••" maxlength="4">
                         </div>
                     </div>
 

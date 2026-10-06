@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth import verify_pin, create_session_token, get_current_employee
+from app.auth import verify_pin, create_session_token, get_current_employee, is_valid_pin
 from app.config import SESSION_COOKIE_NAME
 from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
 from app.services.audit import log_action
@@ -394,11 +394,11 @@ async def reset_pin_submit(
             "error": "PINs do not match.",
         })
 
-    if len(new_pin) < 4:
+    if not is_valid_pin(new_pin):
         return templates.TemplateResponse("reset_pin.html", {
             "request": request,
             "employee": employee,
-            "error": "PIN must be at least 4 digits.",
+            "error": "PIN must be exactly 4 digits.",
         })
 
     # Update PIN

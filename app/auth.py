@@ -16,6 +16,11 @@ from app.models import Employee
 serializer = URLSafeTimedSerializer(SECRET_KEY)
 
 
+def is_valid_pin(pin: str) -> bool:
+    """PINs are exactly four digits."""
+    return bool(pin) and pin.isdigit() and len(pin) == 4
+
+
 def hash_pin(pin: str) -> str:
     """Hash a PIN for storage."""
     return pbkdf2_sha256.hash(pin)
