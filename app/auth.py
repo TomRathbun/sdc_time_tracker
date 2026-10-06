@@ -60,7 +60,7 @@ def get_current_employee(request: Request, db: Session) -> Optional[Employee]:
     if (
         employee
         and employee.pin_needs_reset
-        and path not in ("/reset-pin", "/logout")
+        and path not in ("/reset-pin", "/logout", "/use-cases")
         and path != "/login"
         and not path.startswith("/login/")
     ):

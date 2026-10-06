@@ -43,6 +43,9 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - Random **innovation spotlight** in notification emails
 - Curated image + summary pairs (fighters, rotary wing, missiles, space, history)
 
+### Demo use cases
+- **`/use-cases`** — scenario → actions cheat sheet (on-time check-in, late check-in, SDC to remote site, BEOD, leave, manager approvals). Linked from login and the main nav.
+
 ### Systems engineering (training)
 - **`/systems-engineering`** — public teaching page derived from this app’s real design
 - Context &amp; architecture diagrams, functional/NFR requirements with IDs

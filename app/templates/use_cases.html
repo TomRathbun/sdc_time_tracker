@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Use Cases — SDC Time Tracker{% endblock %}
+
+{% block head %}
+<style>
+    .uc-section { scroll-margin-top: 5rem; }
+    .uc-card { scroll-margin-top: 5.5rem; }
+    .uc-step-num {
+        flex-shrink: 0;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 999px;
+        background: rgba(99, 102, 241, 0.18);
+        color: #a5b4fc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0.1rem;
+    }
+    .uc-screen {
+        display: inline-block;
+        margin-left: 0.35rem;
+        padding: 0.05rem 0.45rem;
+        border-radius: 0.4rem;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        background: rgba(14, 165, 233, 0.12);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        color: #7dd3fc;
+        vertical-align: middle;
+    }
+    .uc-screen:hover { background: rgba(14, 165, 233, 0.22); color: #e0f2fe; }
+    .uc-screen-static { cursor: default; }
+    .uc-toc a.active { color: #818cf8; }
+    @media print {
+        .collage-bg, .scanlines, nav, .tz-clock-panel, .print\\:hidden, button { display: none !important; }
+        body { background: #fff !important; color: #111 !important; }
+        .glass-card { background: #fff !important; border: 1px solid #ddd !important; box-shadow: none !important; }
+        h1, h2, h3, p, td, li, span { color: #111 !important; }
+        .uc-screen { border: 1px solid #999; color: #111; background: #f3f3f3; }
+        main { padding-top: 0 !important; }
+        a { color: #111 !important; text-decoration: none !important; }
+    }
+</style>
+{% endblock %}
+
+{# Public (login kiosk) and signed-in layouts both render this body. #}
+{% block content %}
+{% include "_use_cases_body.html" %}
+{% endblock %}
+
+{% block public_content %}
+{% include "_use_cases_body.html" %}
+{% endblock %}

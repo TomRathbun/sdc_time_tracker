@@ -219,6 +219,20 @@ async def systems_engineering_page(request: Request, db: Session = Depends(get_d
     })
 
 
+@router.get("/use-cases", response_class=HTMLResponse)
+async def use_cases_page(request: Request, db: Session = Depends(get_db)):
+    """Public demo page: scenarios mapped to the screens that perform them."""
+    from app.use_cases import USE_CASE_GROUPS, featured_cases
+
+    employee = get_current_employee(request, db)
+    return templates.TemplateResponse("use_cases.html", {
+        "request": request,
+        "employee": employee,
+        "groups": USE_CASE_GROUPS,
+        "featured": featured_cases(),
+    })
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, db: Session = Depends(get_db)):
     """Show employee list for login.

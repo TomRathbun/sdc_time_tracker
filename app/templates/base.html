@@ -95,6 +95,13 @@
                             </svg>
                             Leave
                         </a>
+                        <a href="/use-cases" class="nav-link" id="nav-use-cases" title="Demo use cases and actions">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                            </svg>
+                            Use Cases
+                        </a>
                         <a href="/systems-engineering" class="nav-link" id="nav-se" title="Systems engineering training">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -188,6 +195,7 @@
                 <div class="px-4 pt-2 space-y-1">
                     <a href="/" class="mobile-nav-link">Dashboard</a>
                     <a href="/leave" class="mobile-nav-link">Leave</a>
+                    <a href="/use-cases" class="mobile-nav-link">Use Cases</a>
                     <a href="/systems-engineering" class="mobile-nav-link">Systems Engineering</a>
                     {% if employee.role.value in ['manager', 'supervisor'] %}
                     <a href="/reports" class="mobile-nav-link">Reports</a>
