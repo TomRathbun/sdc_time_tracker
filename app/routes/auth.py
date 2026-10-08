@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import verify_pin, create_session_token, get_current_employee, is_valid_pin
 from app.config import SESSION_COOKIE_NAME, BEOD_MINIMUM_HOURS
-from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
+from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary, OffsiteEntry
 from app.services.audit import log_action
 from app.services.settings import get_setting, get_bool_setting, parse_hhmm_setting
 from app.services.time_calc import projected_checkout_from_entries, beod_offered_on
@@ -43,6 +43,7 @@ def _empty_status(**overrides):
         "projected_checkout": None,
         "projected_checkout_beod": None,
         "beod_claimed": False,
+        "open_offsite": False,
     }
     base.update(overrides)
     return base
@@ -86,6 +87,15 @@ def _get_employee_status(db: Session, employees):
                 time=last_time.strftime("%H:%M"),
                 minutes=last_time.hour * 60 + last_time.minute,
             )
+    open_offsite_ids = {
+        row[0]
+        for row in db.query(OffsiteEntry.employee_id).filter(
+            OffsiteEntry.date == today,
+            OffsiteEntry.end_time.is_(None),
+        )
+    }
+    for emp_id, info in status_map.items():
+        info["open_offsite"] = emp_id in open_offsite_ids
     return status_map
 
 

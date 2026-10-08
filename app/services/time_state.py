@@ -7,7 +7,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.models import EntryType, OffsiteEntry, TimeEntry
+from app.models import EntryType, LocationType, OffsiteEntry, TimeEntry
 
 # Day punch status values
 STATUS_NOT_STARTED = "not_started"
@@ -16,6 +16,7 @@ STATUS_CHECKED_OUT = "checked_out"
 
 RETURN_CHECKIN_COMMENT = "Return after checkout (called back)"
 RECHECKOUT_COMMENT = "Re-checkout — extra session after being called back"
+OFFSITE_CHECKOUT_COMMENT = "Check-out for offsite"
 
 
 def latest_entry(
@@ -221,7 +222,7 @@ def validate_offsite_range(
     employee_id: int,
     work_date: date,
     start_time: datetime,
-    end_time: datetime,
+    end_time: Optional[datetime],
     *,
     exclude_offsite_id: Optional[int] = None,
     extra_clock_intervals: Optional[Sequence[Tuple[datetime, datetime]]] = None,
@@ -231,15 +232,13 @@ def validate_offsite_range(
     """
     Validate an offsite block (Option A rules).
 
-    - end must be after start
-    - must not overlap other offsite entries that day
-    - must not overlap completed clock sessions
-    - must not fall while still checked in (open session covering the range)
-
-    Returns error message or None if valid.
+    end_time None means the visit is still open; check-in will close it.
+    An open visit must not overlap clock time or another offsite.
     """
-    if end_time <= start_time:
+    if end_time is not None and end_time <= start_time:
         return "End time must be after start time."
+
+    proposed_end = end_time if end_time is not None else datetime.max
 
     if not ignore_existing_offsite:
         offsites = (
@@ -253,7 +252,13 @@ def validate_offsite_range(
         for oe in offsites:
             if exclude_offsite_id is not None and oe.id == exclude_offsite_id:
                 continue
-            if ranges_overlap(start_time, end_time, oe.start_time, oe.end_time):
+            other_end = oe.end_time if oe.end_time is not None else datetime.max
+            if ranges_overlap(start_time, proposed_end, oe.start_time, other_end):
+                if oe.end_time is None:
+                    return (
+                        f"Offsite already open since {oe.start_time.strftime('%H:%M')} "
+                        f"at {oe.location}. Check in to close it."
+                    )
                 return (
                     f"Offsite overlaps an existing remote site entry "
                     f"({oe.start_time.strftime('%H:%M')}–{oe.end_time.strftime('%H:%M')})."
@@ -278,7 +283,7 @@ def validate_offsite_range(
         clock_intervals.extend(extra_clock_intervals)
 
     for c_start, c_end in clock_intervals:
-        if ranges_overlap(start_time, end_time, c_start, c_end):
+        if ranges_overlap(start_time, proposed_end, c_start, c_end):
             return (
                 "Offsite overlaps a checked-in work interval "
                 f"({c_start.strftime('%H:%M')}–{c_end.strftime('%H:%M')}). "
@@ -286,11 +291,88 @@ def validate_offsite_range(
             )
 
     # Open check-in with no checkout: treat as [open_start, +inf).
-    # Overlaps if the offsite ends after the open check-in started.
-    if open_start is not None and end_time > open_start:
+    if open_start is not None and proposed_end > open_start:
         return (
             "You are currently checked in (or this offsite overlaps an open session). "
             "Check out before logging remote site work, or use the gap prompt after returning."
         )
 
+    return None
+
+
+def find_open_offsite(
+    db: Session,
+    employee_id: int,
+    work_date: date,
+) -> Optional[OffsiteEntry]:
+    """Latest offsite today that has a start and no end yet."""
+    return (
+        db.query(OffsiteEntry)
+        .filter(
+            OffsiteEntry.employee_id == employee_id,
+            OffsiteEntry.date == work_date,
+            OffsiteEntry.end_time.is_(None),
+        )
+        .order_by(OffsiteEntry.start_time.desc(), OffsiteEntry.id.desc())
+        .first()
+    )
+
+
+def close_open_offsites(
+    db: Session,
+    employee_id: int,
+    work_date: date,
+    end_time: datetime,
+) -> List[OffsiteEntry]:
+    """Fill the end time on open offsites that started before this check-in.
+
+    Does not commit. Visits that start at or after end_time are left open.
+    """
+    rows = (
+        db.query(OffsiteEntry)
+        .filter(
+            OffsiteEntry.employee_id == employee_id,
+            OffsiteEntry.date == work_date,
+            OffsiteEntry.end_time.is_(None),
+            OffsiteEntry.start_time < end_time,
+        )
+        .order_by(OffsiteEntry.start_time)
+        .all()
+    )
+    for row in rows:
+        row.end_time = end_time
+    return rows
+
+
+def depart_for_offsite(
+    db: Session,
+    employee_id: int,
+    work_date: date,
+    start_time: datetime,
+    now: datetime,
+    *,
+    offset_approved: bool,
+) -> Optional[str]:
+    """Check out at the offsite start when the employee is still clocked in.
+
+    No-op if they are already out or have not started. Does not commit.
+    Flushes so a following overlap check sees the checkout.
+    """
+    if current_status(db, employee_id, work_date) != STATUS_CHECKED_IN:
+        return None
+    err = can_check_out(db, employee_id, work_date, declared_time=start_time)
+    if err:
+        return err
+    db.add(TimeEntry(
+        employee_id=employee_id,
+        date=work_date,
+        declared_time=start_time,
+        submission_time=now,
+        entry_type=EntryType.check_out,
+        location_type=LocationType.office,
+        is_remote=False,
+        comments=OFFSITE_CHECKOUT_COMMENT,
+        offset_approved=offset_approved,
+    ))
+    db.flush()
     return None

@@ -20,8 +20,9 @@ from app.services.time_calc import (
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
-    last_checkout_entry, STATUS_CHECKED_OUT,
+    last_checkout_entry, STATUS_CHECKED_OUT, STATUS_CHECKED_IN,
     RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
+    close_open_offsites, depart_for_offsite,
 )
 from app.services.time_offset import (
     offset_approved_default, get_variance_reasons, resolve_offset_comment,
@@ -210,9 +211,9 @@ async def checkin_submit(
         offset_approved=True if returning else offset_approved_default(db, declared_time, now),
     )
     db.add(entry)
+    closed_offsite = close_open_offsites(db, employee.id, today, declared_time)
     db.commit()
 
-    # Update daily summary
     update_daily_summary(db, employee.id, today)
 
     # Audit log
@@ -224,6 +225,7 @@ async def checkin_submit(
             "submission_time": str(now),
             "location_type": loc_type.value,
             "comments": comment_text,
+            "offsite_closed": [row.id for row in closed_offsite],
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -282,7 +284,7 @@ async def checkin_submit(
         TimeEntry.entry_type == EntryType.check_out,
     ).order_by(TimeEntry.declared_time.desc()).first()
 
-    if prev_checkout:
+    if prev_checkout and not closed_offsite:
         gap_start = prev_checkout.declared_time
         gap_end = declared_time
         gap_minutes = (gap_end - gap_start).total_seconds() / 60
@@ -558,6 +560,45 @@ async def checkout_submit(
     return RedirectResponse(url="/", status_code=303)
 
 
+def _offsite_departure(db: Session, employee, today: date, now: datetime) -> dict:
+    """Defaults for leaving the office: checkout time as the offsite start."""
+    from app.routes.quick_action import round_up_5
+
+    status = current_status(db, employee.id, today)
+    if status == STATUS_CHECKED_IN:
+        start = round_up_5(now)
+        return {
+            "offsite_start_hour": start.hour,
+            "offsite_start_minute": start.minute,
+            "until_return": True,
+            "will_checkout": True,
+            "offsite_note": (
+                "You are checked in. Submitting checks you out at the start time. "
+                "Leave the end open — check-in sets it when you get back."
+            ),
+        }
+    if status == STATUS_CHECKED_OUT:
+        last = last_checkout_entry(db, employee.id, today)
+        if last:
+            return {
+                "offsite_start_hour": last.declared_time.hour,
+                "offsite_start_minute": (last.declared_time.minute // 5) * 5,
+                "until_return": True,
+                "will_checkout": False,
+                "offsite_note": (
+                    f"Already checked out at {last.declared_time.strftime('%H:%M')}. "
+                    "Start is filled from that. Check-in sets the end when you get back."
+                ),
+            }
+    return {
+        "offsite_start_hour": 8,
+        "offsite_start_minute": 0,
+        "until_return": False,
+        "will_checkout": False,
+        "offsite_note": "",
+    }
+
+
 @router.get("/time/offsite", response_class=HTMLResponse)
 async def offsite_page(request: Request, db: Session = Depends(get_db)):
     """Show offsite work logging form."""
@@ -566,13 +607,15 @@ async def offsite_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     now = datetime.now()
+    today = date.today()
     return templates.TemplateResponse("offsite.html", {
         "request": request,
         "employee": employee,
         "now": now,
-        "today": date.today(),
+        "today": today,
         "error": None,
-        **_offsite_beod_fields(db, date.today(), employee),
+        **_offsite_departure(db, employee, today, now),
+        **_offsite_beod_fields(db, today, employee),
     })
 
 
@@ -582,9 +625,10 @@ async def offsite_submit(
     location: str = Form(...),
     start_hour: int = Form(...),
     start_minute: int = Form(...),
-    end_hour: int = Form(...),
-    end_minute: int = Form(...),
+    end_hour: int | None = Form(None),
+    end_minute: int | None = Form(None),
     comments: str = Form(""),
+    until_return: str = Form("false"),
     lunch_end_of_day: bool = Form(False),
     beod_hours: str = Form("1"),
     db: Session = Depends(get_db),
@@ -597,21 +641,38 @@ async def offsite_submit(
     today = date.today()
     now = datetime.now()
 
-    start_time = datetime(today.year, today.month, today.day, start_hour, start_minute)
-    end_time = datetime(today.year, today.month, today.day, end_hour, end_minute)
-
-    offsite_err = validate_offsite_range(
-        db, employee.id, today, start_time, end_time,
-    )
-    if offsite_err:
+    def _offsite_error(message: str):
         return templates.TemplateResponse("offsite.html", {
             "request": request,
             "employee": employee,
             "now": now,
             "today": today,
-            "error": offsite_err,
+            "error": message,
+            **_offsite_departure(db, employee, today, now),
             **_offsite_beod_fields(db, today, employee),
         })
+
+    start_time = datetime(today.year, today.month, today.day, start_hour, start_minute)
+    open_ended = str(until_return).lower() in ("true", "1", "on", "yes")
+    end_time = None
+    if not open_ended:
+        if end_hour is None or end_minute is None:
+            return _offsite_error("Enter an end time, or leave it open until you check back in.")
+        end_time = datetime(today.year, today.month, today.day, end_hour, end_minute)
+
+    depart_err = depart_for_offsite(
+        db, employee.id, today, start_time, now,
+        offset_approved=offset_approved_default(db, start_time, now),
+    )
+    if depart_err:
+        return _offsite_error(depart_err)
+
+    offsite_err = validate_offsite_range(
+        db, employee.id, today, start_time, end_time,
+    )
+    if offsite_err:
+        db.rollback()
+        return _offsite_error(offsite_err)
 
     entry = OffsiteEntry(
         employee_id=employee.id,
@@ -634,7 +695,8 @@ async def offsite_submit(
         new_values={
             "location": location,
             "start_time": str(start_time),
-            "end_time": str(end_time),
+            "end_time": str(end_time) if end_time else "",
+            "open_ended": end_time is None,
             "comments": comments,
             "beod": bool(lunch_end_of_day) and beod_offered_on(today),
             "beod_hours": normalize_beod_length(beod_hours) if lunch_end_of_day else 0,

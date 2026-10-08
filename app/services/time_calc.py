@@ -203,8 +203,11 @@ def calculate_clock_hours(time_entries: List[TimeEntry]) -> float:
 def calculate_offsite_hours(offsite_entries: List[OffsiteEntry]) -> float:
     total_seconds = 0.0
     for offsite in offsite_entries:
+        if not offsite.end_time or not offsite.start_time:
+            continue
         delta = offsite.end_time - offsite.start_time
-        total_seconds += delta.total_seconds()
+        if delta.total_seconds() > 0:
+            total_seconds += delta.total_seconds()
     return round(total_seconds / 3600.0, 2)
 
 

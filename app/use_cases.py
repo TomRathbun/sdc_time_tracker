@@ -163,14 +163,14 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "id": "sdc-to-remote-eod",
                 "scenario": "SDC to Remote Site EOD",
                 "who": "Employee",
-                "summary": "Check In, Check Out, Remote site entry.",
+                "summary": "Tap the offsite icon. If you are checked in, that checks you out and starts the site visit.",
                 "featured": True,
                 "actions": [
                     {"text": "Check In at SDC (Quick Check In, or Dashboard Check In with Office)", "href": "/time/checkin", "screen": "Check In"},
-                    {"text": "Check Out when you leave SDC", "href": "/time/checkout", "screen": "Check Out"},
-                    {"text": "Open Offsite and log the remote site location plus start/end", "href": "/time/offsite", "screen": "Offsite / Remote site"},
+                    {"text": "Tap the offsite icon. Confirm the location. Start time is your checkout.", "href": "/login", "screen": "Login"},
+                    {"text": "Check in when you get back. That sets the offsite end time.", "href": "/login", "screen": "Login"},
                 ],
-                "notes": "Offsite hours add to FOSC for the day. If you check back in later, the app can also offer the Remote Site Work gap form automatically.",
+                "notes": "Leave the end open unless you already know it. Offsite hours add to FOSC once the visit is closed. A gap with no open offsite still offers the Remote Site Work form.",
             },
             {
                 "id": "midday-remote-gap",

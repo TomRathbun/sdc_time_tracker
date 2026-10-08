@@ -93,7 +93,8 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
     )
     off_h = 0.0
     for o in offsites:
-        off_h += (o.end_time - o.start_time).total_seconds() / 3600.0
+        if o.end_time and o.start_time and o.end_time > o.start_time:
+            off_h += (o.end_time - o.start_time).total_seconds() / 3600.0
     off_h = round(off_h, 2) or None
 
     summary = (

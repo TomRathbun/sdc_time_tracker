@@ -85,6 +85,8 @@
                 {% set emp_on_leave = on_leave_map.get(emp.id, False) %}
                 <div class="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-surface-900/30 hover:bg-surface-900/60 hover:border-white/10 transition-all group emp-row"
                     id="emp-row-{{ emp.id }}" data-name="{{ emp.name }}"
+                    data-status="{{ emp_status }}"
+                    data-open-offsite="{% if emp_info.open_offsite %}1{% else %}0{% endif %}"
                     data-beod-claim="{% if emp.beod_pref_known and emp.beod_pref_claim %}1{% else %}0{% endif %}"
                     data-beod-hours="{{ emp.beod_pref_hours if emp.beod_pref_hours else 1 }}">
                     <!-- Avatar + Name -->
@@ -115,7 +117,7 @@
                                 {% elif emp_status == 'checked_out' %}
                                 <span class="flex items-center gap-1 text-[10px] text-gray-500">
                                     <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
-                                    Out @ {{ emp_time }}
+                                    Out @ {{ emp_time }}{% if emp_info.open_offsite %}<span class="text-accent-400"> · offsite open</span>{% endif %}
                                 </span>
                                 {% endif %}
                             </div>
@@ -134,7 +136,7 @@
                                 {% else %}
                                     bg-success-500/10 text-success-400 hover:bg-success-500/20 hover:text-success-300 active:scale-95
                                 {% endif %}"
-                            title="{% if emp_status == 'checked_in' %}Already checked in{% elif emp_status == 'checked_out' %}Return (called back){% else %}Quick Check In{% endif %}"
+                            title="{% if emp_status == 'checked_in' %}Already checked in{% elif emp_info.open_offsite %}Check in — ends the offsite{% elif emp_status == 'checked_out' %}Return (called back){% else %}Quick Check In{% endif %}"
                             id="btn-quick-ci-{{ emp.id }}"
                             {% if emp_status == 'checked_in' %}disabled aria-disabled="true"{% endif %}>
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
@@ -159,9 +161,9 @@
                             </svg>
                         </button>
                         <button type="button"
-                            onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'offsite', '')"
+                            onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'offsite', '{{ emp_time or '' }}')"
                             class="p-2 rounded-lg transition-all active:scale-95 bg-accent-500/10 text-accent-400 hover:bg-accent-500/20 hover:text-accent-300"
-                            title="Quick Offsite"
+                            title="{% if emp_status == 'checked_in' %}Leave for offsite (checks you out){% elif emp_status == 'checked_out' %}Log offsite from your checkout{% else %}Quick Offsite{% endif %}"
                             id="btn-quick-os-{{ emp.id }}">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
                                 <path d="M12 21s7-5.4 7-11a7 7 0 10-14 0c0 5.6 7 11 7 11z"></path>
@@ -374,6 +376,11 @@
                     </div>
                 </div>
             </div>
+            <label class="flex items-start gap-2 cursor-pointer" for="offsite-until-return">
+                <input type="checkbox" id="offsite-until-return" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500" checked>
+                <span class="text-[11px] text-gray-400">Still there — check-in will set the end</span>
+            </label>
+            <p id="offsite-transition-note" class="text-[11px] text-accent-300"></p>
             <div>
                 <label for="offsite-comments" class="block text-xs text-gray-500 mb-1">Notes <span class="text-gray-600">(optional)</span></label>
                 <input type="text" id="offsite-comments"
@@ -537,6 +544,7 @@
     let currentAction = null;
     let currentLastPunch = '';
     var QUICK_THRESHOLD = {{ comment_threshold|default(30) }};
+    var _offsiteChecksOut = false;
     var _adjustTime = null;
     var _adjustDirty = false;
     var _shownHHMM = '';
@@ -592,20 +600,48 @@
         if (offsiteBeodWrap) offsiteBeodWrap.classList.add('hidden');
         applyRememberedBeod();
         if (action === 'offsite') {
+            var row = document.getElementById('emp-row-' + empId);
+            var status = row ? (row.getAttribute('data-status') || '') : '';
+            _offsiteChecksOut = status === 'checked_in';
             var nowOff = new Date();
-            var endMinute = Math.floor(nowOff.getMinutes() / 5) * 5;
             var setSel = function (id, value) {
                 var el = document.getElementById(id);
                 if (el) el.value = String(value);
             };
-            setSel('offsite-start-hour', 8);
-            setSel('offsite-start-minute', 0);
+            var startAt = null;
+            if (status === 'checked_in') {
+                startAt = ceil5(nowOff);
+            } else if (status === 'checked_out' && currentLastPunch) {
+                startAt = parseTodayHHMM(currentLastPunch);
+            }
+            if (startAt) {
+                setSel('offsite-start-hour', startAt.getHours());
+                setSel('offsite-start-minute', startAt.getMinutes() - (startAt.getMinutes() % 5));
+            } else {
+                setSel('offsite-start-hour', 8);
+                setSel('offsite-start-minute', 0);
+            }
             setSel('offsite-end-hour', nowOff.getHours());
-            setSel('offsite-end-minute', endMinute);
+            setSel('offsite-end-minute', Math.floor(nowOff.getMinutes() / 5) * 5);
+            var until = document.getElementById('offsite-until-return');
+            if (until) until.checked = status === 'checked_in' || status === 'checked_out';
+            syncOffsiteUntilReturn();
+            var transition = document.getElementById('offsite-transition-note');
+            if (transition) {
+                if (status === 'checked_in') {
+                    transition.textContent = 'Checks you out at the start time, then starts the offsite.';
+                } else if (status === 'checked_out') {
+                    transition.textContent = 'Already checked out. Start is filled from that checkout.';
+                } else {
+                    transition.textContent = '';
+                }
+            }
             var locEl = document.getElementById('offsite-location');
             if (locEl) locEl.value = '';
             var noteEl = document.getElementById('offsite-comments');
             if (noteEl) noteEl.value = '';
+        } else {
+            _offsiteChecksOut = false;
         }
         _adjustDirty = false;
         _adjustTime = null;
@@ -618,6 +654,10 @@
             icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="13" y="3" width="8" height="18" rx="1.5"></rect><path d="M3 12h8"></path><path d="M8 8l3 4-3 4"></path></svg>';
             title.textContent = currentLastPunch ? 'Return to work' : 'Quick Check In';
             subtitle.textContent = currentLastPunch ? (empName + ' · out at ' + currentLastPunch) : empName;
+            var ciRow = document.getElementById('emp-row-' + empId);
+            if (ciRow && ciRow.getAttribute('data-open-offsite') === '1') {
+                subtitle.textContent += ' · closes the open offsite';
+            }
         } else if (action === 'recheckout') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-warning-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="18" rx="1.5"></rect><path d="M13 12h8"></path><path d="M17 8l4 4-4 4"></path></svg>';
@@ -632,7 +672,7 @@
         if (action === 'offsite') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-accent-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 21s7-5.4 7-11a7 7 0 10-14 0c0 5.6 7 11 7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>';
-            title.textContent = 'Quick Offsite';
+            title.textContent = _offsiteChecksOut ? 'Leave for offsite' : 'Quick Offsite';
             subtitle.textContent = empName;
         }
 
@@ -693,6 +733,15 @@
         var pref = rememberedBeod();
         setBeodControl('modal-beod', 'modal-beod-hours', 'preview-beod-length-wrap', pref.claim, pref.hours);
         setBeodControl('quick-offsite-beod', 'quick-offsite-beod-hours', 'quick-offsite-beod-length', pref.claim, pref.hours);
+    }
+
+    function syncOffsiteUntilReturn() {
+        var cb = document.getElementById('offsite-until-return');
+        var open = cb && cb.checked;
+        ['offsite-end-hour', 'offsite-end-minute'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.disabled = !!open;
+        });
     }
 
     function closeQuickModal() {
@@ -896,7 +945,10 @@
             var pad = function (n) { n = parseInt(n, 10); return (n < 10 ? '0' : '') + n; };
             formData.append('location', (document.getElementById('offsite-location').value || '').trim());
             formData.append('start_time', pad(document.getElementById('offsite-start-hour').value) + ':' + pad(document.getElementById('offsite-start-minute').value));
-            formData.append('end_time', pad(document.getElementById('offsite-end-hour').value) + ':' + pad(document.getElementById('offsite-end-minute').value));
+            var untilReturn = document.getElementById('offsite-until-return');
+            var openEnded = untilReturn && untilReturn.checked;
+            formData.append('until_return', openEnded ? 'true' : 'false');
+            formData.append('end_time', openEnded ? '' : (pad(document.getElementById('offsite-end-hour').value) + ':' + pad(document.getElementById('offsite-end-minute').value)));
             formData.append('comments', document.getElementById('offsite-comments').value || '');
             var offBeod = document.getElementById('quick-offsite-beod');
             var offBeodOn = offBeod && offBeod.checked;
@@ -1068,6 +1120,8 @@
                 offWrap.classList.toggle('hidden', !offBeod.checked);
             });
         }
+        var untilReturn = document.getElementById('offsite-until-return');
+        if (untilReturn) untilReturn.addEventListener('change', syncOffsiteUntilReturn);
     });
 
     function updateQuickButton() {
@@ -1116,6 +1170,9 @@
                         } else if (currentAction === 'recheckout') {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-warning-600 to-warning-500 hover:from-warning-500 hover:to-warning-400 shadow-warning-500/25';
                             btnText.textContent = 'Re-Check Out';
+                        } else if (currentAction === 'offsite') {
+                            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-accent-600 to-accent-500 hover:from-accent-500 hover:to-accent-400 shadow-accent-500/25';
+                            btnText.textContent = _offsiteChecksOut ? 'Check Out & Start Offsite' : 'Log Offsite';
                         } else {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-danger-500/25';
                             btnText.textContent = 'Check Out';
@@ -1132,7 +1189,9 @@
                     btn.className = disabledClass;
                     btnText.textContent = currentAction === 'checkin'
                         ? (currentLastPunch ? 'Return' : 'Check In')
-                        : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out');
+                        : (currentAction === 'offsite'
+                            ? (_offsiteChecksOut ? 'Check Out & Start Offsite' : 'Log Offsite')
+                            : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out'));
                 });
         }, 300);
     }

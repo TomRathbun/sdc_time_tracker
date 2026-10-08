@@ -123,7 +123,7 @@ class OffsiteEntry(Base):
     date = Column(Date, nullable=False, index=True)
     location = Column(String(200), nullable=False)
     start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=True)  # null = still offsite; check-in fills it
     comments = Column(Text, default="")
     submission_time = Column(DateTime, default=datetime.utcnow, nullable=False)
     needs_review = Column(Boolean, default=False)

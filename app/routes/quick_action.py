@@ -19,8 +19,9 @@ from app.services.time_calc import (
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
-    last_checkout_entry, STATUS_CHECKED_OUT,
+    last_checkout_entry, STATUS_CHECKED_IN, STATUS_CHECKED_OUT,
     RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
+    close_open_offsites, depart_for_offsite,
 )
 from app.services.time_offset import (
     offset_approved_default,
@@ -188,6 +189,7 @@ async def quick_checkin(
         offset_approved=True if returning else offset_approved_default(db, rounded_time, now),
     )
     db.add(entry)
+    closed = close_open_offsites(db, emp.id, today, rounded_time)
     db.commit()
 
     update_daily_summary(db, emp.id, today)
@@ -200,6 +202,10 @@ async def quick_checkin(
             "declared_time": str(rounded_time),
             "submission_time": str(now),
             "returning": returning,
+            "offsite_closed": [
+                {"location": row.location, "start": row.start_time.strftime("%H:%M")}
+                for row in closed
+            ],
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -241,6 +247,12 @@ async def quick_checkin(
         msg = f"Returned at {rounded_time.strftime('%H:%M')} — check out when the extra work is done"
     else:
         msg = f"Checked in at {rounded_time.strftime('%H:%M')}"
+    if closed:
+        bits = ", ".join(
+            f"{row.location} {row.start_time.strftime('%H:%M')}–{row.end_time.strftime('%H:%M')}"
+            for row in closed
+        )
+        msg = f"Checked in at {rounded_time.strftime('%H:%M')}. Offsite ended: {bits}"
 
     return JSONResponse({
         "ok": True,
@@ -614,9 +626,14 @@ async def quick_offsite(
     comments: str = Form(""),
     beod: str = Form("false"),
     beod_hours: str = Form("1"),
+    until_return: str = Form("false"),
     db: Session = Depends(get_db),
 ):
-    """PIN-verified offsite block from the login list. Optional BEOD claim."""
+    """PIN-verified offsite block from the login list. Optional BEOD claim.
+
+    If still checked in, also checks out at the offsite start.
+    A blank end stays open until the next check-in.
+    """
     emp = db.query(Employee).filter(
         Employee.id == employee_id,
         Employee.is_active == True,
@@ -633,12 +650,26 @@ async def quick_offsite(
     today = date.today()
     now = datetime.now()
     start = _parse_hhmm(today, start_time)
-    end = _parse_hhmm(today, end_time)
-    if start is None or end is None:
-        return JSONResponse({"ok": False, "error": "Enter a start and end time."}, status_code=400)
+    if start is None:
+        return JSONResponse({"ok": False, "error": "Enter a start time."}, status_code=400)
+    open_ended = str(until_return).lower() in ("true", "1", "on", "yes") or not (end_time or "").strip()
+    end = None
+    if not open_ended:
+        end = _parse_hhmm(today, end_time)
+        if end is None:
+            return JSONResponse({"ok": False, "error": "Enter an end time, or leave it open until you check back in."}, status_code=400)
+
+    was_in = current_status(db, emp.id, today) == STATUS_CHECKED_IN
+    depart_err = depart_for_offsite(
+        db, emp.id, today, start, now,
+        offset_approved=offset_approved_default(db, start, now),
+    )
+    if depart_err:
+        return JSONResponse({"ok": False, "error": depart_err}, status_code=400)
 
     range_err = validate_offsite_range(db, emp.id, today, start, end)
     if range_err:
+        db.rollback()
         return JSONResponse({"ok": False, "error": range_err}, status_code=400)
 
     note = (comments or "").strip()
@@ -666,14 +697,16 @@ async def quick_offsite(
         beod_requested_hours=requested_beod,
     )
 
-    hours = round((end - start).total_seconds() / 3600.0, 2)
+    hours = round((end - start).total_seconds() / 3600.0, 2) if end else 0
     log_action(
         db, action="quick_offsite", entity_type="OffsiteEntry",
         entity_id=entry.id, employee_id=emp.id,
         new_values={
             "location": place,
             "start_time": str(start),
-            "end_time": str(end),
+            "end_time": str(end) if end else "",
+            "open_ended": end is None,
+            "checked_out_for_offsite": was_in,
             "hours": hours,
             "comments": note,
             "beod": claim_beod,
@@ -682,10 +715,27 @@ async def quick_offsite(
         ip_address=request.client.host if request.client else "",
     )
 
-    msg = (
-        f"Offsite {start.strftime('%H:%M')}–{end.strftime('%H:%M')} "
-        f"at {place} · {summary.total_hours}h FOSC"
-    )
+    if was_in and end:
+        msg = (
+            f"Checked out at {start.strftime('%H:%M')}. "
+            f"Offsite {start.strftime('%H:%M')}–{end.strftime('%H:%M')} at {place}"
+        )
+    elif was_in:
+        msg = (
+            f"Checked out at {start.strftime('%H:%M')}. "
+            f"Offsite started at {place}. Check in when you get back to set the end."
+        )
+    elif end:
+        msg = (
+            f"Offsite {start.strftime('%H:%M')}–{end.strftime('%H:%M')} "
+            f"at {place}"
+        )
+    else:
+        msg = (
+            f"Offsite started at {start.strftime('%H:%M')} at {place}. "
+            "Check in when you get back to set the end."
+        )
+    msg += f" · {summary.total_hours}h FOSC"
     msg += _beod_status_note(claim_beod, requested_beod, summary, db)
     return JSONResponse({
         "ok": True,

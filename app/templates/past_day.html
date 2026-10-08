@@ -84,7 +84,7 @@
                     <span class="w-2 h-2 rounded-full bg-accent-400"></span>
                     <span class="text-accent-300">{{ oe.location }}</span>
                     <span class="font-mono text-white">{{ oe.start_time.strftime("%H:%M") }} – {{
-                        oe.end_time.strftime("%H:%M") }}</span>
+                        oe.end_time.strftime("%H:%M") if oe.end_time else "open" }}</span>
                 </div>
                 {% endfor %}
             </div>

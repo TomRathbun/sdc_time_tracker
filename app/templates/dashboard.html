@@ -402,7 +402,7 @@
                     <p class="font-medium text-white text-sm truncate">{{ entry.location }}</p>
                     {% if entry.comments %}<p class="text-xs text-gray-500 truncate">{{ entry.comments }}</p>{% endif %}
                 </div>
-                <p class="text-xs font-mono text-white flex-shrink-0">{{ entry.start_time.strftime("%H:%M") }}–{{ entry.end_time.strftime("%H:%M") }}</p>
+                <p class="text-xs font-mono text-white flex-shrink-0">{% if entry.end_time %}{{ entry.start_time.strftime("%H:%M") }}–{{ entry.end_time.strftime("%H:%M") }}{% else %}{{ entry.start_time.strftime("%H:%M") }}–open{% endif %}</p>
             </div>
             {% endfor %}
         </div>

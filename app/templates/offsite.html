@@ -47,6 +47,9 @@
 
             <!-- Time Range -->
             <div class="mb-6">
+                {% if offsite_note %}
+                <p class="text-sm text-accent-300 mb-3">{{ offsite_note }}</p>
+                {% endif %}
                 <label class="block text-sm font-medium text-gray-300 mb-3">Time Period</label>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -54,12 +57,12 @@
                         <div class="flex gap-2">
                             <select name="start_hour" id="start_hour" class="form-select flex-1">
                                 {% for h in range(0, 24) %}
-                                <option value="{{ h }}" {% if h==8 %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+                                <option value="{{ h }}" {% if h==offsite_start_hour|default(8) %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
                                 {% endfor %}
                             </select>
                             <select name="start_minute" id="start_minute" class="form-select flex-1">
                                 {% for m in range(0, 60, 5) %}
-                                <option value="{{ m }}" {% if m==0 %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                                <option value="{{ m }}" {% if m==offsite_start_minute|default(0) %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -81,7 +84,29 @@
                         </div>
                     </div>
                 </div>
+                <label class="flex items-start gap-2 mt-3 cursor-pointer" for="until-return">
+                    <input type="checkbox" name="until_return" value="true" id="until-return"
+                        class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500"
+                        {% if until_return %}checked{% endif %}>
+                    <span class="text-sm text-gray-300">Still there — set the end when I check back in</span>
+                </label>
             </div>
+
+            <script>
+                (function () {
+                    var cb = document.getElementById('until-return');
+                    var endH = document.getElementById('end_hour');
+                    var endM = document.getElementById('end_minute');
+                    if (!cb) return;
+                    function sync() {
+                        var open = cb.checked;
+                        if (endH) endH.disabled = open;
+                        if (endM) endM.disabled = open;
+                    }
+                    cb.addEventListener('change', sync);
+                    sync();
+                })();
+            </script>
 
             <!-- Comments -->
             <div class="mb-6">

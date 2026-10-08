@@ -241,5 +241,52 @@ def _run_migrations():
         """
     )
 
+    # Offsite can stay open (no end) until the next check-in closes it.
+    if "offsite_entries" in [
+        r[0] for r in cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    ]:
+        end_col = next(
+            (row for row in cursor.execute("PRAGMA table_info(offsite_entries)") if row[1] == "end_time"),
+            None,
+        )
+        if end_col is not None and end_col[3] == 1:
+            cursor.execute("PRAGMA foreign_keys=OFF")
+            cursor.execute(
+                """
+                CREATE TABLE offsite_entries_open (
+                    id INTEGER PRIMARY KEY,
+                    employee_id INTEGER NOT NULL,
+                    date DATE NOT NULL,
+                    location VARCHAR(200) NOT NULL,
+                    start_time DATETIME NOT NULL,
+                    end_time DATETIME,
+                    comments TEXT DEFAULT '',
+                    submission_time DATETIME NOT NULL,
+                    needs_review BOOLEAN DEFAULT 0,
+                    FOREIGN KEY(employee_id) REFERENCES employees (id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                INSERT INTO offsite_entries_open (
+                    id, employee_id, date, location, start_time, end_time,
+                    comments, submission_time, needs_review
+                )
+                SELECT id, employee_id, date, location, start_time, end_time,
+                       comments, submission_time, needs_review
+                FROM offsite_entries
+                """
+            )
+            cursor.execute("DROP TABLE offsite_entries")
+            cursor.execute("ALTER TABLE offsite_entries_open RENAME TO offsite_entries")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS ix_offsite_entries_date ON offsite_entries (date)"
+            )
+            cursor.execute("PRAGMA foreign_keys=ON")
+            print("✅ Migration: Offsite end can stay open until check-in")
+
     conn.commit()
     conn.close()
