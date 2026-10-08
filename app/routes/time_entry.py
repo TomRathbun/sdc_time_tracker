@@ -16,6 +16,7 @@ from app.models import (
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import (
     update_daily_summary, get_target_hours, normalize_beod_length, format_beod_length,
+    beod_offered_on,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -43,6 +44,26 @@ def _comment_threshold(db: Session) -> int:
 
 def _beod_blanket(db: Session) -> bool:
     return get_bool_setting(db, "beod_blanket_approval")
+
+
+def _offsite_beod_fields(db: Session, work_date: date) -> dict:
+    return {
+        "beod_offered": beod_offered_on(work_date),
+        "beod_blanket": _beod_blanket(db),
+        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+    }
+
+
+def _save_offsite_beod(db: Session, employee_id: int, work_date: date, claim: bool, beod_hours: str):
+    """Recalculate the day, applying a BEOD claim from an offsite form when asked."""
+    if claim and beod_offered_on(work_date):
+        return update_daily_summary(
+            db, employee_id, work_date,
+            lunch_end_of_day=True,
+            lunch_approved=_beod_blanket(db),
+            beod_requested_hours=normalize_beod_length(beod_hours),
+        )
+    return update_daily_summary(db, employee_id, work_date)
 
 
 def _time_entry_error(request, employee, entry_type, now, today, error, threshold=None, db=None, **extra):
@@ -529,6 +550,7 @@ async def offsite_page(request: Request, db: Session = Depends(get_db)):
         "now": now,
         "today": date.today(),
         "error": None,
+        **_offsite_beod_fields(db, date.today()),
     })
 
 
@@ -541,6 +563,8 @@ async def offsite_submit(
     end_hour: int = Form(...),
     end_minute: int = Form(...),
     comments: str = Form(""),
+    lunch_end_of_day: bool = Form(False),
+    beod_hours: str = Form("1"),
     db: Session = Depends(get_db),
 ):
     """Submit an offsite work entry."""
@@ -564,6 +588,7 @@ async def offsite_submit(
             "now": now,
             "today": today,
             "error": offsite_err,
+            **_offsite_beod_fields(db, today),
         })
 
     entry = OffsiteEntry(
@@ -579,7 +604,7 @@ async def offsite_submit(
     db.add(entry)
     db.commit()
 
-    update_daily_summary(db, employee.id, today)
+    summary = _save_offsite_beod(db, employee.id, today, lunch_end_of_day, beod_hours)
 
     log_action(
         db, action="offsite_log", entity_type="OffsiteEntry",
@@ -589,6 +614,9 @@ async def offsite_submit(
             "start_time": str(start_time),
             "end_time": str(end_time),
             "comments": comments,
+            "beod": bool(lunch_end_of_day) and beod_offered_on(today),
+            "beod_hours": normalize_beod_length(beod_hours) if lunch_end_of_day else 0,
+            "fosc_hours": summary.total_hours,
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -639,6 +667,7 @@ async def offsite_gap_page(
         "start_display": f"{start_hour:02d}:{start_min:02d}",
         "end_display": f"{end_hour:02d}:{end_min:02d}",
         "error": None,
+        **_offsite_beod_fields(db, today),
     })
 
 
@@ -651,6 +680,8 @@ async def offsite_gap_submit(
     end_hour: int = Form(...),
     end_minute: int = Form(...),
     comments: str = Form(""),
+    lunch_end_of_day: bool = Form(False),
+    beod_hours: str = Form("1"),
     db: Session = Depends(get_db),
 ):
     """Confirm remote site work for the gap period."""
@@ -681,6 +712,7 @@ async def offsite_gap_submit(
             "start_display": f"{start_hour:02d}:{start_minute:02d}",
             "end_display": f"{end_hour:02d}:{end_minute:02d}",
             "error": offsite_err,
+            **_offsite_beod_fields(db, today),
         })
 
     entry = OffsiteEntry(
@@ -696,7 +728,7 @@ async def offsite_gap_submit(
     db.add(entry)
     db.commit()
 
-    update_daily_summary(db, employee.id, today)
+    summary = _save_offsite_beod(db, employee.id, today, lunch_end_of_day, beod_hours)
 
     log_action(
         db, action="offsite_gap", entity_type="OffsiteEntry",
@@ -707,6 +739,9 @@ async def offsite_gap_submit(
             "end_time": str(end_time),
             "auto_detected": True,
             "comments": comments,
+            "beod": bool(lunch_end_of_day) and beod_offered_on(today),
+            "beod_hours": normalize_beod_length(beod_hours) if lunch_end_of_day else 0,
+            "fosc_hours": summary.total_hours,
         },
         ip_address=request.client.host if request.client else "",
     )

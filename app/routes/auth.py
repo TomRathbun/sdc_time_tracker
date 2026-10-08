@@ -10,14 +10,22 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import verify_pin, create_session_token, get_current_employee, is_valid_pin
-from app.config import SESSION_COOKIE_NAME
+from app.config import SESSION_COOKIE_NAME, BEOD_MINIMUM_HOURS
 from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary
 from app.services.audit import log_action
-from app.services.settings import get_setting, parse_hhmm_setting
-from app.services.time_calc import projected_checkout_from_entries
+from app.services.settings import get_setting, get_bool_setting, parse_hhmm_setting
+from app.services.time_calc import projected_checkout_from_entries, beod_offered_on
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _beod_login_flags(db: Session) -> dict:
+    return {
+        "beod_offered": beod_offered_on(date.today()),
+        "beod_blanket": get_bool_setting(db, "beod_blanket_approval"),
+        "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+    }
 
 
 def _comment_threshold(db: Session) -> int:
@@ -270,6 +278,7 @@ async def login_page(request: Request, db: Session = Depends(get_db)):
         "display_count": display_count,
         "comment_threshold": _comment_threshold(db),
         "surface_after": f"{surface_after // 60:02d}{surface_after % 60:02d}",
+        **_beod_login_flags(db),
     })
 
 
@@ -308,6 +317,7 @@ async def login_pin_page(employee_id: int, request: Request, db: Session = Depen
         "weapon": _get_random_weapon(),
         "display_count": display_count,
         "comment_threshold": _comment_threshold(db),
+        **_beod_login_flags(db),
     })
 
 
@@ -332,6 +342,7 @@ async def login_submit(
             "weapon": _get_random_weapon(),
             "display_count": display_count,
             "comment_threshold": _comment_threshold(db),
+            **_beod_login_flags(db),
         })
 
     matched = selected

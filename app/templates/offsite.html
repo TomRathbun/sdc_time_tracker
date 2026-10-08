@@ -84,11 +84,13 @@
             </div>
 
             <!-- Comments -->
-            <div class="mb-8">
+            <div class="mb-6">
                 <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">Comments</label>
                 <textarea name="comments" id="comments" rows="3" class="form-input resize-none"
                     placeholder="Describe the offsite work or deviation..."></textarea>
             </div>
+
+            {% with beod_prefix='offsite-beod' %}{% include '_beod_claim.html' %}{% endwith %}
 
             <button type="submit" id="btn-submit-offsite" class="w-full btn-primary py-4 text-lg">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

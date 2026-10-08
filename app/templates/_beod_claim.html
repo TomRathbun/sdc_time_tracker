@@ -1,0 +1,36 @@
+{% if beod_offered|default(false) %}
+<div class="mb-6 p-4 rounded-xl bg-warning-500/5 border border-warning-500/10">
+    <label class="flex items-start gap-3 cursor-pointer" for="{{ beod_prefix }}-toggle">
+        <input type="checkbox" name="lunch_end_of_day" value="true" id="{{ beod_prefix }}-toggle"
+            class="mt-1 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
+        <span>
+            <span class="text-sm font-medium text-warning-300 block">
+                {% if beod_blanket|default(true) %}Use BEOD — break at end of day{% else %}Request end-of-day break (BEOD){% endif %}
+            </span>
+            <span class="text-xs text-gray-500 block mt-0.5">
+                Optional. 1 hour is the usual credit. Pick 30 minutes for a half-hour lunch plus a half-hour BEOD.
+                Needs at least {{ beod_minimum_hours|default(6) }}h worked.
+            </span>
+        </span>
+    </label>
+    <div id="{{ beod_prefix }}-length" class="hidden mt-3 pl-7">
+        <label for="{{ beod_prefix }}-hours" class="block text-xs text-gray-400 mb-1">BEOD length</label>
+        <select name="beod_hours" id="{{ beod_prefix }}-hours" class="form-select">
+            <option value="1" selected>1 hour</option>
+            <option value="0.75">45 minutes</option>
+            <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
+            <option value="0.25">15 minutes</option>
+        </select>
+    </div>
+</div>
+<script>
+    (function () {
+        var cb = document.getElementById("{{ beod_prefix }}-toggle");
+        var wrap = document.getElementById("{{ beod_prefix }}-length");
+        if (!cb || !wrap) return;
+        function sync() { wrap.classList.toggle("hidden", !cb.checked); }
+        cb.addEventListener("change", sync);
+        sync();
+    })();
+</script>
+{% endif %}

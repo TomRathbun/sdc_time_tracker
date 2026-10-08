@@ -19,7 +19,7 @@ from app.services.time_calc import (
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
     last_checkout_entry, STATUS_CHECKED_OUT,
-    RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT,
+    RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
 )
 from app.services.time_offset import (
     offset_approved_default,
@@ -571,6 +571,108 @@ async def quick_checkout(
         "time": rounded_time.strftime("%H:%M"),
         "fosc_hours": summary.total_hours,
         "recheckout": False,
+    })
+
+
+def _parse_hhmm(today: date, raw: str):
+    text = (raw or "").strip()
+    try:
+        hour_s, minute_s = text.split(":")
+        hour, minute = int(hour_s), int(minute_s)
+    except ValueError:
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return datetime(today.year, today.month, today.day, hour, minute)
+
+
+@router.post("/quick-offsite")
+async def quick_offsite(
+    request: Request,
+    employee_id: int = Form(...),
+    pin: str = Form(...),
+    location: str = Form(""),
+    start_time: str = Form(""),
+    end_time: str = Form(""),
+    comments: str = Form(""),
+    beod: str = Form("false"),
+    beod_hours: str = Form("1"),
+    db: Session = Depends(get_db),
+):
+    """PIN-verified offsite block from the login list. Optional BEOD claim."""
+    emp = db.query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.is_active == True,
+    ).first()
+    if not emp or not verify_pin(pin, emp.pin_hash):
+        return JSONResponse({"ok": False, "error": "Invalid PIN."}, status_code=401)
+
+    place = " ".join((location or "").split())
+    if not place:
+        return JSONResponse({"ok": False, "error": "Enter where you worked."}, status_code=400)
+    if len(place) > 200:
+        return JSONResponse({"ok": False, "error": "Location is too long."}, status_code=400)
+
+    today = date.today()
+    now = datetime.now()
+    start = _parse_hhmm(today, start_time)
+    end = _parse_hhmm(today, end_time)
+    if start is None or end is None:
+        return JSONResponse({"ok": False, "error": "Enter a start and end time."}, status_code=400)
+
+    range_err = validate_offsite_range(db, emp.id, today, start, end)
+    if range_err:
+        return JSONResponse({"ok": False, "error": range_err}, status_code=400)
+
+    note = (comments or "").strip()
+    entry = OffsiteEntry(
+        employee_id=emp.id,
+        date=today,
+        location=place,
+        start_time=start,
+        end_time=end,
+        comments=note,
+        submission_time=now,
+        needs_review=True,
+    )
+    db.add(entry)
+    db.commit()
+
+    claim_beod = str(beod).lower() in ("true", "1", "on", "yes") and beod_offered_on(today)
+    requested_beod = normalize_beod_length(beod_hours) if claim_beod else None
+    beod_approved = claim_beod and get_bool_setting(db, "beod_blanket_approval")
+    summary = update_daily_summary(
+        db, emp.id, today,
+        lunch_end_of_day=claim_beod,
+        lunch_approved=beod_approved,
+        beod_requested_hours=requested_beod,
+    )
+
+    hours = round((end - start).total_seconds() / 3600.0, 2)
+    log_action(
+        db, action="quick_offsite", entity_type="OffsiteEntry",
+        entity_id=entry.id, employee_id=emp.id,
+        new_values={
+            "location": place,
+            "start_time": str(start),
+            "end_time": str(end),
+            "hours": hours,
+            "comments": note,
+            "beod": claim_beod,
+            "beod_hours": requested_beod or 0,
+        },
+        ip_address=request.client.host if request.client else "",
+    )
+
+    msg = (
+        f"Offsite {start.strftime('%H:%M')}–{end.strftime('%H:%M')} "
+        f"at {place} · {summary.total_hours}h FOSC"
+    )
+    msg += _beod_status_note(claim_beod, requested_beod, summary, db)
+    return JSONResponse({
+        "ok": True,
+        "message": msg,
+        "fosc_hours": summary.total_hours,
     })
 
 

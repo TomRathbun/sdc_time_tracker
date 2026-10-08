@@ -156,6 +156,16 @@
                                 <path d="M17 8l4 4-4 4"></path>
                             </svg>
                         </button>
+                        <button type="button"
+                            onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'offsite', '')"
+                            class="p-2 rounded-lg transition-all active:scale-95 bg-accent-500/10 text-accent-400 hover:bg-accent-500/20 hover:text-accent-300"
+                            title="Quick Offsite"
+                            id="btn-quick-os-{{ emp.id }}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 21s7-5.4 7-11a7 7 0 10-14 0c0 5.6 7 11 7 11z"></path>
+                                <circle cx="12" cy="10" r="2.5"></circle>
+                            </svg>
+                        </button>
                     </div>
                     {% endif %}
                 </div>
@@ -329,6 +339,65 @@
                     class="w-11 h-11 rounded-xl bg-surface-900 border border-white/10 text-white text-2xl leading-none font-bold hover:bg-white/10 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-surface-900">+</button>
             </div>
             <p id="time-adjust-help" class="text-[11px] text-gray-500 text-center mt-2"></p>
+        </div>
+
+        <div id="modal-offsite" style="display:none" class="mb-4 space-y-3">
+            <div>
+                <label for="offsite-location" class="block text-xs text-gray-500 mb-1">Where</label>
+                <input type="text" id="offsite-location" maxlength="200"
+                    class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-accent-500/50"
+                    placeholder="Client site, Al Dhafra, training...">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-[11px] text-gray-500 mb-1">Start</label>
+                    <div class="flex gap-1">
+                        <select id="offsite-start-hour" class="w-full bg-surface-900 border border-white/10 rounded-lg px-1 py-2 text-xs text-gray-200">
+                            {% for h in range(0, 24) %}<option value="{{ h }}">{{ "%02d"|format(h) }}</option>{% endfor %}
+                        </select>
+                        <select id="offsite-start-minute" class="w-full bg-surface-900 border border-white/10 rounded-lg px-1 py-2 text-xs text-gray-200">
+                            {% for m in range(0, 60, 5) %}<option value="{{ m }}">{{ "%02d"|format(m) }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-[11px] text-gray-500 mb-1">End</label>
+                    <div class="flex gap-1">
+                        <select id="offsite-end-hour" class="w-full bg-surface-900 border border-white/10 rounded-lg px-1 py-2 text-xs text-gray-200">
+                            {% for h in range(0, 24) %}<option value="{{ h }}">{{ "%02d"|format(h) }}</option>{% endfor %}
+                        </select>
+                        <select id="offsite-end-minute" class="w-full bg-surface-900 border border-white/10 rounded-lg px-1 py-2 text-xs text-gray-200">
+                            {% for m in range(0, 60, 5) %}<option value="{{ m }}">{{ "%02d"|format(m) }}</option>{% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label for="offsite-comments" class="block text-xs text-gray-500 mb-1">Notes <span class="text-gray-600">(optional)</span></label>
+                <input type="text" id="offsite-comments"
+                    class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-white/20"
+                    placeholder="What you were doing">
+            </div>
+            {% if beod_offered|default(false) %}
+            <div class="pt-2 border-t border-white/5">
+                <label class="flex items-start gap-2 cursor-pointer" for="quick-offsite-beod">
+                    <input type="checkbox" id="quick-offsite-beod" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
+                    <span>
+                        <span class="text-warning-300 font-medium text-xs block">{% if beod_blanket|default(true) %}Use BEOD — break at end of day{% else %}Request BEOD{% endif %}</span>
+                        <span class="text-[11px] text-gray-500 block mt-0.5">1 hour unless you shorten it. Needs {{ beod_minimum_hours|default(6) }}h worked.</span>
+                    </span>
+                </label>
+                <div id="quick-offsite-beod-length" class="hidden mt-2 pl-6">
+                    <label for="quick-offsite-beod-hours" class="text-[11px] text-gray-400 block mb-1">BEOD length</label>
+                    <select id="quick-offsite-beod-hours" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200">
+                        <option value="1">1 hour</option>
+                        <option value="0.75">45 minutes</option>
+                        <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
+                        <option value="0.25">15 minutes</option>
+                    </select>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Error message -->
@@ -509,6 +578,32 @@
         var beodLenWrap = document.getElementById('preview-beod-length-wrap');
         if (beodLenWrap) beodLenWrap.classList.add('hidden');
         if (previewEl) previewEl.style.display = 'none';
+        var offsitePanel = document.getElementById('modal-offsite');
+        var timeAdjust = document.getElementById('modal-time-adjust');
+        if (offsitePanel) offsitePanel.style.display = action === 'offsite' ? 'block' : 'none';
+        if (timeAdjust) timeAdjust.style.display = action === 'offsite' ? 'none' : '';
+        var offsiteBeod = document.getElementById('quick-offsite-beod');
+        if (offsiteBeod) offsiteBeod.checked = false;
+        var offsiteBeodLen = document.getElementById('quick-offsite-beod-hours');
+        if (offsiteBeodLen) offsiteBeodLen.value = '1';
+        var offsiteBeodWrap = document.getElementById('quick-offsite-beod-length');
+        if (offsiteBeodWrap) offsiteBeodWrap.classList.add('hidden');
+        if (action === 'offsite') {
+            var nowOff = new Date();
+            var endMinute = Math.floor(nowOff.getMinutes() / 5) * 5;
+            var setSel = function (id, value) {
+                var el = document.getElementById(id);
+                if (el) el.value = String(value);
+            };
+            setSel('offsite-start-hour', 8);
+            setSel('offsite-start-minute', 0);
+            setSel('offsite-end-hour', nowOff.getHours());
+            setSel('offsite-end-minute', endMinute);
+            var locEl = document.getElementById('offsite-location');
+            if (locEl) locEl.value = '';
+            var noteEl = document.getElementById('offsite-comments');
+            if (noteEl) noteEl.value = '';
+        }
         _adjustDirty = false;
         _adjustTime = null;
         _shownHHMM = '';
@@ -529,6 +624,12 @@
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-danger-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="18" rx="1.5"></rect><path d="M13 12h8"></path><path d="M17 8l4 4-4 4"></path></svg>';
             title.textContent = 'Quick Check Out';
+            subtitle.textContent = empName;
+        }
+        if (action === 'offsite') {
+            icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-accent-500/10';
+            icon.innerHTML = '<svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 21s7-5.4 7-11a7 7 0 10-14 0c0 5.6 7 11 7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>';
+            title.textContent = 'Quick Offsite';
             subtitle.textContent = empName;
         }
 
@@ -727,11 +828,20 @@
             return;
         }
 
-        if (_adjustDirty && _adjustTime && !stepAllowed(_adjustTime)) {
+        if (currentAction !== 'offsite' && _adjustDirty && _adjustTime && !stepAllowed(_adjustTime)) {
             showEl(errorEl);
             errorText.textContent = 'That time is more than ' + QUICK_THRESHOLD
                 + ' minutes from now. Move it closer, or sign in to record a larger change.';
             return;
+        }
+
+        if (currentAction === 'offsite') {
+            var loc = (document.getElementById('offsite-location').value || '').trim();
+            if (!loc) {
+                showEl(errorEl);
+                errorText.textContent = 'Enter where you worked.';
+                return;
+            }
         }
 
         hideEl(errorEl);
@@ -739,19 +849,32 @@
         btn.disabled = true;
         btnText.textContent = 'Processing...';
 
-        var url = currentAction === 'checkin' ? '/api/quick-checkin' : '/api/quick-checkout';
+        var url = currentAction === 'checkin' ? '/api/quick-checkin'
+            : currentAction === 'offsite' ? '/api/quick-offsite'
+            : '/api/quick-checkout';
 
         var formData = new FormData();
         formData.append('employee_id', currentEmployeeId);
         formData.append('pin', pin);
-        if (currentAction === 'checkout' || currentAction === 'recheckout') {
+        if (currentAction === 'offsite') {
+            var pad = function (n) { n = parseInt(n, 10); return (n < 10 ? '0' : '') + n; };
+            formData.append('location', (document.getElementById('offsite-location').value || '').trim());
+            formData.append('start_time', pad(document.getElementById('offsite-start-hour').value) + ':' + pad(document.getElementById('offsite-start-minute').value));
+            formData.append('end_time', pad(document.getElementById('offsite-end-hour').value) + ':' + pad(document.getElementById('offsite-end-minute').value));
+            formData.append('comments', document.getElementById('offsite-comments').value || '');
+            var offBeod = document.getElementById('quick-offsite-beod');
+            var offBeodOn = offBeod && offBeod.checked;
+            formData.append('beod', offBeodOn ? 'true' : 'false');
+            var offLen = document.getElementById('quick-offsite-beod-hours');
+            formData.append('beod_hours', (offBeodOn && offLen) ? offLen.value : '1');
+        } else if (currentAction === 'checkout' || currentAction === 'recheckout') {
             var beodEl = document.getElementById('modal-beod');
             var beodOn = beodEl && beodEl.checked;
             formData.append('beod', beodOn ? 'true' : 'false');
             var beodLenEl = document.getElementById('modal-beod-hours');
             formData.append('beod_hours', (beodOn && beodLenEl) ? beodLenEl.value : '1');
         }
-        if (_adjustDirty && _adjustTime) {
+        if (_adjustDirty && _adjustTime && currentAction !== 'offsite') {
             formData.append('declared_time', fmtHM(_adjustTime));
         }
 
@@ -899,6 +1022,13 @@
         if (beod) beod.addEventListener('change', updateBeodPreviewResult);
         var beodLen = document.getElementById('modal-beod-hours');
         if (beodLen) beodLen.addEventListener('change', updateBeodPreviewResult);
+        var offBeod = document.getElementById('quick-offsite-beod');
+        var offWrap = document.getElementById('quick-offsite-beod-length');
+        if (offBeod && offWrap) {
+            offBeod.addEventListener('change', function () {
+                offWrap.classList.toggle('hidden', !offBeod.checked);
+            });
+        }
     });
 
     function updateQuickButton() {
