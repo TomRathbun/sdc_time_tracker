@@ -16,7 +16,7 @@ from app.models import (
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import (
     update_daily_summary, get_target_hours, normalize_beod_length, format_beod_length,
-    beod_offered_on,
+    beod_offered_on, beod_pref_ui, remember_beod_pref,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -46,24 +46,29 @@ def _beod_blanket(db: Session) -> bool:
     return get_bool_setting(db, "beod_blanket_approval")
 
 
-def _offsite_beod_fields(db: Session, work_date: date) -> dict:
+def _offsite_beod_fields(db: Session, work_date: date, employee=None) -> dict:
+    offered = beod_offered_on(work_date)
     return {
-        "beod_offered": beod_offered_on(work_date),
+        "beod_offered": offered,
         "beod_blanket": _beod_blanket(db),
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
+        **beod_pref_ui(employee, offered=offered),
     }
 
 
-def _save_offsite_beod(db: Session, employee_id: int, work_date: date, claim: bool, beod_hours: str):
+def _save_offsite_beod(db: Session, employee, work_date: date, claim: bool, beod_hours: str):
     """Recalculate the day, applying a BEOD claim from an offsite form when asked."""
-    if claim and beod_offered_on(work_date):
+    offered = beod_offered_on(work_date)
+    if offered:
+        remember_beod_pref(employee, bool(claim), beod_hours, work_date)
+    if claim and offered:
         return update_daily_summary(
-            db, employee_id, work_date,
+            db, employee.id, work_date,
             lunch_end_of_day=True,
             lunch_approved=_beod_blanket(db),
             beod_requested_hours=normalize_beod_length(beod_hours),
         )
-    return update_daily_summary(db, employee_id, work_date)
+    return update_daily_summary(db, employee.id, work_date)
 
 
 def _time_entry_error(request, employee, entry_type, now, today, error, threshold=None, db=None, **extra):
@@ -79,6 +84,7 @@ def _time_entry_error(request, employee, entry_type, now, today, error, threshol
         "beod_blanket": beod_blanket,
         "beod_minimum_hours": BEOD_MINIMUM_HOURS,
         "target_hours": get_target_hours(today) if today else 0,
+        **beod_pref_ui(employee, offered=beod_offered_on(today) if today else False),
         "open_checkin_iso": None,
         "completed_clock_hours": 0,
         "offsite_hours": 0,
@@ -337,6 +343,19 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
 
     completed_clock = calculate_clock_hours(entries)
     # completed pairs only; open/extra session added in browser from declared checkout time
+    from app.models import DailySummary
+    summary = db.query(DailySummary).filter(
+        DailySummary.employee_id == employee.id,
+        DailySummary.date == today,
+    ).first()
+    offered = beod_offered_on(today)
+    if summary and summary.lunch_end_of_day and offered:
+        pref = beod_pref_ui(
+            employee, offered=True, claim=True,
+            hours=summary.beod_requested_hours or summary.beod_hours or 1,
+        )
+    else:
+        pref = beod_pref_ui(employee, offered=offered)
     return templates.TemplateResponse("time_entry.html", {
         "request": request,
         "employee": employee,
@@ -355,6 +374,7 @@ async def checkout_page(request: Request, db: Session = Depends(get_db)):
         "is_recheckout": is_recheckout,
         "last_checkout_display": last_checkout_display,
         "variance_reasons": get_variance_reasons(db),
+        **pref,
     })
 
 
@@ -438,6 +458,7 @@ async def checkout_submit(
 
         beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
         requested_beod = normalize_beod_length(beod_hours) if lunch_end_of_day else None
+        remember_beod_pref(employee, bool(lunch_end_of_day), beod_hours, today)
         update_daily_summary(
             db, employee.id, today,
             lunch_end_of_day=lunch_end_of_day,
@@ -498,6 +519,7 @@ async def checkout_submit(
     # BEOD: blanket approval auto-approves; otherwise pending manager approval
     beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
     requested_beod = normalize_beod_length(beod_hours) if lunch_end_of_day else None
+    remember_beod_pref(employee, bool(lunch_end_of_day), beod_hours, today)
     update_daily_summary(
         db, employee.id, today,
         lunch_end_of_day=lunch_end_of_day,
@@ -550,7 +572,7 @@ async def offsite_page(request: Request, db: Session = Depends(get_db)):
         "now": now,
         "today": date.today(),
         "error": None,
-        **_offsite_beod_fields(db, date.today()),
+        **_offsite_beod_fields(db, date.today(), employee),
     })
 
 
@@ -588,7 +610,7 @@ async def offsite_submit(
             "now": now,
             "today": today,
             "error": offsite_err,
-            **_offsite_beod_fields(db, today),
+            **_offsite_beod_fields(db, today, employee),
         })
 
     entry = OffsiteEntry(
@@ -604,7 +626,7 @@ async def offsite_submit(
     db.add(entry)
     db.commit()
 
-    summary = _save_offsite_beod(db, employee.id, today, lunch_end_of_day, beod_hours)
+    summary = _save_offsite_beod(db, employee, today, lunch_end_of_day, beod_hours)
 
     log_action(
         db, action="offsite_log", entity_type="OffsiteEntry",
@@ -667,7 +689,7 @@ async def offsite_gap_page(
         "start_display": f"{start_hour:02d}:{start_min:02d}",
         "end_display": f"{end_hour:02d}:{end_min:02d}",
         "error": None,
-        **_offsite_beod_fields(db, today),
+        **_offsite_beod_fields(db, today, employee),
     })
 
 
@@ -712,7 +734,7 @@ async def offsite_gap_submit(
             "start_display": f"{start_hour:02d}:{start_minute:02d}",
             "end_display": f"{end_hour:02d}:{end_minute:02d}",
             "error": offsite_err,
-            **_offsite_beod_fields(db, today),
+            **_offsite_beod_fields(db, today, employee),
         })
 
     entry = OffsiteEntry(
@@ -728,7 +750,7 @@ async def offsite_gap_submit(
     db.add(entry)
     db.commit()
 
-    summary = _save_offsite_beod(db, employee.id, today, lunch_end_of_day, beod_hours)
+    summary = _save_offsite_beod(db, employee, today, lunch_end_of_day, beod_hours)
 
     log_action(
         db, action="offsite_gap", entity_type="OffsiteEntry",
@@ -827,6 +849,16 @@ def _render_past_day(
     recorded_ci, recorded_co = _primary_office_pair(existing_checkins)
     ci_hm = _snap_hm(preset_checkin if preset_checkin is not None else recorded_ci) or (7, 0)
     co_hm = _snap_hm(preset_checkout if preset_checkout is not None else recorded_co) or (16, 0)
+    offered = beod_offered_on(selected_date)
+    if summary and summary.lunch_end_of_day:
+        pref = beod_pref_ui(
+            employee, offered=True, claim=True,
+            hours=summary.beod_requested_hours or summary.beod_hours or 1,
+        )
+    else:
+        # Don't pre-check a past day from habit — saving would add BEOD they didn't take.
+        # Still offer their usual length in the dropdown.
+        pref = beod_pref_ui(employee, offered=offered, claim=False)
 
     return templates.TemplateResponse("past_day.html", {
         "request": request,
@@ -850,6 +882,7 @@ def _render_past_day(
         "office_checkout_minute": co_hm[1],
         "office_prefilled": recorded_ci is not None or recorded_co is not None,
         "office_hours": _hour_choices(ci_hm[0], co_hm[0]),
+        **pref,
     })
 
 
@@ -1035,9 +1068,12 @@ async def past_day_submit(
 
     db.commit()
 
-    # BEOD: blanket auto-approves
+    # BEOD: blanket auto-approves. A claim here updates the usual choice; leaving
+    # it off does not, so fixing hours on an old day does not wipe the routine.
     beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
     requested_beod = normalize_beod_length(beod_hours) if lunch_end_of_day else None
+    if lunch_end_of_day:
+        remember_beod_pref(employee, True, beod_hours, selected_date)
     update_daily_summary(
         db, employee.id, selected_date,
         lunch_end_of_day=lunch_end_of_day,

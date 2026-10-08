@@ -62,6 +62,10 @@ class Employee(Base):
     role = Column(Enum(Role), default=Role.employee, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     pin_needs_reset = Column(Boolean, default=True, nullable=False)
+    # Last BEOD choice (claim + length). Pre-fills the next checkout.
+    beod_pref_known = Column(Boolean, default=False, nullable=False)
+    beod_pref_claim = Column(Boolean, default=False, nullable=False)
+    beod_pref_hours = Column(Float, default=1.0, nullable=False)
     # FOSC leave entitlements (work days per calendar year; balances are tracked in hours)
     vacation_days_per_year = Column(Float, default=22.0, nullable=False)
     sick_days_per_year = Column(Float, default=15.0, nullable=False)

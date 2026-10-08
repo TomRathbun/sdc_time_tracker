@@ -179,7 +179,7 @@
                 <label class="flex items-start gap-3 cursor-pointer">
                     <input type="checkbox" name="lunch_end_of_day" value="true"
                         class="mt-1 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500 focus:ring-primary-500/25"
-                        id="lunch-eod">
+                        id="lunch-eod" {% if beod_pref_claim %}checked{% endif %}>
                     <div>
                         {% if beod_blanket|default(true) %}
                         <p class="text-sm font-medium text-warning-300">Use BEOD — break at end of day</p>
@@ -187,23 +187,25 @@
                             Check only if you take paid lunch at the <strong class="text-gray-400">end</strong> of the day
                             (e.g. 07:00–15:00 = 8h + 1h BEOD = 9h). Leave unchecked if you take the full lunch during the day.
                             Needs ≥ {{ beod_minimum_hours|default(6) }}h worked. Blanket approval is ON — credit applies when checked.
+                            {% if beod_pref_known and beod_pref_claim %}Starts from your last choice — uncheck if today is different.{% endif %}
                         </p>
                         {% else %}
                         <p class="text-sm font-medium text-warning-300">Request end-of-day break (BEOD)</p>
                         <p class="text-xs text-gray-500 mt-0.5">
                             Optional request for manager approval if you take paid lunch at the end of the day.
                             Leave unchecked for a normal mid-day lunch. Needs ≥ {{ beod_minimum_hours|default(6) }}h worked.
+                            {% if beod_pref_known and beod_pref_claim %}Starts from your last choice — uncheck if today is different.{% endif %}
                         </p>
                         {% endif %}
                     </div>
                 </label>
-                <div id="beod-length-wrap" class="hidden mt-3 pl-7">
+                <div id="beod-length-wrap" class="{% if not beod_pref_claim %}hidden {% endif %}mt-3 pl-7">
                     <label for="beod_hours" class="block text-xs text-gray-400 mb-1">BEOD length</label>
                     <select name="beod_hours" id="beod_hours" class="form-select">
-                        <option value="1" selected>1 hour</option>
-                        <option value="0.75">45 minutes</option>
-                        <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
-                        <option value="0.25">15 minutes</option>
+                        <option value="1" {% if beod_pref_hours|default('1') == '1' %}selected{% endif %}>1 hour</option>
+                        <option value="0.75" {% if beod_pref_hours|default('1') == '0.75' %}selected{% endif %}>45 minutes</option>
+                        <option value="0.5" {% if beod_pref_hours|default('1') == '0.5' %}selected{% endif %}>30 minutes — half-hour lunch + half-hour BEOD</option>
+                        <option value="0.25" {% if beod_pref_hours|default('1') == '0.25' %}selected{% endif %}>15 minutes</option>
                     </select>
                     <p class="text-[11px] text-gray-500 mt-1">Shorter than an hour when you did not take the full break at the end of the day.</p>
                 </div>

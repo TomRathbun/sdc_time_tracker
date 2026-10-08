@@ -123,6 +123,54 @@ def format_beod_length(hours: float) -> str:
     return labels.get(minutes, f"{float(hours):g}h")
 
 
+def beod_hours_value(hours) -> str:
+    """Option value for a BEOD length select: '1', '0.75', '0.5', or '0.25'."""
+    normalized = normalize_beod_length(hours)
+    if abs(normalized - 0.75) < 1e-6:
+        return "0.75"
+    if abs(normalized - 0.5) < 1e-6:
+        return "0.5"
+    if abs(normalized - 0.25) < 1e-6:
+        return "0.25"
+    return "1"
+
+
+def beod_pref_ui(employee, offered: bool = True, claim: bool | None = None, hours=None) -> dict:
+    """Template defaults for the BEOD checkbox and length.
+
+    Uses the employee's last choice when claim/hours are not overridden.
+    Days that do not offer BEOD stay unchecked unless claim is passed in.
+    """
+    known = bool(getattr(employee, "beod_pref_known", False)) if employee is not None else False
+    pref_claim = bool(getattr(employee, "beod_pref_claim", False)) if known else False
+    pref_hours = getattr(employee, "beod_pref_hours", None) if employee is not None else None
+    use_claim = pref_claim if claim is None else bool(claim)
+    if not offered and claim is None:
+        use_claim = False
+    use_hours = pref_hours if hours is None else hours
+    return {
+        "beod_pref_known": known,
+        "beod_pref_claim": bool(use_claim),
+        "beod_pref_hours": beod_hours_value(use_hours or BEOD_CREDIT_HOURS),
+    }
+
+
+def remember_beod_pref(employee, claimed: bool, hours, work_date: date) -> None:
+    """Store this person's BEOD choice for the next day.
+
+    Unchecking keeps the last length, so the dropdown is ready if they claim again.
+    Friday (and any day BEOD is not offered) does not change the routine.
+    """
+    if employee is None or not beod_offered_on(work_date):
+        return
+    employee.beod_pref_known = True
+    employee.beod_pref_claim = bool(claimed)
+    if claimed:
+        employee.beod_pref_hours = normalize_beod_length(hours)
+    elif not employee.beod_pref_hours:
+        employee.beod_pref_hours = BEOD_CREDIT_HOURS
+
+
 def resolve_beod_request(claimed: bool, explicit: float | None, stored: float | None) -> float:
     """Hours of BEOD requested. 0 if not claimed.
 

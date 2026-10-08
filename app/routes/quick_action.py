@@ -10,11 +10,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import verify_pin
 from app.config import BEOD_MINIMUM_HOURS
-from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry
+from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry, DailySummary
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
     beod_offered_on, normalize_beod_length, format_beod_length,
+    remember_beod_pref,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -372,6 +373,20 @@ async def checkout_preview(
     return JSONResponse(_checkout_preview_payload(db, emp.id, override))
 
 
+def _remember_quick_beod(db: Session, emp: Employee, today: date, claim: bool, hours) -> None:
+    """Save the kiosk choice unless BEOD was already on the day and the box was hidden."""
+    if not beod_offered_on(today):
+        return
+    if not claim:
+        existing = db.query(DailySummary).filter(
+            DailySummary.employee_id == emp.id,
+            DailySummary.date == today,
+        ).first()
+        if existing and existing.lunch_end_of_day:
+            return
+    remember_beod_pref(emp, claim, hours, today)
+
+
 def _beod_status_note(claim_beod: bool, requested, summary, db: Session) -> str:
     """Suffix for the checkout toast describing the BEOD credit."""
     if not claim_beod:
@@ -431,6 +446,7 @@ def _record_recheckout(
     db.add(checkout)
     db.commit()
 
+    _remember_quick_beod(db, emp, today, claim_beod, beod_hours)
     beod_approved = claim_beod and get_bool_setting(db, "beod_blanket_approval")
     summary = update_daily_summary(
         db, emp.id, today,
@@ -541,6 +557,7 @@ async def quick_checkout(
     db.add(entry)
     db.commit()
 
+    _remember_quick_beod(db, emp, today, claim_beod, requested_beod if claim_beod else beod_hours)
     beod_approved = claim_beod and get_bool_setting(db, "beod_blanket_approval")
     summary = update_daily_summary(
         db, emp.id, today,
@@ -640,6 +657,7 @@ async def quick_offsite(
 
     claim_beod = str(beod).lower() in ("true", "1", "on", "yes") and beod_offered_on(today)
     requested_beod = normalize_beod_length(beod_hours) if claim_beod else None
+    _remember_quick_beod(db, emp, today, claim_beod, beod_hours)
     beod_approved = claim_beod and get_bool_setting(db, "beod_blanket_approval")
     summary = update_daily_summary(
         db, emp.id, today,

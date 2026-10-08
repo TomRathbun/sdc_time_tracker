@@ -100,10 +100,10 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "featured": True,
                 "actions": [
                     {"text": "Quick Check Out, or Dashboard → Check Out", "href": "/time/checkout", "screen": "Check Out"},
-                    {"text": "Check Use BEOD, then pick the length (1 hour, or 30 minutes for a half-hour lunch plus a half-hour BEOD)"},
+                    {"text": "Check Use BEOD if it is not already your usual length, then pick 1 hour or 30 minutes for a half-hour lunch plus a half-hour BEOD"},
                     {"text": "Enter PIN if using the kiosk, then confirm"},
                 ],
-                "notes": "Example: 07:00–15:00 = 8h + 1h BEOD = 9h. A half-hour lunch plus a half-hour BEOD is 30 minutes of credit. Hidden on Friday (4h day). If blanket BEOD is off, this is a request for the manager.",
+                "notes": "Example: 07:00–15:00 = 8h + 1h BEOD = 9h. A half-hour lunch plus a half-hour BEOD is 30 minutes of credit. The next checkout starts from that same choice. Hidden on Friday (4h day). If blanket BEOD is off, this is a request for the manager.",
             },
             {
                 "id": "friday-out",

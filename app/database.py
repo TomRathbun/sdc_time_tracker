@@ -75,6 +75,19 @@ def _run_migrations():
             f"ALTER TABLE employees ADD COLUMN sick_days_per_year FLOAT DEFAULT {DEFAULT_SICK_DAYS_PER_YEAR}"
         )
         print("✅ Migration: Added sick_days_per_year to employees")
+    added_beod_pref = "beod_pref_known" not in emp_cols
+    if added_beod_pref:
+        cursor.execute(
+            "ALTER TABLE employees ADD COLUMN beod_pref_known BOOLEAN DEFAULT 0"
+        )
+    if "beod_pref_claim" not in emp_cols:
+        cursor.execute(
+            "ALTER TABLE employees ADD COLUMN beod_pref_claim BOOLEAN DEFAULT 0"
+        )
+    if "beod_pref_hours" not in emp_cols:
+        cursor.execute(
+            "ALTER TABLE employees ADD COLUMN beod_pref_hours FLOAT DEFAULT 1"
+        )
 
     # Old contract defaults were 30 vacation / 10 sick days. Current policy is
     # 22 vacation / 15 sick work days (tracked in hours). Only rows still on
@@ -125,6 +138,46 @@ def _run_migrations():
                 "AND (beod_requested_hours IS NULL OR beod_requested_hours = 0)"
             )
             print("✅ Migration: Added beod_requested_hours (legacy claims = 1h)")
+        if added_beod_pref:
+            from datetime import date as _date
+            today_iso = _date.today().isoformat()
+            # Last Mon–Thu before today. Claim follows that day; length follows
+            # the last day they actually took BEOD (so a no-BEOD day keeps 30m).
+            cursor.execute(
+                """
+                UPDATE employees
+                SET beod_pref_known = 1,
+                    beod_pref_claim = COALESCE((
+                        SELECT ds.lunch_end_of_day
+                        FROM daily_summaries ds
+                        WHERE ds.employee_id = employees.id
+                          AND ds.date < ?
+                          AND CAST(strftime('%w', ds.date) AS INTEGER) BETWEEN 1 AND 4
+                        ORDER BY ds.date DESC
+                        LIMIT 1
+                    ), 0),
+                    beod_pref_hours = COALESCE((
+                        SELECT CASE
+                            WHEN ds.beod_requested_hours > 0 THEN ds.beod_requested_hours
+                            ELSE 1.0
+                        END
+                        FROM daily_summaries ds
+                        WHERE ds.employee_id = employees.id
+                          AND ds.lunch_end_of_day = 1
+                          AND CAST(strftime('%w', ds.date) AS INTEGER) BETWEEN 1 AND 4
+                        ORDER BY ds.date DESC
+                        LIMIT 1
+                    ), 1)
+                WHERE EXISTS (
+                    SELECT 1 FROM daily_summaries ds
+                    WHERE ds.employee_id = employees.id
+                      AND ds.date < ?
+                      AND CAST(strftime('%w', ds.date) AS INTEGER) BETWEEN 1 AND 4
+                )
+                """,
+                (today_iso, today_iso),
+            )
+            print("✅ Migration: Remember last BEOD choice per employee")
 
     # phone_support_entries table (also created via create_all; keep for older paths)
     cursor.execute(

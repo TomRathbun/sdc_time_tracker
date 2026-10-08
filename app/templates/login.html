@@ -84,7 +84,9 @@
                 {% set emp_time = emp_info.time %}
                 {% set emp_on_leave = on_leave_map.get(emp.id, False) %}
                 <div class="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-surface-900/30 hover:bg-surface-900/60 hover:border-white/10 transition-all group emp-row"
-                    id="emp-row-{{ emp.id }}" data-name="{{ emp.name }}">
+                    id="emp-row-{{ emp.id }}" data-name="{{ emp.name }}"
+                    data-beod-claim="{% if emp.beod_pref_known and emp.beod_pref_claim %}1{% else %}0{% endif %}"
+                    data-beod-hours="{{ emp.beod_pref_hours if emp.beod_pref_hours else 1 }}">
                     <!-- Avatar + Name -->
                     <a href="/login/{{ emp.id }}" class="flex items-center gap-3 flex-1 min-w-0">
                         <div
@@ -384,7 +386,7 @@
                     <input type="checkbox" id="quick-offsite-beod" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
                     <span>
                         <span class="text-warning-300 font-medium text-xs block">{% if beod_blanket|default(true) %}Use BEOD — break at end of day{% else %}Request BEOD{% endif %}</span>
-                        <span class="text-[11px] text-gray-500 block mt-0.5">1 hour unless you shorten it. Needs {{ beod_minimum_hours|default(6) }}h worked.</span>
+                        <span class="text-[11px] text-gray-500 block mt-0.5">1 hour unless you shorten it. Needs {{ beod_minimum_hours|default(6) }}h worked. Same choice as last time, until you change it.</span>
                     </span>
                 </label>
                 <div id="quick-offsite-beod-length" class="hidden mt-2 pl-6">
@@ -588,6 +590,7 @@
         if (offsiteBeodLen) offsiteBeodLen.value = '1';
         var offsiteBeodWrap = document.getElementById('quick-offsite-beod-length');
         if (offsiteBeodWrap) offsiteBeodWrap.classList.add('hidden');
+        applyRememberedBeod();
         if (action === 'offsite') {
             var nowOff = new Date();
             var endMinute = Math.floor(nowOff.getMinutes() / 5) * 5;
@@ -657,6 +660,39 @@
         });
 
         setTimeout(function () { pinInput.focus(); }, 150);
+    }
+
+    function beodOptionValue(hours) {
+        var n = parseFloat(hours);
+        if (!isFinite(n) || n <= 0) return '1';
+        var choices = [1, 0.75, 0.5, 0.25];
+        for (var i = 0; i < choices.length; i++) {
+            if (Math.abs(choices[i] - n) < 0.02) return String(choices[i]);
+        }
+        return '1';
+    }
+
+    function rememberedBeod() {
+        var offered = {{ 'true' if beod_offered|default(false) else 'false' }};
+        var row = document.getElementById('emp-row-' + currentEmployeeId);
+        var claim = !!(offered && row && row.getAttribute('data-beod-claim') === '1');
+        var hours = beodOptionValue(row ? row.getAttribute('data-beod-hours') : '1');
+        return { claim: claim, hours: hours };
+    }
+
+    function setBeodControl(cbId, selId, wrapId, claim, hours) {
+        var cb = document.getElementById(cbId);
+        var sel = document.getElementById(selId);
+        var wrap = document.getElementById(wrapId);
+        if (sel) sel.value = hours;
+        if (cb) cb.checked = !!claim;
+        if (wrap) wrap.classList.toggle('hidden', !(cb && cb.checked));
+    }
+
+    function applyRememberedBeod() {
+        var pref = rememberedBeod();
+        setBeodControl('modal-beod', 'modal-beod-hours', 'preview-beod-length-wrap', pref.claim, pref.hours);
+        setBeodControl('quick-offsite-beod', 'quick-offsite-beod-hours', 'quick-offsite-beod-length', pref.claim, pref.hours);
     }
 
     function closeQuickModal() {
@@ -978,6 +1014,9 @@
                     help.textContent = data.beod_eligible
                         ? 'Optional. Requests manager approval. 1 hour is the full credit; pick a shorter length if you only took part of it at the end of the day.'
                         : 'Need at least ' + data.beod_minimum_hours + 'h worked. Currently ' + data.fosc_hours + 'h.';
+                }
+                if (rememberedBeod().claim) {
+                    help.textContent += ' Starts from your last choice.';
                 }
                 updateBeodPreviewResult();
             })

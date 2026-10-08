@@ -206,19 +206,20 @@
                 <div
                     class="flex items-start gap-3 p-3 rounded-xl bg-surface-900/30 border border-white/5">
                     <input type="checkbox" name="lunch_end_of_day" value="true" id="beod-past"
-                        class="mt-0.5 w-4 h-4 rounded bg-surface-700 border-white/10 text-primary-500 focus:ring-primary-500/30">
+                        class="mt-0.5 w-4 h-4 rounded bg-surface-700 border-white/10 text-primary-500 focus:ring-primary-500/30"
+                        {% if beod_pref_claim %}checked{% endif %}>
                     <div class="flex-1">
                         <label for="beod-past" class="cursor-pointer">
                             <span class="text-sm font-medium text-gray-300">BEOD — break at end of day</span>
                             <span class="text-xs text-gray-500 ml-1">(1 hour unless you shorten it)</span>
                         </label>
-                        <div id="beod-past-length" class="hidden mt-2">
+                        <div id="beod-past-length" class="{% if not beod_pref_claim %}hidden {% endif %}mt-2">
                             <label for="beod_hours" class="text-xs text-gray-400 block mb-1">BEOD length</label>
                             <select name="beod_hours" id="beod_hours" class="form-select">
-                                <option value="1" selected>1 hour</option>
-                                <option value="0.75">45 minutes</option>
-                                <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
-                                <option value="0.25">15 minutes</option>
+                                <option value="1" {% if beod_pref_hours|default('1') == '1' %}selected{% endif %}>1 hour</option>
+                                <option value="0.75" {% if beod_pref_hours|default('1') == '0.75' %}selected{% endif %}>45 minutes</option>
+                                <option value="0.5" {% if beod_pref_hours|default('1') == '0.5' %}selected{% endif %}>30 minutes — half-hour lunch + half-hour BEOD</option>
+                                <option value="0.25" {% if beod_pref_hours|default('1') == '0.25' %}selected{% endif %}>15 minutes</option>
                             </select>
                         </div>
                     </div>
