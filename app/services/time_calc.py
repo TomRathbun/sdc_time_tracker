@@ -19,6 +19,9 @@ def get_target_hours(work_date: date) -> float:
 
 
 BEOD_CREDIT_HOURS = 1.0
+# Allowed BEOD credits. 1h is the usual paid end-of-day break.
+# Shorter lengths cover a split day (e.g. 30m lunch + 30m BEOD).
+BEOD_LENGTH_HOURS = (1.0, 0.75, 0.5, 0.25)
 
 
 class ProjectedCheckout(NamedTuple):
@@ -101,6 +104,39 @@ def projected_checkout_from_entries(
     return ProjectedCheckout(standard, beod, False)
 
 
+def normalize_beod_length(hours) -> float:
+    """Snap a requested BEOD credit to an allowed length. Unknown → 1 hour."""
+    try:
+        value = float(hours)
+    except (TypeError, ValueError):
+        return BEOD_CREDIT_HOURS
+    for choice in BEOD_LENGTH_HOURS:
+        if abs(choice - value) < (1.0 / 60.0):
+            return choice
+    return BEOD_CREDIT_HOURS
+
+
+def format_beod_length(hours: float) -> str:
+    """Compact label: 1h, 45m, 30m, 15m."""
+    minutes = int(round(float(hours) * 60))
+    labels = {60: "1h", 45: "45m", 30: "30m", 15: "15m"}
+    return labels.get(minutes, f"{float(hours):g}h")
+
+
+def resolve_beod_request(claimed: bool, explicit: float | None, stored: float | None) -> float:
+    """Hours of BEOD requested. 0 if not claimed.
+
+    An explicit choice wins. Legacy claims with nothing stored stay 1 hour.
+    """
+    if not claimed:
+        return 0.0
+    if explicit is not None:
+        return normalize_beod_length(explicit)
+    if stored and stored > 0:
+        return normalize_beod_length(stored)
+    return BEOD_CREDIT_HOURS
+
+
 def calculate_clock_hours(time_entries: List[TimeEntry]) -> float:
     """Sum paired check-in / check-out durations (hours)."""
     total_seconds = 0.0
@@ -169,11 +205,12 @@ def update_daily_summary(
     leave_hours: float = -1.0,
     leave_type: str | LeaveType | None = None,
     pto_approved: bool = False,
+    beod_requested_hours: float | None = None,
 ) -> DailySummary:
     """Recalculate and update/create the daily summary for an employee.
 
-    FOSC Normal Time = clock + offsite + phone + BEOD credit (+1 if claimed,
-    approved, and work hours before credit >= BEOD_MINIMUM_HOURS).
+    FOSC Normal Time = clock + offsite + phone + BEOD credit (claimed length,
+    default 1h, when approved and work hours before credit >= BEOD_MINIMUM_HOURS).
 
     Leave hours only count toward compliance when leave_approved=True.
     leave_hours < 0 means preserve existing leave fields.
@@ -223,13 +260,20 @@ def update_daily_summary(
         eff_leave_type = summary.leave_type if summary else None
         eff_leave_approved_flag = (summary.leave_approved if summary else False) or pto_approved
 
+    eff_requested = resolve_beod_request(
+        eff_beod_claimed,
+        beod_requested_hours,
+        summary.beod_requested_hours if summary else None,
+    )
+
     beod_hours = 0.0
     total_hours = work_hours
     if eff_beod_claimed and eff_beod_approved and work_hours >= BEOD_MINIMUM_HOURS:
-        beod_hours = 1.0
-        total_hours = round(work_hours + 1.0, 2)
+        credit = eff_requested if eff_requested > 0 else BEOD_CREDIT_HOURS
+        beod_hours = credit
+        total_hours = round(work_hours + credit, 2)
     elif eff_beod_claimed and work_hours < BEOD_MINIMUM_HOURS:
-        # Claimed but below floor — no credit; keep claim flag for audit/display
+        # Claimed but below floor — no credit; keep claim + requested length
         beod_hours = 0.0
 
     approved_leave = eff_leave_hours if eff_leave_approved_flag else 0.0
@@ -242,6 +286,7 @@ def update_daily_summary(
         summary.offsite_hours = offsite_hours
         summary.phone_hours = phone_hours
         summary.beod_hours = beod_hours
+        summary.beod_requested_hours = eff_requested
         summary.leave_hours = eff_leave_hours
         summary.leave_type = eff_leave_type
         summary.leave_approved = eff_leave_approved_flag
@@ -258,6 +303,7 @@ def update_daily_summary(
             offsite_hours=offsite_hours,
             phone_hours=phone_hours,
             beod_hours=beod_hours,
+            beod_requested_hours=eff_requested,
             leave_hours=eff_leave_hours,
             leave_type=eff_leave_type,
             leave_approved=eff_leave_approved_flag,

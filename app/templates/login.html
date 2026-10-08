@@ -135,9 +135,10 @@
                             title="{% if emp_status == 'checked_in' %}Already checked in{% elif emp_status == 'checked_out' %}Return (called back){% else %}Quick Check In{% endif %}"
                             id="btn-quick-ci-{{ emp.id }}"
                             {% if emp_status == 'checked_in' %}disabled aria-disabled="true"{% endif %}>
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="13" y="3" width="8" height="18" rx="1.5"></rect>
+                                <path d="M3 12h8"></path>
+                                <path d="M8 8l3 4-3 4"></path>
                             </svg>
                         </button>
                         <!-- Check Out (enabled when in, or re-checkout when already out) -->
@@ -149,9 +150,10 @@
                                 {% else %}
                                     bg-surface-800/50 text-gray-600 cursor-not-allowed
                                 {% endif %}" title="{% if emp_status == 'checked_out' %}Re-Check Out (called back){% else %}Quick Check Out{% endif %}" id="btn-quick-co-{{ emp.id }}" {% if emp_status not in ['checked_in', 'checked_out'] %}disabled{% endif %}>
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                <rect x="3" y="3" width="8" height="18" rx="1.5"></rect>
+                                <path d="M13 12h8"></path>
+                                <path d="M17 8l4 4-4 4"></path>
                             </svg>
                         </button>
                     </div>
@@ -360,14 +362,25 @@
                 <span id="preview-fosc" class="font-mono text-primary-300">—</span>
             </div>
             <p id="preview-detail" class="text-[11px] text-gray-500"></p>
-            <label id="preview-beod-wrap" class="flex items-start gap-2 pt-2 border-t border-white/5 cursor-pointer">
-                <input type="checkbox" id="modal-beod" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
-                <span>
-                    <span id="preview-beod-label" class="text-warning-300 font-medium block"></span>
-                    <span id="preview-beod-help" class="text-[11px] text-gray-500 block mt-0.5"></span>
-                    <span id="preview-beod-result" class="text-[11px] text-accent-300 block mt-1 hidden"></span>
-                </span>
-            </label>
+            <div id="preview-beod-wrap" class="block pt-2 border-t border-white/5">
+                <label class="flex items-start gap-2 cursor-pointer" for="modal-beod">
+                    <input type="checkbox" id="modal-beod" class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-surface-900 text-primary-500">
+                    <span>
+                        <span id="preview-beod-label" class="text-warning-300 font-medium block"></span>
+                        <span id="preview-beod-help" class="text-[11px] text-gray-500 block mt-0.5"></span>
+                    </span>
+                </label>
+                <div id="preview-beod-length-wrap" class="hidden mt-2 pl-6">
+                    <label for="modal-beod-hours" class="text-[11px] text-gray-400 block mb-1">BEOD length</label>
+                    <select id="modal-beod-hours" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200">
+                        <option value="1">1 hour</option>
+                        <option value="0.75">45 minutes</option>
+                        <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
+                        <option value="0.25">15 minutes</option>
+                    </select>
+                </div>
+                <span id="preview-beod-result" class="text-[11px] text-accent-300 block mt-1 hidden"></span>
+            </div>
         </div>
 
         <!-- Submit Button -->
@@ -491,6 +504,10 @@
         var previewEl = document.getElementById('modal-checkout-preview');
         var beodCb = document.getElementById('modal-beod');
         if (beodCb) beodCb.checked = false;
+        var beodLen = document.getElementById('modal-beod-hours');
+        if (beodLen) beodLen.value = '1';
+        var beodLenWrap = document.getElementById('preview-beod-length-wrap');
+        if (beodLenWrap) beodLenWrap.classList.add('hidden');
         if (previewEl) previewEl.style.display = 'none';
         _adjustDirty = false;
         _adjustTime = null;
@@ -500,17 +517,17 @@
 
         if (action === 'checkin') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-success-500/10';
-            icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14"/></svg>';
+            icon.innerHTML = '<svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="13" y="3" width="8" height="18" rx="1.5"></rect><path d="M3 12h8"></path><path d="M8 8l3 4-3 4"></path></svg>';
             title.textContent = currentLastPunch ? 'Return to work' : 'Quick Check In';
             subtitle.textContent = currentLastPunch ? (empName + ' · out at ' + currentLastPunch) : empName;
         } else if (action === 'recheckout') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-warning-500/10';
-            icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
+            icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="18" rx="1.5"></rect><path d="M13 12h8"></path><path d="M17 8l4 4-4 4"></path></svg>';
             title.textContent = 'Re-Check Out';
             subtitle.textContent = empName + (currentLastPunch ? ' · extra time after ' + currentLastPunch : ' · called back');
         } else {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-danger-500/10';
-            icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7"/></svg>';
+            icon.innerHTML = '<svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="18" rx="1.5"></rect><path d="M13 12h8"></path><path d="M17 8l4 4-4 4"></path></svg>';
             title.textContent = 'Quick Check Out';
             subtitle.textContent = empName;
         }
@@ -729,7 +746,10 @@
         formData.append('pin', pin);
         if (currentAction === 'checkout' || currentAction === 'recheckout') {
             var beodEl = document.getElementById('modal-beod');
-            formData.append('beod', (beodEl && beodEl.checked) ? 'true' : 'false');
+            var beodOn = beodEl && beodEl.checked;
+            formData.append('beod', beodOn ? 'true' : 'false');
+            var beodLenEl = document.getElementById('modal-beod-hours');
+            formData.append('beod_hours', (beodOn && beodLenEl) ? beodLenEl.value : '1');
         }
         if (_adjustDirty && _adjustTime) {
             formData.append('declared_time', fmtHM(_adjustTime));
@@ -822,18 +842,18 @@
                     if (beodCb) beodCb.checked = false;
                     return;
                 }
-                wrap.style.display = 'flex';
+                wrap.style.display = 'block';
                 var label = document.getElementById('preview-beod-label');
                 var help = document.getElementById('preview-beod-help');
                 if (data.beod_blanket) {
-                    label.textContent = 'Use BEOD — Break at end of day (+1h)';
+                    label.textContent = 'Use BEOD — break at end of day';
                     help.textContent = data.beod_eligible
-                        ? 'Optional. Only if you take paid lunch at end of day (not mid-day lunch). Credit applies immediately if checked (blanket ON).'
+                        ? 'Optional. 1 hour is the usual paid lunch at the end of the day. Pick 30 minutes if you took a half-hour lunch and only a half-hour BEOD.'
                         : 'Need at least ' + data.beod_minimum_hours + 'h worked for BEOD credit. Currently ' + data.fosc_hours + 'h.';
                 } else {
-                    label.textContent = 'Request end-of-day break (BEOD +1h)';
+                    label.textContent = 'Request end-of-day break (BEOD)';
                     help.textContent = data.beod_eligible
-                        ? 'Optional. Requests manager approval for +1h lunch at end of day. Leave unchecked if you took lunch during the day.'
+                        ? 'Optional. Requests manager approval. 1 hour is the full credit; pick a shorter length if you only took part of it at the end of the day.'
                         : 'Need at least ' + data.beod_minimum_hours + 'h worked. Currently ' + data.fosc_hours + 'h.';
                 }
                 updateBeodPreviewResult();
@@ -843,16 +863,31 @@
             });
     }
 
+    function formatBeodLength(hours) {
+        var minutes = Math.round(hours * 60);
+        if (minutes === 60) return '1h';
+        if (minutes === 45) return '45m';
+        if (minutes === 30) return '30m';
+        if (minutes === 15) return '15m';
+        return hours + 'h';
+    }
+
     function updateBeodPreviewResult() {
         var data = _checkoutPreview;
         var res = document.getElementById('preview-beod-result');
         var beod = document.getElementById('modal-beod');
+        var lenWrap = document.getElementById('preview-beod-length-wrap');
+        if (lenWrap) lenWrap.classList.toggle('hidden', !(beod && beod.checked));
         if (!data || !res || !beod) return;
+        var sel = document.getElementById('modal-beod-hours');
+        var credit = sel ? parseFloat(sel.value) : 1;
+        if (!isFinite(credit) || credit <= 0) credit = 1;
         if (beod.checked && data.beod_eligible) {
-            res.textContent = 'With BEOD: ' + data.fosc_with_beod + 'h FOSC today';
+            var total = Math.round((data.fosc_hours + credit) * 100) / 100;
+            res.textContent = 'With BEOD (' + formatBeodLength(credit) + '): ' + total + 'h FOSC today';
             res.classList.remove('hidden');
         } else if (beod.checked && !data.beod_eligible) {
-            res.textContent = 'BEOD will not add +1h (under ' + data.beod_minimum_hours + 'h worked).';
+            res.textContent = 'BEOD will not add credit (under ' + data.beod_minimum_hours + 'h worked).';
             res.classList.remove('hidden');
         } else {
             res.classList.add('hidden');
@@ -862,6 +897,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         var beod = document.getElementById('modal-beod');
         if (beod) beod.addEventListener('change', updateBeodPreviewResult);
+        var beodLen = document.getElementById('modal-beod-hours');
+        if (beodLen) beodLen.addEventListener('change', updateBeodPreviewResult);
     });
 
     function updateQuickButton() {

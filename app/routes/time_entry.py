@@ -14,7 +14,9 @@ from app.models import (
     RemoteAuthorization, AuthorizationStatus, Employee, Role
 )
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
-from app.services.time_calc import update_daily_summary, get_target_hours
+from app.services.time_calc import (
+    update_daily_summary, get_target_hours, normalize_beod_length, format_beod_length,
+)
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
     last_checkout_entry, STATUS_CHECKED_OUT,
@@ -342,6 +344,7 @@ async def checkout_submit(
     declared_minute: int = Form(...),
     location_type: str = Form("office"),
     lunch_end_of_day: bool = Form(False),
+    beod_hours: str = Form("1"),
     comments: str = Form(""),
     variance_reason: str = Form(""),
     variance_other: str = Form(""),
@@ -413,10 +416,12 @@ async def checkout_submit(
         db.commit()
 
         beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
+        requested_beod = normalize_beod_length(beod_hours) if lunch_end_of_day else None
         update_daily_summary(
             db, employee.id, today,
             lunch_end_of_day=lunch_end_of_day,
             lunch_approved=beod_approved,
+            beod_requested_hours=requested_beod,
         )
 
         extra_h = round((declared_time - last_co.declared_time).total_seconds() / 3600.0, 2)
@@ -430,6 +435,7 @@ async def checkout_submit(
                 "extra_hours": extra_h,
                 "location_type": loc_type.value,
                 "beod": lunch_end_of_day,
+                "beod_hours": requested_beod or 0,
                 "comments": comment_text,
             },
             ip_address=request.client.host if request.client else "",
@@ -470,10 +476,12 @@ async def checkout_submit(
 
     # BEOD: blanket approval auto-approves; otherwise pending manager approval
     beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
+    requested_beod = normalize_beod_length(beod_hours) if lunch_end_of_day else None
     update_daily_summary(
         db, employee.id, today,
         lunch_end_of_day=lunch_end_of_day,
         lunch_approved=beod_approved,
+        beod_requested_hours=requested_beod,
     )
 
     log_action(
@@ -484,6 +492,7 @@ async def checkout_submit(
             "submission_time": str(now),
             "location_type": loc_type.value,
             "beod": lunch_end_of_day,
+            "beod_hours": requested_beod or 0,
             "beod_auto_approved": beod_approved,
             "comments": comment_text,
         },
@@ -855,6 +864,7 @@ async def past_day_submit(
     checkout_hour: int = Form(...),
     checkout_minute: int = Form(...),
     lunch_end_of_day: bool = Form(False),
+    beod_hours: str = Form("1"),
     offsite_location: str = Form(""),
     offsite_start_hour: int = Form(-1),
     offsite_start_minute: int = Form(0),
@@ -992,10 +1002,12 @@ async def past_day_submit(
 
     # BEOD: blanket auto-approves
     beod_approved = bool(lunch_end_of_day) and _beod_blanket(db)
+    requested_beod = normalize_beod_length(beod_hours) if lunch_end_of_day else None
     update_daily_summary(
         db, employee.id, selected_date,
         lunch_end_of_day=lunch_end_of_day,
         lunch_approved=beod_approved,
+        beod_requested_hours=requested_beod,
     )
 
     log_action(
@@ -1006,6 +1018,7 @@ async def past_day_submit(
             "checkin": str(checkin_time),
             "checkout": str(checkout_time),
             "lunch_end_of_day": lunch_end_of_day,
+            "beod_hours": requested_beod or 0,
             "offsite_location": offsite_location.strip() or None,
             "comments": comments,
         },
@@ -1030,7 +1043,10 @@ async def past_day_submit(
             [
                 ("Check-In Time", f"{old_ci} → {checkin_hour:02d}:{checkin_minute:02d}"),
                 ("Check-Out Time", f"{old_co} → {checkout_hour:02d}:{checkout_minute:02d}"),
-                ("Lunch EOD", "Enabled" if lunch_end_of_day else "Disabled"),
+                ("Lunch EOD", (
+                    f"Enabled ({format_beod_length(requested_beod)})"
+                    if lunch_end_of_day else "Disabled"
+                )),
                 ("Offsite", offsite_location.strip() or "None")
             ]
         ),

@@ -14,25 +14,28 @@
         <h1 class="text-2xl font-bold text-white flex items-center gap-3">
             {% if entry_type == "check_in" %}
             <div class="w-10 h-10 rounded-xl bg-success-500/10 flex items-center justify-center">
-                <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                <svg class="w-5 h-5 text-success-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="13" y="3" width="8" height="18" rx="1.5"></rect>
+                    <path d="M3 12h8"></path>
+                    <path d="M8 8l3 4-3 4"></path>
                 </svg>
             </div>
             Check In
             {% elif is_recheckout|default(false) %}
             <div class="w-10 h-10 rounded-xl bg-warning-500/10 flex items-center justify-center">
-                <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                <svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="8" height="18" rx="1.5"></rect>
+                    <path d="M13 12h8"></path>
+                    <path d="M17 8l4 4-4 4"></path>
                 </svg>
             </div>
             Re-Check Out
             {% else %}
             <div class="w-10 h-10 rounded-xl bg-danger-500/10 flex items-center justify-center">
-                <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                <svg class="w-5 h-5 text-danger-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="8" height="18" rx="1.5"></rect>
+                    <path d="M13 12h8"></path>
+                    <path d="M17 8l4 4-4 4"></path>
                 </svg>
             </div>
             Check Out
@@ -179,14 +182,14 @@
                         id="lunch-eod">
                     <div>
                         {% if beod_blanket|default(true) %}
-                        <p class="text-sm font-medium text-warning-300">Use BEOD — Break at end of day (+1h)</p>
+                        <p class="text-sm font-medium text-warning-300">Use BEOD — break at end of day</p>
                         <p class="text-xs text-gray-500 mt-0.5">
-                            Check only if you take the paid lunch at the <strong class="text-gray-400">end</strong> of the day
-                            (e.g. 07:00–15:00 = 8h + BEOD = 9h). Leave unchecked if you take lunch during the day.
+                            Check only if you take paid lunch at the <strong class="text-gray-400">end</strong> of the day
+                            (e.g. 07:00–15:00 = 8h + 1h BEOD = 9h). Leave unchecked if you take the full lunch during the day.
                             Needs ≥ {{ beod_minimum_hours|default(6) }}h worked. Blanket approval is ON — credit applies when checked.
                         </p>
                         {% else %}
-                        <p class="text-sm font-medium text-warning-300">Request end-of-day break (BEOD +1h)</p>
+                        <p class="text-sm font-medium text-warning-300">Request end-of-day break (BEOD)</p>
                         <p class="text-xs text-gray-500 mt-0.5">
                             Optional request for manager approval if you take paid lunch at the end of the day.
                             Leave unchecked for a normal mid-day lunch. Needs ≥ {{ beod_minimum_hours|default(6) }}h worked.
@@ -194,6 +197,16 @@
                         {% endif %}
                     </div>
                 </label>
+                <div id="beod-length-wrap" class="hidden mt-3 pl-7">
+                    <label for="beod_hours" class="block text-xs text-gray-400 mb-1">BEOD length</label>
+                    <select name="beod_hours" id="beod_hours" class="form-select">
+                        <option value="1" selected>1 hour</option>
+                        <option value="0.75">45 minutes</option>
+                        <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
+                        <option value="0.25">15 minutes</option>
+                    </select>
+                    <p class="text-[11px] text-gray-500 mt-1">Shorter than an hour when you did not take the full break at the end of the day.</p>
+                </div>
             </div>
             {% endif %}
 
@@ -317,12 +330,19 @@
                         }
                         const withBeod = document.getElementById('preview-fosc-with-beod');
                         const beodCb = document.getElementById('lunch-eod');
+                        const beodLenWrap = document.getElementById('beod-length-wrap');
+                        const beodLen = document.getElementById('beod_hours');
+                        if (beodLenWrap && beodCb) beodLenWrap.classList.toggle('hidden', !beodCb.checked);
                         if (withBeod && beodCb) {
                             if (beodCb.checked) {
+                                const credit = beodLen ? parseFloat(beodLen.value) : 1;
+                                const minutes = Math.round((isFinite(credit) ? credit : 1) * 60);
+                                const creditLabel = minutes === 60 ? '1h' : (minutes + 'm');
                                 if (fosc >= beodMin) {
-                                    withBeod.textContent = 'With BEOD: ' + (Math.round((fosc + 1) * 100) / 100) + 'h FOSC (target ' + target + 'h)';
+                                    const total = Math.round((fosc + (isFinite(credit) ? credit : 1)) * 100) / 100;
+                                    withBeod.textContent = 'With BEOD (' + creditLabel + '): ' + total + 'h FOSC (target ' + target + 'h)';
                                 } else {
-                                    withBeod.textContent = 'BEOD checked but under ' + beodMin + 'h worked — no +1 credit.';
+                                    withBeod.textContent = 'BEOD checked but under ' + beodMin + 'h worked — no credit.';
                                 }
                                 withBeod.classList.remove('hidden');
                             } else {
@@ -336,6 +356,8 @@
                     if (reasonSelect) reasonSelect.addEventListener('change', updateOtherVisibility);
                     const beodCb = document.getElementById('lunch-eod');
                     if (beodCb) beodCb.addEventListener('change', updateFoscPreview);
+                    const beodLen = document.getElementById('beod_hours');
+                    if (beodLen) beodLen.addEventListener('change', updateFoscPreview);
                     updateCommentStatus();
                     updateFoscPreview();
                 });
@@ -344,21 +366,24 @@
             <!-- Submit -->
             <button type="submit" id="btn-submit-entry" class="w-full btn-primary py-4 text-lg">
                 {% if entry_type == "check_in" %}
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="13" y="3" width="8" height="18" rx="1.5"></rect>
+                    <path d="M3 12h8"></path>
+                    <path d="M8 8l3 4-3 4"></path>
                 </svg>
                 Submit Check-In
                 {% elif is_recheckout|default(false) %}
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="8" height="18" rx="1.5"></rect>
+                    <path d="M13 12h8"></path>
+                    <path d="M17 8l4 4-4 4"></path>
                 </svg>
                 Submit Re-Check Out
                 {% else %}
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="3" width="8" height="18" rx="1.5"></rect>
+                    <path d="M13 12h8"></path>
+                    <path d="M17 8l4 4-4 4"></path>
                 </svg>
                 Submit Check-Out
                 {% endif %}

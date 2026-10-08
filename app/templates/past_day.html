@@ -203,15 +203,36 @@
 
             <!-- Lunch checkbox -->
             <div class="mb-6">
-                <label
-                    class="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-surface-900/30 border border-white/5 hover:border-white/10 transition-colors">
+                <div
+                    class="flex items-start gap-3 p-3 rounded-xl bg-surface-900/30 border border-white/5">
                     <input type="checkbox" name="lunch_end_of_day" value="true" id="beod-past"
-                        class="w-4 h-4 rounded bg-surface-700 border-white/10 text-primary-500 focus:ring-primary-500/30">
-                    <div>
-                        <span class="text-sm font-medium text-gray-300">BEOD — Break at end of day (+1h)</span>
-                        <span class="text-xs text-gray-500 ml-1">(needs admin approval, +1h)</span>
+                        class="mt-0.5 w-4 h-4 rounded bg-surface-700 border-white/10 text-primary-500 focus:ring-primary-500/30">
+                    <div class="flex-1">
+                        <label for="beod-past" class="cursor-pointer">
+                            <span class="text-sm font-medium text-gray-300">BEOD — break at end of day</span>
+                            <span class="text-xs text-gray-500 ml-1">(1 hour unless you shorten it)</span>
+                        </label>
+                        <div id="beod-past-length" class="hidden mt-2">
+                            <label for="beod_hours" class="text-xs text-gray-400 block mb-1">BEOD length</label>
+                            <select name="beod_hours" id="beod_hours" class="form-select">
+                                <option value="1" selected>1 hour</option>
+                                <option value="0.75">45 minutes</option>
+                                <option value="0.5">30 minutes — half-hour lunch + half-hour BEOD</option>
+                                <option value="0.25">15 minutes</option>
+                            </select>
+                        </div>
                     </div>
-                </label>
+                </div>
+                <script>
+                    (function () {
+                        var cb = document.getElementById('beod-past');
+                        var wrap = document.getElementById('beod-past-length');
+                        if (!cb || !wrap) return;
+                        function sync() { wrap.classList.toggle('hidden', !cb.checked); }
+                        cb.addEventListener('change', sync);
+                        sync();
+                    })();
+                </script>
             </div>
 
             <!-- Offsite Work (optional) -->

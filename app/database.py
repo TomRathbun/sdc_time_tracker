@@ -114,6 +114,17 @@ def _run_migrations():
                     f"ALTER TABLE daily_summaries ADD COLUMN {col} {sql_type} DEFAULT {default}"
                 )
                 print(f"✅ Migration: Added {col} to daily_summaries")
+        ds_cols = _cols("daily_summaries")
+        if "beod_requested_hours" not in ds_cols:
+            cursor.execute(
+                "ALTER TABLE daily_summaries ADD COLUMN beod_requested_hours FLOAT DEFAULT 0"
+            )
+            cursor.execute(
+                "UPDATE daily_summaries SET beod_requested_hours = 1 "
+                "WHERE lunch_end_of_day = 1 "
+                "AND (beod_requested_hours IS NULL OR beod_requested_hours = 0)"
+            )
+            print("✅ Migration: Added beod_requested_hours (legacy claims = 1h)")
 
     # phone_support_entries table (also created via create_all; keep for older paths)
     cursor.execute(

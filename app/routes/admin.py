@@ -15,7 +15,9 @@ from app.models import (
     OffsiteEntry, PhoneSupportEntry, AuditLog,
 )
 from app.services.audit import log_action
-from app.services.time_calc import get_target_hours, update_daily_summary
+from app.services.time_calc import (
+    get_target_hours, update_daily_summary, format_beod_length,
+)
 from app.services.time_offset import reject_time_offset
 from app.services.leave_sync import apply_leave_approval
 from app.services.time_state import squash_continuous_sessions
@@ -526,6 +528,12 @@ async def team_timesheet(
                 "phone_hours": s.phone_hours if s else 0.0,
                 "offsite_hours": s.offsite_hours if s else 0.0,
                 "beod_hours": s.beod_hours if s else 0.0,
+                "beod_label": (
+                    format_beod_length(
+                        (s.beod_hours or s.beod_requested_hours or 1.0) if s else 0
+                    )
+                    if s and (s.beod_hours or s.lunch_end_of_day) else ""
+                ),
             })
 
         rows.append({
@@ -672,7 +680,7 @@ async def approve_lunch(
     week: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """Approve BEOD (break at end of day). Adds +1h to worked hours when eligible."""
+    """Approve BEOD (break at end of day). Adds the claimed length when eligible."""
     employee = get_current_employee(request, db)
     if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
@@ -684,8 +692,8 @@ async def approve_lunch(
     # Capture stats for audit before update
     old_total = summary.total_hours
 
-    # Approve and recalculate (update_daily_summary will add +1h)
-    update_daily_summary(
+    # Approve and recalculate using the length claimed at checkout
+    updated = update_daily_summary(
         db, summary.employee_id, summary.date,
         lunch_end_of_day=True, lunch_approved=True,
     )
@@ -720,7 +728,8 @@ async def approve_lunch(
             mgr_emails,
             [
                 ("Status", "Pending → Approved"),
-                ("Total Worked", f"{old_total}h → {old_total + 1.0}h")
+                ("BEOD", format_beod_length(updated.beod_hours or updated.beod_requested_hours or 1)),
+                ("Total Worked", f"{old_total}h → {updated.total_hours}h"),
             ]
         ),
         daemon=True,

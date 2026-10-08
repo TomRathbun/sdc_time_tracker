@@ -151,7 +151,8 @@ class DailySummary(Base):
     clock_hours = Column(Float, default=0.0)
     offsite_hours = Column(Float, default=0.0)
     phone_hours = Column(Float, default=0.0)
-    beod_hours = Column(Float, default=0.0)  # 0 or 1 when BEOD credit applied
+    beod_hours = Column(Float, default=0.0)  # applied credit: 0, 0.25, 0.5, 0.75, or 1
+    beod_requested_hours = Column(Float, default=0.0)  # claimed length; legacy claims are 1h
     leave_hours = Column(Float, default=0.0)
     leave_type = Column(Enum(LeaveType), nullable=True)
     leave_approved = Column(Boolean, default=False)

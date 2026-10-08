@@ -167,7 +167,7 @@
                                         {% endif %}
                                     </span>
                                     {% if cell.beod_hours %}
-                                    <span class="text-[9px] text-success-400 ml-0.5" title="BEOD +1h">+BEOD</span>
+                                    <span class="text-[9px] text-success-400 ml-0.5" title="BEOD +{{ cell.beod_label }}">+{{ cell.beod_label }}</span>
                                     {% endif %}
                                 </div>
                                 {% endif %}
@@ -225,7 +225,7 @@
                                 <div class="text-[9px] text-accent-400 text-center mt-0.5">{{ cell.leave_type_label }} +{{ cell.display_leave_hours }}h ✓</div>
                                 {% endif %}
                                 {% if cell.lunch_approved %}
-                                <div class="text-[9px] text-success-400 text-center">BEOD +1h ✓</div>
+                                <div class="text-[9px] text-success-400 text-center">BEOD +{{ cell.beod_label }} ✓</div>
                                 {% endif %}
 
                                 {% if cell.status == 'future' and not cell.ci_punches and not cell.pto_pending and not cell.is_leave %}
@@ -264,8 +264,8 @@
                                     <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
                                     <button type="submit"
                                         class="w-full px-1 py-0.5 rounded text-[10px] font-semibold bg-success-500/15 text-success-400 hover:bg-success-500/30 border border-success-500/20"
-                                        title="Approve BEOD (+1h)">
-                                        ✓ Approve BEOD
+                                        title="Approve BEOD (+{{ cell.beod_label }})">
+                                        ✓ Approve BEOD{% if cell.beod_label %} {{ cell.beod_label }}{% endif %}
                                     </button>
                                 </form>
                                 {% endif %}

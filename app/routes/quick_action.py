@@ -14,7 +14,7 @@ from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntr
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
-    beod_offered_on,
+    beod_offered_on, normalize_beod_length, format_beod_length,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -372,6 +372,19 @@ async def checkout_preview(
     return JSONResponse(_checkout_preview_payload(db, emp.id, override))
 
 
+def _beod_status_note(claim_beod: bool, requested, summary, db: Session) -> str:
+    """Suffix for the checkout toast describing the BEOD credit."""
+    if not claim_beod:
+        return ""
+    length = format_beod_length(summary.beod_hours or requested or 1)
+    if summary.beod_hours:
+        return f" (BEOD +{length} applied)"
+    if not get_bool_setting(db, "beod_blanket_approval"):
+        asked = format_beod_length(requested or 1)
+        return f" (BEOD {asked} requested — pending approval)"
+    return " (BEOD claimed but under 6h worked — no credit)"
+
+
 def _record_recheckout(
     db: Session,
     emp: Employee,
@@ -379,6 +392,7 @@ def _record_recheckout(
     now: datetime,
     rounded_time: datetime,
     claim_beod: bool,
+    beod_hours: float | None,
     request: Request,
     adjusted: bool = False,
 ):
@@ -406,7 +420,9 @@ def _record_recheckout(
         location_type=LocationType.office,
         is_remote=False,
         comments=_note_adjusted(
-            RECHECKOUT_COMMENT + (" + BEOD" if claim_beod else ""),
+            RECHECKOUT_COMMENT + (
+                f" + BEOD {format_beod_length(beod_hours or 1)}" if claim_beod else ""
+            ),
             adjusted,
         ),
         offset_approved=offset_approved_default(db, rounded_time, now),
@@ -420,6 +436,7 @@ def _record_recheckout(
         db, emp.id, today,
         lunch_end_of_day=claim_beod,
         lunch_approved=beod_approved,
+        beod_requested_hours=beod_hours if claim_beod else None,
     )
 
     extra_h = round((rounded_time - return_time).total_seconds() / 3600.0, 2)
@@ -432,6 +449,7 @@ def _record_recheckout(
             "submission_time": str(now),
             "extra_hours": extra_h,
             "beod": claim_beod,
+            "beod_hours": beod_hours if claim_beod else 0,
             "beod_auto_approved": beod_approved,
         },
         ip_address=request.client.host if request.client else "",
@@ -445,6 +463,7 @@ async def quick_checkout(
     employee_id: int = Form(...),
     pin: str = Form(...),
     beod: str = Form("false"),
+    beod_hours: str = Form("1"),
     declared_time: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -474,6 +493,7 @@ async def quick_checkout(
     claim_beod = str(beod).lower() in ("true", "1", "on", "yes")
     if not beod_offered_on(today):
         claim_beod = False
+    requested_beod = normalize_beod_length(beod_hours) if claim_beod else None
     status = current_status(db, emp.id, today)
 
     if status == STATUS_CHECKED_OUT:
@@ -481,20 +501,14 @@ async def quick_checkout(
         if state_err:
             return JSONResponse({"ok": False, "error": state_err}, status_code=400)
         summary, extra_h, return_time = _record_recheckout(
-            db, emp, today, now, rounded_time, claim_beod, request, adjusted,
+            db, emp, today, now, rounded_time, claim_beod, requested_beod, request, adjusted,
         )
         msg = (
             f"Re-checked out at {rounded_time.strftime('%H:%M')} "
             f"(+{extra_h}h extra from {return_time.strftime('%H:%M')}) "
             f"· {summary.total_hours}h FOSC"
         )
-        if claim_beod:
-            if summary.beod_hours:
-                msg += " (BEOD +1h applied)"
-            elif not get_bool_setting(db, "beod_blanket_approval"):
-                msg += " (BEOD requested — pending approval)"
-            else:
-                msg += " (BEOD claimed but under 6h worked — no credit)"
+        msg += _beod_status_note(claim_beod, requested_beod, summary, db)
         return JSONResponse({
             "ok": True,
             "message": msg,
@@ -517,7 +531,9 @@ async def quick_checkout(
         location_type=LocationType.office,
         is_remote=False,
         comments=_note_adjusted(
-            "Quick check-out" + (" + BEOD" if claim_beod else ""),
+            "Quick check-out" + (
+                f" + BEOD {format_beod_length(requested_beod or 1)}" if claim_beod else ""
+            ),
             adjusted,
         ),
         offset_approved=offset_approved_default(db, rounded_time, now),
@@ -530,6 +546,7 @@ async def quick_checkout(
         db, emp.id, today,
         lunch_end_of_day=claim_beod,
         lunch_approved=beod_approved,
+        beod_requested_hours=requested_beod,
     )
 
     log_action(
@@ -539,19 +556,14 @@ async def quick_checkout(
             "declared_time": str(rounded_time),
             "submission_time": str(now),
             "beod": claim_beod,
+            "beod_hours": requested_beod or 0,
             "beod_auto_approved": beod_approved,
         },
         ip_address=request.client.host if request.client else "",
     )
 
     msg = f"Checked out at {rounded_time.strftime('%H:%M')} · {summary.total_hours}h FOSC"
-    if claim_beod:
-        if beod_approved and summary.beod_hours:
-            msg += " (BEOD +1h applied)"
-        elif claim_beod and not beod_approved:
-            msg += " (BEOD requested — pending approval)"
-        elif claim_beod and not summary.beod_hours:
-            msg += " (BEOD claimed but under 6h worked — no credit)"
+    msg += _beod_status_note(claim_beod, requested_beod, summary, db)
 
     return JSONResponse({
         "ok": True,

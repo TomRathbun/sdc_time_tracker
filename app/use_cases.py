@@ -58,7 +58,7 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "featured": True,
                 "actions": [
                     {"text": "Find your name on the login list", "href": "/login", "screen": "Login"},
-                    {"text": "Tap the green check-in arrow"},
+                    {"text": "Tap the green check-in icon (box, arrow going in)"},
                     {"text": "Enter PIN and confirm"},
                 ],
                 "notes": "Rounds down to the nearest 5 minutes. Projected checkout then shows next to your name (9h Mon–Thu, 8h with BEOD, 4h Friday).",
@@ -86,7 +86,7 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "featured": True,
                 "actions": [
                     {"text": "Find your name (shows In @ time)", "href": "/login", "screen": "Login"},
-                    {"text": "Tap the red check-out arrow"},
+                    {"text": "Tap the check-out icon (box, arrow leaving)"},
                     {"text": "Enter PIN. Leave BEOD unchecked for a normal mid-day lunch"},
                     {"text": "Confirm"},
                 ],
@@ -100,10 +100,10 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "featured": True,
                 "actions": [
                     {"text": "Quick Check Out, or Dashboard → Check Out", "href": "/time/checkout", "screen": "Check Out"},
-                    {"text": "Check Use BEOD — Break at end of day (+1h)"},
+                    {"text": "Check Use BEOD, then pick the length (1 hour, or 30 minutes for a half-hour lunch plus a half-hour BEOD)"},
                     {"text": "Enter PIN if using the kiosk, then confirm"},
                 ],
-                "notes": "Example: 07:00–15:00 = 8h + BEOD = 9h. Hidden on Friday (4h day). If blanket BEOD is off, this is a request for the manager.",
+                "notes": "Example: 07:00–15:00 = 8h + 1h BEOD = 9h. A half-hour lunch plus a half-hour BEOD is 30 minutes of credit. Hidden on Friday (4h day). If blanket BEOD is off, this is a request for the manager.",
             },
             {
                 "id": "friday-out",
@@ -111,7 +111,7 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "who": "Employee",
                 "summary": "Use Quick Check Out. BEOD is not offered.",
                 "actions": [
-                    {"text": "Tap the red check-out arrow on the login list", "href": "/login", "screen": "Login"},
+                    {"text": "Tap the check-out icon (box, arrow leaving) on the login list", "href": "/login", "screen": "Login"},
                     {"text": "Enter PIN and confirm"},
                 ],
                 "notes": "Friday target is 4 hours. Quick checkout hides Use BEOD.",
@@ -237,7 +237,7 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "summary": "Use Re-Check Out (or Return, then Check Out).",
                 "featured": True,
                 "actions": [
-                    {"text": "On the login list, tap the amber/red check-out arrow again", "href": "/login", "screen": "Login"},
+                    {"text": "On the login list, tap the check-out icon again (box, arrow leaving)", "href": "/login", "screen": "Login"},
                     {"text": "Enter PIN — extra time is from last checkout until now"},
                     {"text": "Or tap Return (green) if you are still working, then Check Out when you leave"},
                 ],
