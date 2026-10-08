@@ -169,5 +169,24 @@ def _run_migrations():
         """
     )
 
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS suggestions (
+            id INTEGER PRIMARY KEY,
+            employee_id INTEGER NOT NULL,
+            kind VARCHAR(20) NOT NULL,
+            title VARCHAR(140) NOT NULL,
+            details TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'open',
+            status_note TEXT DEFAULT '',
+            updated_by INTEGER,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            FOREIGN KEY(employee_id) REFERENCES employees (id),
+            FOREIGN KEY(updated_by) REFERENCES employees (id)
+        )
+        """
+    )
+
     conn.commit()
     conn.close()

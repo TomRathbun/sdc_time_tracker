@@ -74,6 +74,12 @@ class Employee(Base):
     daily_summaries = relationship("DailySummary", back_populates="employee", lazy="dynamic")
     leave_requests = relationship("LeaveRequest", back_populates="employee",
                                   foreign_keys="LeaveRequest.employee_id", lazy="dynamic")
+    suggestions = relationship(
+        "Suggestion",
+        back_populates="employee",
+        foreign_keys="Suggestion.employee_id",
+        lazy="dynamic",
+    )
     remote_authorizations = relationship("RemoteAuthorization", back_populates="employee",
                                          foreign_keys="RemoteAuthorization.employee_id", lazy="dynamic")
 
@@ -199,6 +205,40 @@ class LeaveRequest(Base):
     # Relationships
     employee = relationship("Employee", foreign_keys=[employee_id], back_populates="leave_requests")
     approver = relationship("Employee", foreign_keys=[approved_by])
+
+
+class SuggestionKind(str, enum.Enum):
+    change = "change"
+    feature = "feature"
+
+
+class SuggestionStatus(str, enum.Enum):
+    open = "open"
+    planned = "planned"
+    done = "done"
+    declined = "declined"
+
+
+class Suggestion(Base):
+    """Employee request for a change or a new feature."""
+    __tablename__ = "suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    kind = Column(Enum(SuggestionKind), nullable=False)
+    title = Column(String(140), nullable=False)
+    details = Column(Text, nullable=False)
+    status = Column(Enum(SuggestionStatus), default=SuggestionStatus.open, nullable=False)
+    status_note = Column(Text, default="")
+    updated_by = Column(Integer, ForeignKey("employees.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, nullable=False)
+
+    employee = relationship("Employee", foreign_keys=[employee_id], back_populates="suggestions")
+    updater = relationship("Employee", foreign_keys=[updated_by])
+
+    def __repr__(self):
+        return f"<Suggestion {self.id} {self.kind.value} {self.status.value}>"
 
 
 class AuditLog(Base):
