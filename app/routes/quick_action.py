@@ -603,7 +603,8 @@ async def quick_checkout(
     })
 
 
-def _parse_hhmm(today: date, raw: str):
+def _clock_on(today: date, raw: str):
+    """Parse 'HH:MM' into a datetime on today, or None if invalid."""
     text = (raw or "").strip()
     try:
         hour_s, minute_s = text.split(":")
@@ -649,13 +650,13 @@ async def quick_offsite(
 
     today = date.today()
     now = datetime.now()
-    start = _parse_hhmm(today, start_time)
+    start = _clock_on(today, start_time)
     if start is None:
         return JSONResponse({"ok": False, "error": "Enter a start time."}, status_code=400)
     open_ended = str(until_return).lower() in ("true", "1", "on", "yes") or not (end_time or "").strip()
     end = None
     if not open_ended:
-        end = _parse_hhmm(today, end_time)
+        end = _clock_on(today, end_time)
         if end is None:
             return JSONResponse({"ok": False, "error": "Enter an end time, or leave it open until you check back in."}, status_code=400)
 
