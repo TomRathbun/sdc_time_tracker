@@ -10,7 +10,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - **Projected checkout** — after check-in, login and dashboard show expected out time (9h Mon–Thu, 8h with BEOD, 4h Friday). Clears after checkout or midnight. Friday quick checkout hides BEOD.
 - **Past-day entry** — log or correct previous workdays (manager rules apply)
 - **Offsite / remote work** — dedicated offsite logging with gap detection
-- **Phone support hours** — additive hours that roll into FOSC totals
+- **Phone support hours** — additive hours that roll into FOSC totals. The login roster has a phone icon for today's call (PIN, no punch). Past days stay on the Phone form.
 - **Live dashboard progress** — daily/weekly targets (default **9h Mon–Thu, 4h Fri**), including in-progress open shifts
 
 ### FOSC rules

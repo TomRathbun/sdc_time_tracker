@@ -745,6 +745,87 @@ async def quick_offsite(
     })
 
 
+_QUICK_PHONE_HOURS = (0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0)
+
+
+def _quick_phone_hours(raw: str):
+    try:
+        hours = round(float(raw), 2)
+    except (TypeError, ValueError):
+        return None
+    for allowed in _QUICK_PHONE_HOURS:
+        if abs(hours - allowed) < 0.01:
+            return allowed
+    return None
+
+
+def _phone_length_label(hours: float) -> str:
+    minutes = int(round(hours * 60))
+    if minutes < 60:
+        return f"{minutes}m"
+    if minutes % 60 == 0:
+        return f"{minutes // 60}h"
+    return f"{hours:g}h"
+
+
+@router.post("/quick-phone")
+async def quick_phone(
+    request: Request,
+    employee_id: int = Form(...),
+    pin: str = Form(...),
+    hours: str = Form("0.5"),
+    comments: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """PIN-verified phone-support hours for today. Does not punch in or out."""
+    emp = db.query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.is_active == True,
+    ).first()
+    if not emp or not verify_pin(pin, emp.pin_hash):
+        return JSONResponse({"ok": False, "error": "Invalid PIN."}, status_code=401)
+
+    length = _quick_phone_hours(hours)
+    if length is None:
+        return JSONResponse({"ok": False, "error": "Pick a call length."}, status_code=400)
+
+    note = " ".join((comments or "").split())
+    if len(note) > 500:
+        return JSONResponse({"ok": False, "error": "Notes are too long."}, status_code=400)
+
+    today = date.today()
+    now = datetime.now()
+    entry = PhoneSupportEntry(
+        employee_id=emp.id,
+        date=today,
+        hours=length,
+        comments=note,
+        submission_time=now,
+    )
+    db.add(entry)
+    db.commit()
+
+    summary = update_daily_summary(db, emp.id, today)
+    log_action(
+        db, action="quick_phone", entity_type="PhoneSupportEntry",
+        entity_id=entry.id, employee_id=emp.id,
+        new_values={"date": str(today), "hours": length, "comments": note},
+        ip_address=request.client.host if request.client else "",
+    )
+
+    label = _phone_length_label(length)
+    msg = f"Logged {label} phone call"
+    if note:
+        msg += f" — {note}"
+    msg += f" · {summary.total_hours}h FOSC"
+    return JSONResponse({
+        "ok": True,
+        "message": msg,
+        "phone_hours": length,
+        "fosc_hours": summary.total_hours,
+    })
+
+
 @router.get("/settings")
 async def get_settings(db: Session = Depends(get_db)):
     """Return feature toggle settings for frontend use."""
