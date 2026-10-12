@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import verify_pin
-from app.config import BEOD_MINIMUM_HOURS
+from app.config import BEOD_MINIMUM_HOURS, PAST_DAY_MAX_LOOKBACK_DAYS
 from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry, DailySummary
 from app.services.time_calc import (
     update_daily_summary, get_target_hours,
@@ -775,9 +775,14 @@ async def quick_phone(
     pin: str = Form(...),
     hours: str = Form("0.5"),
     comments: str = Form(""),
+    entry_date: str = Form(""),
     db: Session = Depends(get_db),
 ):
-    """PIN-verified phone-support hours for today. Does not punch in or out."""
+    """PIN-verified phone-support hours. Does not punch in or out.
+
+    Defaults to today. A night call is usually entered the next morning,
+    so the dialog may send yesterday or another day inside the lookback.
+    """
     emp = db.query(Employee).filter(
         Employee.id == employee_id,
         Employee.is_active == True,
@@ -794,10 +799,24 @@ async def quick_phone(
         return JSONResponse({"ok": False, "error": "Notes are too long."}, status_code=400)
 
     today = date.today()
+    work_date = today
+    if (entry_date or "").strip():
+        try:
+            work_date = date.fromisoformat(entry_date.strip())
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Pick the day of the call."}, status_code=400)
+    if work_date > today:
+        return JSONResponse({"ok": False, "error": "Cannot log a phone call in the future."}, status_code=400)
+    if work_date < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
+        return JSONResponse({
+            "ok": False,
+            "error": f"Phone calls can only be logged for the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.",
+        }, status_code=400)
+
     now = datetime.now()
     entry = PhoneSupportEntry(
         employee_id=emp.id,
-        date=today,
+        date=work_date,
         hours=length,
         comments=note,
         submission_time=now,
@@ -805,16 +824,17 @@ async def quick_phone(
     db.add(entry)
     db.commit()
 
-    summary = update_daily_summary(db, emp.id, today)
+    summary = update_daily_summary(db, emp.id, work_date)
     log_action(
         db, action="quick_phone", entity_type="PhoneSupportEntry",
         entity_id=entry.id, employee_id=emp.id,
-        new_values={"date": str(today), "hours": length, "comments": note},
+        new_values={"date": str(work_date), "hours": length, "comments": note},
         ip_address=request.client.host if request.client else "",
     )
 
     label = _phone_length_label(length)
-    msg = f"Logged {label} phone call"
+    when = "today" if work_date == today else work_date.strftime("%a %d %b")
+    msg = f"Logged {label} phone call for {when}"
     if note:
         msg += f" — {note}"
     msg += f" · {summary.total_hours}h FOSC"
@@ -822,6 +842,7 @@ async def quick_phone(
         "ok": True,
         "message": msg,
         "phone_hours": length,
+        "date": str(work_date),
         "fosc_hours": summary.total_hours,
     })
 

@@ -420,6 +420,10 @@
 
         <div id="modal-phone" style="display:none" class="mb-4 space-y-3">
             <div>
+                <label for="phone-date" class="block text-xs text-gray-500 mb-1">Day of the call</label>
+                <select id="phone-date" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200"></select>
+            </div>
+            <div>
                 <label for="phone-hours" class="block text-xs text-gray-500 mb-1">How long</label>
                 <select id="phone-hours" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200">
                     <option value="0.25">15 minutes</option>
@@ -438,7 +442,7 @@
                     class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/50"
                     placeholder="Who called, what you supported">
             </div>
-            <p class="text-[11px] text-cyan-300/90">Adds to today's FOSC. Does not check you in or out. For another day, sign in and use Phone.</p>
+            <p class="text-[11px] text-cyan-300/90">Yesterday is already selected for a night call you are logging this morning. Hours go on that day's FOSC. Does not check you in or out.</p>
         </div>
 
         <!-- Error message -->
@@ -678,6 +682,7 @@
             _offsiteChecksOut = false;
         }
         if (action === 'phone') {
+            fillPhoneDates();
             var phoneHours = document.getElementById('phone-hours');
             if (phoneHours) phoneHours.value = '0.5';
             var phoneNotes = document.getElementById('phone-comments');
@@ -719,7 +724,7 @@
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-cyan-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"></path></svg>';
             title.textContent = 'Phone call';
-            subtitle.textContent = empName + ' · today only';
+            subtitle.textContent = empName;
         }
 
         // Fetch random weapon for spotlight
@@ -746,6 +751,35 @@
         });
 
         setTimeout(function () { pinInput.focus(); }, 150);
+    }
+
+    function fillPhoneDates() {
+        var sel = document.getElementById('phone-date');
+        if (!sel) return;
+        var lookback = 14;
+        var today = new Date();
+        today.setHours(12, 0, 0, 0);
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        var iso = function (d) {
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        };
+        var label = function (d) {
+            return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+        };
+        var add = function (offset, prefix) {
+            var d = new Date(today.getTime());
+            d.setDate(d.getDate() + offset);
+            var opt = document.createElement('option');
+            opt.value = iso(d);
+            opt.textContent = prefix ? (prefix + ' — ' + label(d)) : label(d);
+            sel.appendChild(opt);
+            return opt.value;
+        };
+        sel.innerHTML = '';
+        var yesterday = add(-1, 'Yesterday');
+        add(0, 'Today');
+        for (var i = 2; i <= lookback; i++) add(-i, '');
+        sel.value = yesterday;
     }
 
     function beodOptionValue(hours) {
@@ -974,6 +1008,14 @@
                 return;
             }
         }
+        if (currentAction === 'phone') {
+            var phoneDay = document.getElementById('phone-date');
+            if (!phoneDay || !phoneDay.value) {
+                showEl(errorEl);
+                errorText.textContent = 'Pick the day of the call.';
+                return;
+            }
+        }
 
         hideEl(errorEl);
         hideEl(successEl);
@@ -1004,7 +1046,9 @@
             formData.append('beod_hours', (offBeodOn && offLen) ? offLen.value : '1');
         } else if (currentAction === 'phone') {
             var phoneHours = document.getElementById('phone-hours');
+            var phoneDate = document.getElementById('phone-date');
             formData.append('hours', phoneHours ? phoneHours.value : '0.5');
+            formData.append('entry_date', phoneDate ? phoneDate.value : '');
             formData.append('comments', (document.getElementById('phone-comments').value || '').trim());
         } else if (currentAction === 'checkout' || currentAction === 'recheckout') {
             var beodEl = document.getElementById('modal-beod');
