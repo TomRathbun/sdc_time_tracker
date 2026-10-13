@@ -22,11 +22,13 @@ from app.services.time_state import (
     last_checkout_entry, STATUS_CHECKED_IN, STATUS_CHECKED_OUT,
     RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
     close_open_offsites, depart_for_offsite,
+    latest_checkin_entry, validate_checkin_correction, apply_checkin_correction,
 )
 from app.services.time_offset import (
     offset_approved_default,
     get_comment_threshold_minutes,
     offset_minutes,
+    needs_offset_approval,
 )
 from app.services.audit import log_action
 from app.services.settings import get_bool_setting
@@ -99,6 +101,88 @@ def resolve_quick_declared(db: Session, now: datetime, declared_hhmm: str):
             "without a reason. Sign in to record a larger change."
         )
     return declared, None
+
+
+def _parse_same_day_hhmm(now: datetime, raw: str):
+    """Parse HH:MM into a datetime on now's date. (datetime, None) or (None, error)."""
+    parsed = _parse_hhmm(raw)
+    if parsed is None:
+        return None, "Time must be HH:MM."
+    hour, minute = parsed
+    if minute % 5 != 0:
+        return None, "Time must be in 5-minute steps."
+    return now.replace(hour=hour, minute=minute, second=0, microsecond=0), None
+
+
+@router.post("/quick-fix-checkin")
+async def quick_fix_checkin(
+    request: Request,
+    employee_id: int = Form(...),
+    pin: str = Form(...),
+    declared_time: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Move today's latest check-in. Does not change when they punched.
+
+    A small miss (forgot to subtract 10 minutes) stays inside the no-reason
+    window measured from the original punch. A larger move has to be done
+    signed-in, with a reason.
+    """
+    emp = db.query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.is_active == True,
+    ).first()
+    if not emp or not verify_pin(pin, emp.pin_hash):
+        return JSONResponse({"ok": False, "error": "Invalid PIN."}, status_code=401)
+
+    now = datetime.now()
+    today = date.today()
+    entry = latest_checkin_entry(db, emp.id, today)
+    if entry is None:
+        return JSONResponse({"ok": False, "error": "No check-in to change today."}, status_code=400)
+
+    new_time, time_err = _parse_same_day_hhmm(now, declared_time)
+    if time_err:
+        return JSONResponse({"ok": False, "error": time_err}, status_code=400)
+
+    range_err = validate_checkin_correction(db, entry, new_time, now)
+    if range_err:
+        return JSONResponse({"ok": False, "error": range_err}, status_code=400)
+
+    if needs_offset_approval(db, new_time, entry.submission_time):
+        threshold = get_comment_threshold_minutes(db)
+        return JSONResponse({
+            "ok": False,
+            "error": (
+                f"That is more than {threshold} minutes from the punch "
+                f"at {entry.submission_time.strftime('%H:%M')}. "
+                "Sign in and use Fix check-in to record a reason."
+            ),
+        }, status_code=400)
+
+    old = apply_checkin_correction(db, entry, new_time)
+    entry.offset_approved = True
+    db.commit()
+    summary = update_daily_summary(db, emp.id, today)
+    log_action(
+        db, action="fix_checkin", entity_type="TimeEntry",
+        entity_id=entry.id, employee_id=emp.id,
+        new_values={
+            "old_declared": str(old),
+            "declared_time": str(new_time),
+            "submission_time": str(entry.submission_time),
+        },
+        ip_address=request.client.host if request.client else "",
+    )
+    return JSONResponse({
+        "ok": True,
+        "message": (
+            f"Check-in moved from {old.strftime('%H:%M')} to {new_time.strftime('%H:%M')}"
+            f" · {summary.total_hours}h FOSC"
+        ),
+        "time": new_time.strftime("%H:%M"),
+        "fosc_hours": summary.total_hours,
+    })
 
 
 def _note_adjusted(comment: str, adjusted: bool) -> str:

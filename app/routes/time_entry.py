@@ -23,6 +23,7 @@ from app.services.time_state import (
     last_checkout_entry, STATUS_CHECKED_OUT, STATUS_CHECKED_IN,
     RETURN_CHECKIN_COMMENT, RECHECKOUT_COMMENT, validate_offsite_range,
     close_open_offsites, depart_for_offsite,
+    latest_checkin_entry, validate_checkin_correction, apply_checkin_correction,
 )
 from app.services.time_offset import (
     offset_approved_default, get_variance_reasons, resolve_offset_comment,
@@ -1485,6 +1486,94 @@ async def partial_leave_submit(
             daemon=True,
         ).start()
 
+    return RedirectResponse(url="/", status_code=303)
+
+
+@router.get("/time/fix-checkin", response_class=HTMLResponse)
+async def fix_checkin_page(request: Request, db: Session = Depends(get_db)):
+    """Change today's latest check-in. Larger moves need a reason."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+    entry = latest_checkin_entry(db, employee.id, date.today())
+    return templates.TemplateResponse(
+        "fix_checkin.html",
+        {"request": request, **_fix_checkin_page_ctx(db, employee, entry)},
+    )
+
+
+def _fix_checkin_page_ctx(db, employee, entry, error=None):
+    declared = entry.declared_time if entry else datetime.now()
+    return {
+        "employee": employee,
+        "entry": entry,
+        "error": error,
+        "hour": declared.hour,
+        "minute": (declared.minute // 5) * 5,
+        "submitted": entry.submission_time.strftime("%H:%M") if entry else "",
+        "current": entry.declared_time.strftime("%H:%M") if entry else "",
+        "comment_threshold": _comment_threshold(db),
+        "variance_reasons": get_variance_reasons(db),
+    }
+
+
+@router.post("/time/fix-checkin", response_class=HTMLResponse)
+async def fix_checkin_submit(
+    request: Request,
+    declared_hour: int = Form(...),
+    declared_minute: int = Form(...),
+    comments: str = Form(""),
+    variance_reason: str = Form(""),
+    variance_other: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    now = datetime.now()
+    today = date.today()
+    entry = latest_checkin_entry(db, employee.id, today)
+    if entry is None:
+        return templates.TemplateResponse("fix_checkin.html", {
+            "request": request,
+            **_fix_checkin_page_ctx(db, employee, None, "No check-in to change today."),
+        })
+
+    new_time = datetime(today.year, today.month, today.day, declared_hour, declared_minute)
+    range_err = validate_checkin_correction(db, entry, new_time, now)
+    if range_err:
+        return templates.TemplateResponse("fix_checkin.html", {
+            "request": request,
+            **_fix_checkin_page_ctx(db, employee, entry, range_err),
+        })
+
+    reason = ""
+    if needs_offset_approval(db, new_time, entry.submission_time):
+        reason, comment_err = resolve_offset_comment(
+            db, new_time, entry.submission_time, comments, variance_reason, variance_other,
+        )
+        if comment_err:
+            return templates.TemplateResponse("fix_checkin.html", {
+                "request": request,
+                **_fix_checkin_page_ctx(db, employee, entry, comment_err),
+            })
+
+    old = apply_checkin_correction(db, entry, new_time, comment=reason or None)
+    entry.offset_approved = offset_approved_default(db, new_time, entry.submission_time)
+    db.commit()
+    update_daily_summary(db, employee.id, today)
+    log_action(
+        db, action="fix_checkin", entity_type="TimeEntry",
+        entity_id=entry.id, employee_id=employee.id,
+        new_values={
+            "old_declared": str(old),
+            "declared_time": str(new_time),
+            "submission_time": str(entry.submission_time),
+            "offset_approved": entry.offset_approved,
+        },
+        ip_address=request.client.host if request.client else "",
+    )
     return RedirectResponse(url="/", status_code=303)
 
 

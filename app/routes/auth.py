@@ -44,9 +44,30 @@ def _empty_status(**overrides):
         "projected_checkout_beod": None,
         "beod_claimed": False,
         "open_offsite": False,
+        "checkin": "",
+        "checkin_submitted": "",
+        "checkin_min": "",
+        "checkin_max": "",
     }
     base.update(overrides)
     return base
+
+
+def _checkin_fix_fields(entries) -> dict:
+    """Latest check-in today, plus the punches that bound a correction."""
+    cis = [e for e in entries if e.entry_type == EntryType.check_in]
+    if not cis:
+        return {}
+    ci = cis[-1]
+    idx = entries.index(ci)
+    prev = entries[idx - 1] if idx else None
+    nxt = entries[idx + 1] if idx + 1 < len(entries) else None
+    return {
+        "checkin": ci.declared_time.strftime("%H:%M"),
+        "checkin_submitted": ci.submission_time.strftime("%H:%M"),
+        "checkin_min": prev.declared_time.strftime("%H:%M") if prev else "",
+        "checkin_max": nxt.declared_time.strftime("%H:%M") if nxt else "",
+    }
 
 
 def _get_employee_status(db: Session, employees):
@@ -79,6 +100,7 @@ def _get_employee_status(db: Session, employees):
                 projected_checkout=proj.standard.strftime("%H:%M") if proj.standard else None,
                 projected_checkout_beod=proj.beod.strftime("%H:%M") if proj.beod else None,
                 beod_claimed=proj.beod_claimed,
+                **_checkin_fix_fields(entries),
             )
         else:
             last_time = entries[-1].declared_time
@@ -86,6 +108,7 @@ def _get_employee_status(db: Session, employees):
                 status="checked_out",
                 time=last_time.strftime("%H:%M"),
                 minutes=last_time.hour * 60 + last_time.minute,
+                **_checkin_fix_fields(entries),
             )
     open_offsite_ids = {
         row[0]

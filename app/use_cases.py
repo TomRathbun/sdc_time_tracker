@@ -241,6 +241,19 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "notes": "Creates a second session. If it is continuous, the manager timesheet shows first in / last out. For a phone call from home, use Phone instead.",
             },
             {
+                "id": "fix-checkin",
+                "scenario": "Checked in, then noticed the time is 10 minutes late",
+                "who": "Employee",
+                "summary": "Tap the pencil on the roster, or Fix check-in on the dashboard. Same day only.",
+                "featured": True,
+                "actions": [
+                    {"text": "On the login list, tap the pencil next to check-in", "href": "/login", "screen": "Login"},
+                    {"text": "Step the time back (5 minutes at a time) and enter PIN"},
+                    {"text": "Or sign in and open Fix check-in for a larger change, with a reason", "href": "/time/fix-checkin", "screen": "Fix check-in"},
+                ],
+                "notes": "The original punch time stays on the record. A move within the no-reason window is automatic. Past that, a manager has to approve it. Yesterday is Past Day, not this.",
+            },
+            {
                 "id": "past-day",
                 "scenario": "Forgot to punch yesterday",
                 "who": "Employee",

@@ -5,7 +5,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 ## Key features
 
 ### Timekeeping
-- **Quick check-in / check-out** — one-tap entry from login or dashboard (office, remote, offsite)
+- **Quick check-in / check-out** — one-tap entry from login or dashboard (office, remote, offsite). A pencil on the roster fixes today's check-in if the time was wrong (for example, forgot to subtract 10 minutes).
 - **Re-check out** — after you have already left, punch out again to capture extra time (boss called you back). Records a return session from the previous checkout until now. Also available on past-day as an extra session.
 - **Projected checkout** — after check-in, login and dashboard show expected out time (9h Mon–Thu, 8h with BEOD, 4h Friday). Clears after checkout or midnight. Friday quick checkout hides BEOD.
 - **Past-day entry** — log or correct previous workdays (manager rules apply)

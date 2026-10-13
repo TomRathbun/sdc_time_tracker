@@ -88,7 +88,11 @@
                     data-status="{{ emp_status }}"
                     data-open-offsite="{% if emp_info.open_offsite %}1{% else %}0{% endif %}"
                     data-beod-claim="{% if emp.beod_pref_known and emp.beod_pref_claim %}1{% else %}0{% endif %}"
-                    data-beod-hours="{{ emp.beod_pref_hours if emp.beod_pref_hours else 1 }}">
+                    data-beod-hours="{{ emp.beod_pref_hours if emp.beod_pref_hours else 1 }}"
+                    data-checkin="{{ emp_info.checkin or '' }}"
+                    data-checkin-submitted="{{ emp_info.checkin_submitted or '' }}"
+                    data-checkin-min="{{ emp_info.checkin_min or '' }}"
+                    data-checkin-max="{{ emp_info.checkin_max or '' }}">
                     <!-- Avatar + Name -->
                     <a href="/login/{{ emp.id }}" class="flex items-center gap-3 flex-1 min-w-0">
                         <div
@@ -145,6 +149,18 @@
                                 <path d="M8 8l3 4-3 4"></path>
                             </svg>
                         </button>
+                        {% if emp_info.checkin %}
+                        <button type="button"
+                            onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'fixin', '{{ emp_info.checkin }}')"
+                            class="p-2 rounded-lg transition-all active:scale-95 bg-warning-500/10 text-warning-400 hover:bg-warning-500/20 hover:text-warning-300"
+                            title="Fix today's check-in — for example subtract 10 minutes you forgot"
+                            id="btn-quick-fix-{{ emp.id }}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 20h9"></path>
+                                <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            </svg>
+                        </button>
+                        {% endif %}
                         <!-- Check Out (enabled when in, or re-checkout when already out) -->
                         <button onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', '{% if emp_status == 'checked_out' %}recheckout{% else %}checkout{% endif %}', '{{ emp_time or '' }}')" class="p-2 rounded-lg transition-all active:scale-95
                                 {% if emp_status == 'checked_in' %}
@@ -692,6 +708,13 @@
         _adjustTime = null;
         _shownHHMM = '';
         _checkoutPreview = null;
+        if (action === 'fixin') {
+            var anchor = fixinAnchor();
+            if (anchor) {
+                _adjustDirty = true;
+                _adjustTime = anchor;
+            }
+        }
         startQuickClock();
 
         if (action === 'checkin') {
@@ -725,6 +748,12 @@
             icon.innerHTML = '<svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"></path></svg>';
             title.textContent = 'Phone call';
             subtitle.textContent = empName;
+        }
+        if (action === 'fixin') {
+            icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-warning-500/10';
+            icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
+            title.textContent = 'Fix check-in';
+            subtitle.textContent = empName + (currentLastPunch ? (' · in at ' + currentLastPunch) : '');
         }
 
         // Fetch random weapon for spotlight
@@ -896,9 +925,36 @@
         return parseTodayHHMM(hhmm);
     }
 
+    function fixinRow() {
+        return document.getElementById('emp-row-' + currentEmployeeId);
+    }
+
+    function fixinAnchor() {
+        var row = fixinRow();
+        return row ? parseTodayHHMM(row.getAttribute('data-checkin') || '') : null;
+    }
+
+    function fixinSubmitted() {
+        var row = fixinRow();
+        return (row && parseTodayHHMM(row.getAttribute('data-checkin-submitted') || '')) || fixinAnchor();
+    }
+
     function stepAllowed(candidate) {
         var now = new Date();
         if (!sameDay(candidate, now)) return false;
+        if (currentAction === 'fixin') {
+            var anchor = fixinAnchor();
+            if (anchor && candidate.getTime() === anchor.getTime()) return true;
+            if (candidate.getTime() > now.getTime()) return false;
+            var submitted = fixinSubmitted();
+            if (submitted && Math.abs(candidate.getTime() - submitted.getTime()) / 60000 > QUICK_THRESHOLD + 0.001) return false;
+            var row = fixinRow();
+            var floor = row ? parseTodayHHMM(row.getAttribute('data-checkin-min') || '') : null;
+            if (floor && candidate.getTime() <= floor.getTime()) return false;
+            var ceil = row ? parseTodayHHMM(row.getAttribute('data-checkin-max') || '') : null;
+            if (ceil && candidate.getTime() >= ceil.getTime()) return false;
+            return true;
+        }
         if (Math.abs(candidate.getTime() - now.getTime()) / 60000 > QUICK_THRESHOLD + 0.001) return false;
         var floor = minBoundTime();
         if (!floor) return true;
@@ -916,10 +972,16 @@
         if (!label) return;
         label.textContent = fmtHM(shown);
         if (caption) {
-            caption.textContent = _adjustDirty ? 'Adjusted time' : 'Recorded time';
+            caption.textContent = currentAction === 'fixin'
+                ? 'Check-in time'
+                : (_adjustDirty ? 'Adjusted time' : 'Recorded time');
         }
         if (help) {
-            if (_adjustDirty && !stepAllowed(shown)) {
+            if (currentAction === 'fixin') {
+                help.textContent = 'Starts at the check-in already saved. Step by 5 minutes, up to '
+                    + QUICK_THRESHOLD + ' min from when you punched. Sign in for a bigger change.';
+                help.className = 'text-[11px] text-gray-500 text-center mt-2';
+            } else if (_adjustDirty && !stepAllowed(shown)) {
                 help.textContent = 'That time is more than ' + QUICK_THRESHOLD
                     + ' min from now. Move it closer, or sign in for a larger change.';
                 help.className = 'text-[11px] text-warning-400 text-center mt-2';
@@ -1023,6 +1085,7 @@
         btnText.textContent = 'Processing...';
 
         var url = currentAction === 'checkin' ? '/api/quick-checkin'
+            : currentAction === 'fixin' ? '/api/quick-fix-checkin'
             : currentAction === 'offsite' ? '/api/quick-offsite'
             : currentAction === 'phone' ? '/api/quick-phone'
             : '/api/quick-checkout';
@@ -1271,6 +1334,9 @@
                         } else if (currentAction === 'phone') {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-500/25';
                             btnText.textContent = 'Log Phone Call';
+                        } else if (currentAction === 'fixin') {
+                            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-warning-600 to-warning-500 hover:from-warning-500 hover:to-warning-400 shadow-warning-500/25';
+                            btnText.textContent = 'Update Check-In';
                         } else {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-danger-600 to-danger-500 hover:from-danger-500 hover:to-danger-400 shadow-danger-500/25';
                             btnText.textContent = 'Check Out';
@@ -1291,7 +1357,9 @@
                             ? (_offsiteChecksOut ? 'Check Out & Start Offsite' : 'Log Offsite')
                             : (currentAction === 'phone'
                                 ? 'Log Phone Call'
-                                : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out')));
+                                : (currentAction === 'fixin'
+                                    ? 'Update Check-In'
+                                    : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out')));
                 });
         }, 300);
     }

@@ -54,6 +54,141 @@ def last_checkout_entry(
     )
 
 
+def latest_checkin_entry(
+    db: Session,
+    employee_id: int,
+    work_date: date,
+) -> Optional[TimeEntry]:
+    """Latest check-in punch for employee/day (the one a same-day correction edits)."""
+    return (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.employee_id == employee_id,
+            TimeEntry.date == work_date,
+            TimeEntry.entry_type == EntryType.check_in,
+        )
+        .order_by(TimeEntry.declared_time.desc(), TimeEntry.id.desc())
+        .first()
+    )
+
+
+def checkin_neighbors(
+    db: Session,
+    entry: TimeEntry,
+) -> Tuple[Optional[TimeEntry], Optional[TimeEntry]]:
+    """Punch immediately before and after this check-in, by declared time."""
+    rows = (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.employee_id == entry.employee_id,
+            TimeEntry.date == entry.date,
+        )
+        .order_by(TimeEntry.declared_time, TimeEntry.id)
+        .all()
+    )
+    prev: Optional[TimeEntry] = None
+    nxt: Optional[TimeEntry] = None
+    seen = False
+    for row in rows:
+        if row.id == entry.id:
+            seen = True
+            continue
+        if not seen:
+            prev = row
+        elif nxt is None:
+            nxt = row
+            break
+    return prev, nxt
+
+
+def validate_checkin_correction(
+    db: Session,
+    entry: TimeEntry,
+    new_time: datetime,
+    now: datetime,
+) -> Optional[str]:
+    """Return an error if this same-day check-in cannot move to new_time."""
+    if entry.entry_type != EntryType.check_in:
+        return "That punch is not a check-in."
+    if entry.date != now.date() or new_time.date() != entry.date:
+        return "A check-in can only be changed on the same day. Use Past Day for an earlier day."
+    if new_time.minute % 5 != 0 or new_time.second or new_time.microsecond:
+        return "Time must be in 5-minute steps."
+    if new_time > now:
+        return "Check-in cannot be in the future."
+    if new_time == entry.declared_time:
+        return f"Check-in is already {entry.declared_time.strftime('%H:%M')}."
+
+    prev, nxt = checkin_neighbors(db, entry)
+    if prev and new_time <= prev.declared_time:
+        return (
+            "Check-in must be after the previous punch "
+            f"({prev.declared_time.strftime('%H:%M')})."
+        )
+    if nxt and new_time >= nxt.declared_time:
+        return (
+            "Check-in must be before the next punch "
+            f"({nxt.declared_time.strftime('%H:%M')})."
+        )
+
+    session_end = nxt.declared_time if nxt else datetime.max
+    offs = (
+        db.query(OffsiteEntry)
+        .filter(
+            OffsiteEntry.employee_id == entry.employee_id,
+            OffsiteEntry.date == entry.date,
+        )
+        .all()
+    )
+    for oe in offs:
+        if oe.end_time is not None and oe.end_time == entry.declared_time:
+            if oe.start_time >= new_time:
+                return (
+                    f"That time is not after offsite at {oe.location} "
+                    f"started ({oe.start_time.strftime('%H:%M')})."
+                )
+            continue
+        end = oe.end_time or datetime.max
+        if ranges_overlap(new_time, session_end, oe.start_time, end):
+            return f"That time overlaps offsite at {oe.location}."
+    return None
+
+
+def apply_checkin_correction(
+    db: Session,
+    entry: TimeEntry,
+    new_time: datetime,
+    comment: Optional[str] = None,
+) -> datetime:
+    """Move a check-in. Slides an offsite that was closed by this punch.
+
+    Does not commit. Keeps the original submission time so the offset
+    is still measured from when they actually punched.
+    """
+    old = entry.declared_time
+    offs = (
+        db.query(OffsiteEntry)
+        .filter(
+            OffsiteEntry.employee_id == entry.employee_id,
+            OffsiteEntry.date == entry.date,
+            OffsiteEntry.end_time == old,
+        )
+        .all()
+    )
+    for oe in offs:
+        if oe.start_time < new_time:
+            oe.end_time = new_time
+    entry.declared_time = new_time
+    stamp = f"Corrected from {old.strftime('%H:%M')}"
+    if comment:
+        entry.comments = f"{comment.strip()} · {stamp}"
+    else:
+        existing = (entry.comments or "").strip()
+        if stamp not in existing:
+            entry.comments = f"{existing} · {stamp}".strip(" ·")
+    return old
+
+
 def current_status(
     db: Session,
     employee_id: int,

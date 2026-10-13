@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Fix Check-In — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <div class="mb-8">
+        <a href="/" class="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-4 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+        </a>
+        <h1 class="text-2xl font-bold text-white">Fix today's check-in</h1>
+        <p class="text-gray-400 mt-1">Use this if the punch is wrong — for example you forgot to subtract 10 minutes.</p>
+    </div>
+
+    <div class="glass-card p-8">
+        {% if not entry %}
+        <p class="text-gray-400 text-sm">No check-in to change today.</p>
+        {% else %}
+        <form method="POST" action="/time/fix-checkin" id="fix-checkin-form">
+            {% if error %}
+            <div class="flex items-center gap-2 p-4 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm mb-6">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <div class="grid grid-cols-2 gap-3 mb-6 text-sm">
+                <div class="p-3 rounded-xl bg-surface-900/60 border border-white/10">
+                    <p class="text-[11px] uppercase tracking-wider text-gray-500">Saved check-in</p>
+                    <p class="font-mono text-xl text-white mt-1">{{ current }}</p>
+                </div>
+                <div class="p-3 rounded-xl bg-surface-900/60 border border-white/10">
+                    <p class="text-[11px] uppercase tracking-wider text-gray-500">Punched at</p>
+                    <p class="font-mono text-xl text-white mt-1">{{ submitted }}</p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-300 mb-2">Correct check-in</label>
+                <div class="flex gap-2">
+                    <select name="declared_hour" id="declared_hour" class="form-select flex-1">
+                        {% for h in range(0, 24) %}
+                        <option value="{{ h }}" {% if h == hour %}selected{% endif %}>{{ "%02d"|format(h) }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="declared_minute" id="declared_minute" class="form-select flex-1">
+                        {% for m in range(0, 60, 5) %}
+                        <option value="{{ m }}" {% if m == minute %}selected{% endif %}>{{ "%02d"|format(m) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Within {{ comment_threshold }} minutes of {{ submitted }} needs no reason. A bigger change does, and a manager sees it.</p>
+            </div>
+
+            <div class="mb-6" id="comments-wrap">
+                <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">Notes <span class="text-gray-600">(optional)</span></label>
+                <textarea name="comments" id="comments" rows="2" class="form-input resize-none" placeholder="Forgot to subtract 10 minutes"></textarea>
+            </div>
+
+            <div class="mb-8 hidden" id="variance-reason-wrap">
+                <label for="variance_reason" class="block text-sm font-medium text-gray-300 mb-2">
+                    Reason <span class="text-danger-400">(required)</span>
+                </label>
+                <select name="variance_reason" id="variance_reason" class="form-select">
+                    <option value="">Select a reason…</option>
+                    {% for r in variance_reasons %}
+                    <option value="{{ r }}">{{ r }}</option>
+                    {% endfor %}
+                    <option value="__other__">Other</option>
+                </select>
+                <div id="variance-other-wrap" class="mt-3 hidden">
+                    <label for="variance_other" class="block text-sm font-medium text-gray-300 mb-2">Please specify</label>
+                    <textarea name="variance_other" id="variance_other" rows="2" class="form-input resize-none"></textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full btn-primary py-4 text-lg">Update check-in</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if entry %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var hour = document.getElementById('declared_hour');
+    var minute = document.getElementById('declared_minute');
+    var reasonWrap = document.getElementById('variance-reason-wrap');
+    var reasonSelect = document.getElementById('variance_reason');
+    var otherWrap = document.getElementById('variance-other-wrap');
+    var threshold = {{ comment_threshold }};
+    var submitted = {{ submitted|tojson }};
+    function minutes(hhmm) {
+        var p = (hhmm || '').split(':');
+        return parseInt(p[0], 10) * 60 + parseInt(p[1], 10);
+    }
+    function sync() {
+        var chosen = parseInt(hour.value, 10) * 60 + parseInt(minute.value, 10);
+        var over = Math.abs(chosen - minutes(submitted)) > threshold;
+        reasonWrap.classList.toggle('hidden', !over);
+        if (reasonSelect) reasonSelect.required = over;
+    }
+    function syncOther() {
+        var show = reasonSelect && reasonSelect.value === '__other__';
+        if (otherWrap) otherWrap.classList.toggle('hidden', !show);
+    }
+    hour.addEventListener('change', sync);
+    minute.addEventListener('change', sync);
+    if (reasonSelect) reasonSelect.addEventListener('change', syncOther);
+    sync();
+});
+</script>
+{% endif %}
+{% endblock %}
