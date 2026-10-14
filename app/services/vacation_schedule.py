@@ -241,7 +241,10 @@ def build_vacation_schedule(
     as_of = as_of or date.today()
     employees = (
         db.query(Employee)
-        .filter(Employee.is_active.is_(True))
+        .filter(
+            Employee.is_active.is_(True),
+            Employee.role != Role.customer,
+        )
         .order_by(Employee.name)
         .all()
     )

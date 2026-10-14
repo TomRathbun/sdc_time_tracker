@@ -63,6 +63,7 @@
                             <option value="employee">Employee</option>
                             <option value="supervisor">Supervisor</option>
                             <option value="manager">Manager</option>
+                            <option value="customer">Customer</option>
                         </select>
                     </div>
                     <button type="submit" id="btn-add-employee" class="w-full btn-primary">Add Employee</button>
@@ -174,6 +175,7 @@
                             <span class="px-2 py-1 rounded-full text-xs font-medium
                                 {% if emp.role.value == 'manager' %}bg-primary-500/10 text-primary-400
                                 {% elif emp.role.value == 'supervisor' %}bg-accent-500/10 text-accent-400
+                                {% elif emp.role.value == 'customer' %}bg-cyan-500/10 text-cyan-300
                                 {% else %}bg-gray-500/10 text-gray-400{% endif %}">
                                 {{ emp.role.value.title() }}
                             </span>
@@ -283,6 +285,7 @@
                         <option value="employee">Employee</option>
                         <option value="supervisor">Supervisor</option>
                         <option value="manager">Manager</option>
+                        <option value="customer">Customer</option>
                     </select>
                 </div>
                 <div class="grid grid-cols-2 gap-3">

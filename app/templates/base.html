@@ -71,7 +71,7 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex items-center justify-between h-16">
                     <!-- Logo -->
-                    <a href="/" class="flex items-center gap-3 group">
+                    <a href="{% if employee.role.value == 'customer' %}/admin/timesheet{% else %}/{% endif %}" class="flex items-center gap-3 group">
                         {% with brand_size='nav' %}{% include '_brand_clock.html' %}{% endwith %}
                         <span
                             class="text-lg font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">SDC
@@ -81,6 +81,15 @@
 
                     <!-- Nav Links -->
                     <div class="hidden md:flex items-center gap-1">
+                        {% if employee.role.value == 'customer' %}
+                        <a href="/admin/timesheet" class="nav-link" id="nav-timesheet">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Timeline
+                        </a>
+                        {% else %}
                         <a href="/" class="nav-link" id="nav-dashboard">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -162,6 +171,7 @@
                             Admin
                         </a>
                         {% endif %}
+                        {% endif %}
                     </div>
 
                     <!-- User Info + Logout -->
@@ -200,6 +210,9 @@
             <!-- Mobile menu -->
             <div id="mobile-menu" class="hidden md:hidden border-t border-white/5 pb-3">
                 <div class="px-4 pt-2 space-y-1">
+                    {% if employee.role.value == 'customer' %}
+                    <a href="/admin/timesheet" class="mobile-nav-link">Timeline</a>
+                    {% else %}
                     <a href="/" class="mobile-nav-link">Dashboard</a>
                     <a href="/leave" class="mobile-nav-link">Leave</a>
                     <a href="/use-cases" class="mobile-nav-link">Use Cases</a>
@@ -211,6 +224,7 @@
                     <a href="/admin/timesheet" class="mobile-nav-link">Team Timesheet{% if request.state.pending_approvals is defined and request.state.pending_approvals.total > 0 %} ({{ request.state.pending_approvals.total }}){% endif %}</a>
                     <a href="/leave/approvals" class="mobile-nav-link">Approvals{% if request.state.pending_approvals is defined and request.state.pending_approvals.pending_leave > 0 %} ({{ request.state.pending_approvals.pending_leave }}){% endif %}</a>
                     <a href="/admin" class="mobile-nav-link">Admin</a>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>

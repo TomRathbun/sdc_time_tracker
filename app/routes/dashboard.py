@@ -11,7 +11,7 @@ from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary,
-    LeaveRequest, EntryType, LeaveStatus,
+    LeaveRequest, EntryType, LeaveStatus, Role,
 )
 from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
@@ -35,6 +35,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     employee = get_current_employee(request, db)
     if not employee:
         return RedirectResponse(url="/login", status_code=303)
+    if employee.role == Role.customer:
+        return RedirectResponse(url="/admin/timesheet", status_code=303)
 
     now = datetime.now()
     today = now.date()

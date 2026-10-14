@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import APP_NAME, APP_VERSION
@@ -40,7 +41,9 @@ async def attach_pending_approvals(request: Request, call_next):
         "total": 0,
     }
     path = request.url.path or ""
-    if path.startswith("/static") or path.startswith("/api/"):
+    if path.startswith("/static"):
+        return await call_next(request)
+    if path.startswith("/api/") and not path.startswith("/api/quick"):
         return await call_next(request)
     try:
         from app.database import SessionLocal
@@ -62,6 +65,13 @@ async def attach_pending_approvals(request: Request, call_next):
                 Employee.id == data["employee_id"],
                 Employee.is_active == True,  # noqa: E712
             ).first()
+            if emp and emp.role.value == "customer" and _customer_blocked(path, request.method):
+                if path.startswith("/api/"):
+                    return JSONResponse(
+                        {"ok": False, "error": "Customers do not log time."},
+                        status_code=403,
+                    )
+                return RedirectResponse(url="/admin/timesheet", status_code=303)
             if is_approver(emp):
                 request.state.pending_approvals = get_pending_approvals(db, emp.id)
         finally:
@@ -69,6 +79,19 @@ async def attach_pending_approvals(request: Request, call_next):
     except Exception:
         pass
     return await call_next(request)
+
+
+def _customer_blocked(path: str, method: str) -> bool:
+    """Customers may only read the team timeline. No punches, leave, or admin."""
+    if path.startswith("/time") or path.startswith("/leave"):
+        return True
+    if path.startswith("/api/quick"):
+        return True
+    if path.startswith("/reports") or path.startswith("/audit"):
+        return True
+    if path == "/admin" or path.startswith("/admin/"):
+        return not (path == "/admin/timesheet" and method == "GET")
+    return False
 
 
 @app.on_event("startup")

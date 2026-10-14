@@ -256,9 +256,13 @@ async def team_timesheet(
     week: str = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Show all employees' time for a given week."""
+    """Show all employees' time for a given week.
+
+    Managers and supervisors approve from this page. Customers may open it
+    read-only and only see declared times.
+    """
     employee = get_current_employee(request, db)
-    if not employee or employee.role not in (Role.manager, Role.supervisor):
+    if not employee or employee.role not in (Role.manager, Role.supervisor, Role.customer):
         return RedirectResponse(url="/login", status_code=303)
 
     # Determine the week to display
@@ -292,7 +296,11 @@ async def team_timesheet(
         })
 
     # Get all active employees
-    employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    employees = db.query(Employee).filter(
+        Employee.is_active == True,  # noqa: E712
+        Employee.role != Role.customer,
+    ).order_by(Employee.name).all()
+    viewer_is_customer = employee.role == Role.customer
 
     # Pre-fetch all entries for these employees for the week
     all_emp_ids = [e.id for e in employees]
@@ -484,6 +492,10 @@ async def team_timesheet(
                 status = "compliant"
             else:
                 status = "partial"
+            if viewer_is_customer and status in ("offset_pending", "lunch_pending"):
+                status = "compliant" if compliant else "partial"
+            elif viewer_is_customer and status == "pto_pending":
+                status = "leave"
 
             # Punctuality dots (declared times)
             ci_dot = "empty"
@@ -574,6 +586,7 @@ async def team_timesheet(
         "week_pending_offset": week_pending_offset,
         "week_pending_beod": week_pending_beod,
         "week_pending_leave": week_pending_leave,
+        "viewer_is_customer": viewer_is_customer,
     })
 
 

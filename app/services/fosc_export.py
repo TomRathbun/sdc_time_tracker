@@ -135,7 +135,10 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
 def _active_employees(db: Session) -> list[Employee]:
     employees = (
         db.query(Employee)
-        .filter(Employee.is_active == True)  # noqa: E712
+        .filter(
+            Employee.is_active == True,  # noqa: E712
+            Employee.role != Role.customer,
+        )
         .all()
     )
     return sorted(

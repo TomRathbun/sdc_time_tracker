@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import verify_pin, create_session_token, get_current_employee, is_valid_pin
 from app.config import SESSION_COOKIE_NAME, BEOD_MINIMUM_HOURS
-from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary, OffsiteEntry
+from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary, OffsiteEntry, Role
 from app.services.audit import log_action
 from app.services.settings import get_setting, get_bool_setting, parse_hhmm_setting
 from app.services.time_calc import projected_checkout_from_entries, beod_offered_on
@@ -198,8 +198,8 @@ def _smart_sort_employees(employees, status_map, avg_times, on_leave_map, now_mi
         avg = avg_times.get(eid, {})
         actual_mins = status_info.get("minutes")
 
-        # 1. Supervisors always at the bottom
-        if emp.role.value == "supervisor":
+        # Supervisors and customers do not track time — keep them at the bottom
+        if emp.role.value in ("supervisor", "customer"):
             return (4, LARGE_VAL, emp.name.lower())
 
         # 2. On leave
@@ -381,7 +381,7 @@ async def login_submit(
     matched = selected
 
     # Determine redirect URL
-    redirect_url = "/"
+    redirect_url = "/admin/timesheet" if matched.role == Role.customer else "/"
     if matched.pin_needs_reset:
         redirect_url = "/reset-pin"
 

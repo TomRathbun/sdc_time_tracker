@@ -345,6 +345,25 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
         ],
     },
     {
+        "id": "customer",
+        "title": "Customer",
+        "blurb": "Sign in and read the team timeline. No time entry and no approvals.",
+        "cases": [
+            {
+                "id": "customer-timeline",
+                "scenario": "See who is in and when they arrived",
+                "who": "Customer",
+                "summary": "PIN login opens the team timeline. Only declared times are shown.",
+                "featured": True,
+                "actions": [
+                    {"text": "Tap your name on the login list and enter your PIN", "href": "/login", "screen": "Login"},
+                    {"text": "Read the week. In and out are the times the employee declared"},
+                ],
+                "notes": "Customers are not on the punch list and do not appear as a row on the timeline. Create the account in Admin with role Customer.",
+            },
+        ],
+    },
+    {
         "id": "manager",
         "title": "Manager and supervisor",
         "blurb": "Timesheet for punches, offsets, and BEOD. Approvals for leave. Reports for FOSC and TEMPO.",

@@ -18,6 +18,7 @@ class Role(str, enum.Enum):
     employee = "employee"
     supervisor = "supervisor"
     manager = "manager"
+    customer = "customer"  # views the team timeline; does not log time or approve
 
 
 class EntryType(str, enum.Enum):

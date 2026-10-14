@@ -25,7 +25,7 @@
     <!-- Header with week navigation -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-white">Team Timesheet</h1>
+            <h1 class="text-2xl font-bold text-white">{% if viewer_is_customer %}Team timeline{% else %}Team Timesheet{% endif %}</h1>
             <p class="text-gray-400 mt-1">
                 Week of <span class="font-mono text-white">{{ week_start.strftime("%b %d") }}</span>
                 — <span class="font-mono text-white">{{ week_end.strftime("%b %d, %Y") }}</span>
@@ -35,9 +35,13 @@
                 <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-accent-500/10 text-accent-400 font-medium">Future week</span>
                 {% endif %}
             </p>
+            {% if not viewer_is_customer %}
             <p class="text-xs text-gray-500 mt-1">
                 Declared time = what employee logged · Submitted = when they punched (threshold {{ comment_threshold }} min)
             </p>
+            {% else %}
+            <p class="text-xs text-gray-500 mt-1">Declared in and out times.</p>
+            {% endif %}
         </div>
 
         <div class="flex items-center gap-2">
@@ -64,7 +68,7 @@
         </div>
     </div>
 
-    {% if week_pending_offset or week_pending_beod or week_pending_leave %}
+    {% if not viewer_is_customer and (week_pending_offset or week_pending_beod or week_pending_leave) %}
     <div class="mb-5 glass-card p-4 border-l-4 border-warning-400 flex flex-wrap gap-4 items-center justify-between">
         <div>
             <p class="text-sm font-semibold text-white">This week needs approvals</p>
@@ -83,11 +87,15 @@
     <!-- Legend -->
     <div class="flex flex-wrap items-center gap-3 mb-5 text-[11px] text-gray-500">
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-success-500/20 border border-success-500/40"></span> Target met</span>
+        {% if not viewer_is_customer %}
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-orange-500/30 border-2 border-orange-400 animate-pulse"></span> <span class="text-orange-300">Time offset pending</span></span>
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-red-600/30 border-2 border-red-500/50 animate-pulse"></span> <span class="text-red-400">BEOD pending</span></span>
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-amber-600/30 border-2 border-amber-500/50 animate-pulse"></span> <span class="text-amber-400">Leave pending</span></span>
+        {% endif %}
         <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded bg-accent-500/20 border border-accent-500/30"></span> Leave day</span>
+        {% if not viewer_is_customer %}
         <span class="text-gray-600">Declared = employee time · Sub = punch time</span>
+        {% endif %}
     </div>
 
     <!-- Timesheet Grid -->
@@ -178,12 +186,12 @@
                                     {% for s in cell.punch_sessions %}
                                     {% if s.ci %}
                                     {% set p = s.ci %}
-                                    <div class="rounded px-1 py-0.5 relative group {% if p.needs_approval %}bg-orange-500/20{% else %}bg-black/20{% endif %}"
-                                        {% if p.comments %}title="{{ p.comments }}"{% endif %}>
+                                    <div class="rounded px-1 py-0.5 relative group {% if p.needs_approval and not viewer_is_customer %}bg-orange-500/20{% else %}bg-black/20{% endif %}">
                                         <div class="flex justify-between items-baseline gap-1">
                                             <span class="text-[9px] text-success-400/90 font-medium">In</span>
                                             <span class="text-[11px] font-mono text-white">{{ p.declared }}</span>
                                         </div>
+                                        {% if not viewer_is_customer %}
                                         <div class="flex justify-between items-baseline gap-1">
                                             <span class="text-[9px] text-gray-500">Sub</span>
                                             <span class="text-[10px] font-mono {% if p.needs_approval %}text-orange-300{% else %}text-gray-400{% endif %}">{{ p.submitted }}{% if p.diff_min > 0 %} · {{ p.diff_min }}m{% endif %}</span>
@@ -191,22 +199,24 @@
                                         {% if p.comments %}
                                         <div class="punch-reason-tip">{{ p.comments }}</div>
                                         {% endif %}
+                                        {% endif %}
                                     </div>
                                     {% endif %}
                                     {% if s.co %}
                                     {% set p = s.co %}
-                                    <div class="rounded px-1 py-0.5 relative group {% if p.needs_approval %}bg-orange-500/20{% else %}bg-black/20{% endif %}"
-                                        {% if p.comments %}title="{{ p.comments }}"{% endif %}>
+                                    <div class="rounded px-1 py-0.5 relative group {% if p.needs_approval and not viewer_is_customer %}bg-orange-500/20{% else %}bg-black/20{% endif %}">
                                         <div class="flex justify-between items-baseline gap-1">
                                             <span class="text-[9px] text-danger-400/90 font-medium">Out</span>
                                             <span class="text-[11px] font-mono text-white">{{ p.declared }}</span>
                                         </div>
+                                        {% if not viewer_is_customer %}
                                         <div class="flex justify-between items-baseline gap-1">
                                             <span class="text-[9px] text-gray-500">Sub</span>
                                             <span class="text-[10px] font-mono {% if p.needs_approval %}text-orange-300{% else %}text-gray-400{% endif %}">{{ p.submitted }}{% if p.diff_min > 0 %} · {{ p.diff_min }}m{% endif %}</span>
                                         </div>
                                         {% if p.comments %}
                                         <div class="punch-reason-tip">{{ p.comments }}</div>
+                                        {% endif %}
                                         {% endif %}
                                     </div>
                                     {% endif %}
@@ -234,8 +244,8 @@
                                 <div class="text-center text-xs font-medium text-danger-400 py-1">Missing</div>
                                 {% endif %}
 
-                                {# Approval actions — all on this page #}
-                                {% if cell.offset_pending and cell.pending_offset_ids %}
+                                {# Approval actions — managers and supervisors only #}
+                                {% if not viewer_is_customer and cell.offset_pending and cell.pending_offset_ids %}
                                 <div class="mt-1 space-y-1">
                                     <form method="POST" action="/admin/approve-offset">
                                         <input type="hidden" name="entry_ids" value="{{ cell.pending_offset_ids|join(',') }}">
@@ -258,7 +268,7 @@
                                 </div>
                                 {% endif %}
 
-                                {% if cell.lunch_pending and cell.summary_id %}
+                                {% if not viewer_is_customer and cell.lunch_pending and cell.summary_id %}
                                 <form method="POST" action="/admin/approve-lunch" class="mt-1">
                                     <input type="hidden" name="summary_id" value="{{ cell.summary_id }}">
                                     <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
@@ -275,7 +285,7 @@
                                     {{ cell.leave_type_label or "Leave" }}
                                     {% if cell.display_leave_hours %}+{{ cell.display_leave_hours }}h{% endif %}
                                 </div>
-                                {% if cell.leave_request_id %}
+                                {% if not viewer_is_customer and cell.leave_request_id %}
                                 <form method="POST" action="/admin/approve-leave-request" class="mt-1">
                                     <input type="hidden" name="leave_id" value="{{ cell.leave_request_id }}">
                                     <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
@@ -284,7 +294,7 @@
                                         ✓ Approve leave
                                     </button>
                                 </form>
-                                {% elif cell.summary_id %}
+                                {% elif not viewer_is_customer and cell.summary_id %}
                                 <form method="POST" action="/admin/approve-pto" class="mt-1">
                                     <input type="hidden" name="summary_id" value="{{ cell.summary_id }}">
                                     <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
