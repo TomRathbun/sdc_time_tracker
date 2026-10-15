@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}My Time — SDC Time Tracker{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-white">
+                {% if subject.id == employee.id %}My time{% else %}{{ subject.name }}{% endif %}
+            </h1>
+            <p class="text-gray-400 mt-1">
+                Week of <span class="font-mono text-white">{{ week_start.strftime("%b %d") }}</span>
+                — <span class="font-mono text-white">{{ week_end.strftime("%b %d, %Y") }}</span>
+                {% if is_current_week %}
+                <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-primary-500/10 text-primary-400 font-medium">This week</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{{ prev_url }}"
+                class="p-2.5 rounded-xl bg-surface-800/50 border border-white/5 hover:border-white/10 text-gray-400 hover:text-white transition-all"
+                title="Previous week">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            {% if not is_current_week %}
+            <a href="/my-time{% if can_pick %}?employee_id={{ subject.id }}{% endif %}"
+                class="px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 text-sm text-gray-400 hover:text-white transition-all">This week</a>
+            <a href="{{ next_url }}"
+                class="p-2.5 rounded-xl bg-surface-800/50 border border-white/5 hover:border-white/10 text-gray-400 hover:text-white transition-all"
+                title="Next week">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if can_pick %}
+    <form method="GET" action="/my-time" class="mb-5">
+        <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+        <label for="report-employee" class="block text-xs text-gray-500 mb-1">Person</label>
+        <select name="employee_id" id="report-employee" class="form-select max-w-xs" onchange="this.form.submit()">
+            {% for emp in staff %}
+            <option value="{{ emp.id }}" {% if emp.id == subject.id %}selected{% endif %}>{{ emp.name }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    {% endif %}
+
+    <div class="glass-card p-5 mb-5">
+        <div class="flex items-end justify-between gap-4">
+            <div>
+                <p class="text-[10px] uppercase tracking-wider text-gray-500">Week total</p>
+                <p class="text-3xl font-bold {% if week_compliant %}text-success-400{% else %}text-white{% endif %}">
+                    {{ totals.effective }}<span class="text-lg text-gray-500">h</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">of {{ totals.target | int }}h target</p>
+            </div>
+            <div class="text-right text-xs text-gray-400 space-y-0.5">
+                <p>Clock {{ totals.clock }}h</p>
+                <p>Offsite {{ totals.offsite }}h · Phone {{ totals.phone }}h</p>
+                {% if totals.beod %}<p>BEOD +{{ totals.beod }}h</p>{% endif %}
+                {% if totals.leave %}<p>Leave +{{ totals.leave }}h</p>{% endif %}
+                <p class="text-gray-500">FOSC {{ totals.fosc }}h before leave</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="space-y-4">
+        {% for day in days %}
+        <div class="glass-card p-4 {% if day.is_today %}border border-primary-500/30{% endif %}">
+            <div class="flex items-start justify-between gap-3 mb-3">
+                <div>
+                    <p class="font-semibold text-white">
+                        {{ day.date.strftime("%A") }}
+                        <span class="font-mono text-gray-400 font-normal">{{ day.date.strftime("%b %d") }}</span>
+                        {% if day.is_today %}<span class="ml-1 text-[10px] uppercase text-primary-400">Today</span>{% endif %}
+                    </p>
+                    <p class="text-[11px] text-gray-500 mt-0.5">
+                        clock {{ day.clock }}h
+                        · offsite {{ day.offsite }}h
+                        · phone {{ day.phone }}h
+                        {% if day.beod %} · BEOD +{{ day.beod_label or day.beod }}{% if day.beod_pending %} pending{% endif %}{% endif %}
+                    </p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                    <p class="font-mono font-semibold {% if day.compliant %}text-success-400{% elif day.effective > 0 %}text-white{% else %}text-gray-500{% endif %}">
+                        {{ day.effective }}h
+                    </p>
+                    <p class="text-[10px] text-gray-500">/ {{ day.target | int }}h</p>
+                </div>
+            </div>
+
+            {% if day.leave %}
+            <p class="text-xs mb-2 {% if day.leave_ok %}text-accent-400{% else %}text-warning-400{% endif %}">
+                {{ day.leave_label or "Leave" }} {{ day.leave }}h {% if day.leave_ok %}✓{% else %}pending{% endif %}
+            </p>
+            {% endif %}
+
+            {% if day.entries %}
+            <div class="space-y-1.5">
+                {% for entry in day.entries %}
+                <div class="flex items-center gap-3 px-2.5 py-2 rounded-lg bg-surface-900/50 border border-white/5">
+                    <span class="text-[10px] font-semibold w-8 {% if entry.entry_type.value == 'check_in' %}text-success-400{% else %}text-danger-400{% endif %}">
+                        {% if entry.entry_type.value == 'check_in' %}In{% else %}Out{% endif %}
+                    </span>
+                    <span class="text-sm font-mono text-white">{{ entry.declared_time.strftime("%H:%M") }}</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded-full
+                        {% if entry.location_type.value == 'office' %}bg-primary-500/10 text-primary-300
+                        {% elif entry.location_type.value == 'remote' %}bg-accent-500/10 text-accent-300
+                        {% else %}bg-warning-500/10 text-warning-300{% endif %}">
+                        {{ entry.location_type.value }}
+                    </span>
+                    {% if entry.comments %}
+                    <span class="text-xs text-gray-500 truncate">{{ entry.comments }}</span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% elif not day.offsites and not day.phones and not day.leave %}
+            <p class="text-xs text-gray-600">No entries</p>
+            {% endif %}
+
+            {% if day.offsites %}
+            <div class="mt-2 space-y-1.5">
+                {% for off in day.offsites %}
+                <div class="flex items-center gap-3 px-2.5 py-2 rounded-lg bg-accent-500/5 border border-accent-500/10">
+                    <span class="text-[10px] font-semibold text-accent-300 w-12">Offsite</span>
+                    <span class="text-sm text-white truncate">{{ off.location }}</span>
+                    <span class="ml-auto text-xs font-mono text-gray-300 flex-shrink-0">
+                        {{ off.start_time.strftime("%H:%M") }}–{% if off.end_time %}{{ off.end_time.strftime("%H:%M") }}{% else %}open{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if day.phones %}
+            <div class="mt-2 space-y-1.5">
+                {% for call in day.phones %}
+                <div class="flex items-center gap-3 px-2.5 py-2 rounded-lg bg-cyan-500/5 border border-cyan-500/10">
+                    <span class="text-[10px] font-semibold text-cyan-300 w-12">Phone</span>
+                    <span class="text-sm font-mono text-white">{{ call.hours }}h</span>
+                    {% if call.comments %}<span class="text-xs text-gray-500 truncate">{{ call.comments }}</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

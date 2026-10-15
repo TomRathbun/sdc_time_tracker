@@ -342,6 +342,17 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 ],
                 "notes": "Does not use vacation or sick balance. Full-day FOSC credit after approval.",
             },
+            {
+                "id": "my-weeks",
+                "scenario": "Review previous weeks",
+                "who": "Employee or manager",
+                "summary": "My Time steps week by week through punches and totals.",
+                "actions": [
+                    {"text": "Open My Time", "href": "/my-time", "screen": "My Time"},
+                    {"text": "Use the arrows for earlier weeks"},
+                ],
+                "notes": "Managers and supervisors can pick another person. Customers do not have this page.",
+            },
         ],
     },
     {

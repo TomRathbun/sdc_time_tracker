@@ -83,7 +83,7 @@ async def attach_pending_approvals(request: Request, call_next):
 
 def _customer_blocked(path: str, method: str) -> bool:
     """Customers may only read the team timeline. No punches, leave, or admin."""
-    if path.startswith("/time") or path.startswith("/leave"):
+    if path.startswith("/time") or path.startswith("/leave") or path.startswith("/my-time"):
         return True
     if path.startswith("/api/quick"):
         return True

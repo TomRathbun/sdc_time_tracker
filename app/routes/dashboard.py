@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
-    TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary,
+    Employee, TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary,
     LeaveRequest, EntryType, LeaveStatus, Role,
 )
 from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
-    projected_checkout_from_entries,
+    projected_checkout_from_entries, format_beod_length,
 )
 from app.services.leave_balance import get_leave_balance
 
@@ -166,4 +166,203 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "leave_type_label": leave_type_label,
         "effective_hours": effective_hours,
         "progress_pct": progress_pct,
+    })
+
+
+_LEAVE_LABELS = {
+    "vacation": "Vacation",
+    "sick": "Sick",
+    "covid_sick": "COVID Sick",
+    "uae_holiday": "UAE Holiday",
+}
+
+
+def _monday_of(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+@router.get("/my-time", response_class=HTMLResponse)
+async def my_time_report(
+    request: Request,
+    week: str = Query(None),
+    employee_id: int = Query(None),
+    db: Session = Depends(get_db),
+):
+    """One person's punches and totals for a past or current week."""
+    viewer = get_current_employee(request, db)
+    if not viewer:
+        return RedirectResponse(url="/login", status_code=303)
+    if viewer.role == Role.customer:
+        return RedirectResponse(url="/admin/timesheet", status_code=303)
+
+    can_pick = viewer.role in (Role.manager, Role.supervisor)
+    staff = []
+    subject = viewer
+    if can_pick:
+        staff = (
+            db.query(Employee)
+            .filter(Employee.is_active == True, Employee.role != Role.customer)  # noqa: E712
+            .order_by(Employee.name)
+            .all()
+        )
+        if employee_id:
+            picked = next((e for e in staff if e.id == employee_id), None)
+            if picked:
+                subject = picked
+
+    today = date.today()
+    current_monday = _monday_of(today)
+    week_start = current_monday
+    if week:
+        try:
+            week_start = _monday_of(date.fromisoformat(week))
+        except ValueError:
+            week_start = current_monday
+    if week_start > current_monday:
+        week_start = current_monday
+    week_end = week_start + timedelta(days=4)
+    prev_week = week_start - timedelta(days=7)
+    next_week = week_start + timedelta(days=7)
+
+    entries = (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.employee_id == subject.id,
+            TimeEntry.date >= week_start,
+            TimeEntry.date <= week_end,
+        )
+        .order_by(TimeEntry.declared_time)
+        .all()
+    )
+    offsites = (
+        db.query(OffsiteEntry)
+        .filter(
+            OffsiteEntry.employee_id == subject.id,
+            OffsiteEntry.date >= week_start,
+            OffsiteEntry.date <= week_end,
+        )
+        .order_by(OffsiteEntry.start_time)
+        .all()
+    )
+    phones = (
+        db.query(PhoneSupportEntry)
+        .filter(
+            PhoneSupportEntry.employee_id == subject.id,
+            PhoneSupportEntry.date >= week_start,
+            PhoneSupportEntry.date <= week_end,
+        )
+        .all()
+    )
+    summaries = (
+        db.query(DailySummary)
+        .filter(
+            DailySummary.employee_id == subject.id,
+            DailySummary.date >= week_start,
+            DailySummary.date <= week_end,
+        )
+        .all()
+    )
+    by_entry = {}
+    for e in entries:
+        by_entry.setdefault(e.date, []).append(e)
+    by_off = {}
+    for e in offsites:
+        by_off.setdefault(e.date, []).append(e)
+    by_phone = {}
+    for e in phones:
+        by_phone.setdefault(e.date, []).append(e)
+    by_sum = {s.date: s for s in summaries}
+
+    now = datetime.now()
+    days = []
+    totals = {
+        "clock": 0.0, "offsite": 0.0, "phone": 0.0, "beod": 0.0,
+        "fosc": 0.0, "leave": 0.0, "effective": 0.0, "target": 0.0,
+    }
+    for i in range(5):
+        d = week_start + timedelta(days=i)
+        day_entries = by_entry.get(d, [])
+        day_off = by_off.get(d, [])
+        day_phone = by_phone.get(d, [])
+        summary = by_sum.get(d)
+        target = get_target_hours(d)
+
+        clock = calculate_clock_hours(day_entries)
+        if d == today and day_entries and day_entries[-1].entry_type == EntryType.check_in:
+            clock = round(clock + max(0.0, (now - day_entries[-1].declared_time).total_seconds() / 3600.0), 2)
+        off_h = round(calculate_offsite_hours(day_off), 2)
+        phone_h = round(calculate_phone_hours(day_phone), 2)
+        beod = float(summary.beod_hours or 0) if summary else 0.0
+        # Past days use the stored FOSC total so approvals match the timesheet.
+        if summary and d != today:
+            clock = float(summary.clock_hours or 0)
+            off_h = float(summary.offsite_hours or 0)
+            phone_h = float(summary.phone_hours or 0)
+            fosc = float(summary.total_hours or 0)
+        else:
+            fosc = round(clock + off_h + phone_h + beod, 2)
+
+        leave_h = float(summary.leave_hours or 0) if summary else 0.0
+        leave_ok = bool(summary and summary.leave_approved and leave_h)
+        leave_label = ""
+        if summary and summary.leave_type and leave_h:
+            lt = summary.leave_type.value
+            leave_label = _LEAVE_LABELS.get(lt, lt.replace("_", " ").title())
+        effective = round(fosc + (leave_h if leave_ok else 0.0), 2)
+        beod_label = ""
+        if summary and (summary.beod_hours or summary.lunch_end_of_day):
+            beod_label = format_beod_length(summary.beod_hours or summary.beod_requested_hours or 1.0)
+
+        days.append({
+            "date": d,
+            "is_today": d == today,
+            "target": target,
+            "entries": day_entries,
+            "offsites": day_off,
+            "phones": day_phone,
+            "clock": round(clock, 2),
+            "offsite": round(off_h, 2),
+            "phone": round(phone_h, 2),
+            "beod": round(beod, 2),
+            "beod_label": beod_label,
+            "beod_pending": bool(summary and summary.lunch_end_of_day and not summary.lunch_approved),
+            "fosc": round(fosc, 2),
+            "leave": leave_h,
+            "leave_ok": leave_ok,
+            "leave_label": leave_label,
+            "effective": effective,
+            "compliant": effective + 0.01 >= target if target else True,
+        })
+        totals["clock"] += clock
+        totals["offsite"] += off_h
+        totals["phone"] += phone_h
+        totals["beod"] += beod
+        totals["fosc"] += fosc
+        totals["leave"] += leave_h if leave_ok else 0.0
+        totals["effective"] += effective
+        totals["target"] += target
+
+    for key in totals:
+        totals[key] = round(totals[key], 2)
+
+    def _href(monday: date, emp_id: int) -> str:
+        url = f"/my-time?week={monday.isoformat()}"
+        if can_pick:
+            url += f"&employee_id={emp_id}"
+        return url
+
+    return templates.TemplateResponse("my_time.html", {
+        "request": request,
+        "employee": viewer,
+        "subject": subject,
+        "staff": staff,
+        "can_pick": can_pick,
+        "days": days,
+        "totals": totals,
+        "week_start": week_start,
+        "week_end": week_end,
+        "is_current_week": week_start == current_monday,
+        "prev_url": _href(prev_week, subject.id),
+        "next_url": _href(next_week, subject.id),
+        "week_compliant": totals["effective"] + 0.01 >= totals["target"],
     })
