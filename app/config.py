@@ -54,3 +54,8 @@ SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM = os.environ.get("SMTP_FROM", "sdc-timetracker@lockheedmartin.com")
 SMTP_USE_TLS = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
 EMAIL_ENABLED = bool(SMTP_HOST)
+
+# Inbox read uses the same Gmail account. IMAP must be on in Gmail settings.
+IMAP_HOST = os.environ.get("IMAP_HOST", "imap.gmail.com")
+IMAP_PORT = int(os.environ.get("IMAP_PORT", "993"))
+IMAP_ENABLED = os.environ.get("IMAP_ENABLED", "true").lower() == "true" and bool(SMTP_USER and SMTP_PASSWORD)

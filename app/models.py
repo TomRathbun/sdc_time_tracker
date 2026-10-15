@@ -293,3 +293,18 @@ class TempoWeekly(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
 
     employee = relationship("Employee")
+
+
+class InboundEmail(Base):
+    """A message read from the tracker Gmail inbox."""
+    __tablename__ = "inbound_emails"
+
+    id = Column(Integer, primary_key=True, index=True)
+    imap_uid = Column(Integer, nullable=False, unique=True, index=True)
+    message_id = Column(String(500), default="")
+    from_name = Column(String(200), default="")
+    from_addr = Column(String(200), default="", index=True)
+    subject = Column(String(500), default="")
+    body_text = Column(Text, default="")
+    received_at = Column(DateTime, nullable=True)
+    fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)

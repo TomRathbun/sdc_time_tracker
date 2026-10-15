@@ -11,7 +11,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - **Past-day entry** — log or correct previous workdays (manager rules apply)
 - **Offsite / remote work** — dedicated offsite logging with gap detection
 - **Phone support hours** — additive hours that roll into FOSC totals. The login roster phone icon takes a PIN and a day (yesterday is the default, for a night call logged the next morning). It does not punch in or out.
-- **My Time** — an employee or manager opens previous weeks (`/my-time`) and sees that week's punches, offsite, phone, leave, and totals. Managers and supervisors can switch person.
+- **Inbox** — every 5 minutes the tracker reads new mail from the Gmail account (`imap.gmail.com`, same app password). Managers open it under Inbox. Mail stays unread in Gmail. Turn IMAP on in that Gmail account’s settings if the check fails.
 
 ### FOSC rules
 - **Paid lunch** inside the scheduled work window

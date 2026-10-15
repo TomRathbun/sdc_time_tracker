@@ -85,13 +85,29 @@ def _check_for_upcoming_checkouts():
 
 
 def _scheduler_loop():
-    """Run the scheduler loop — checks every 60 seconds."""
-    logger.info("📋 Background scheduler started (checkout reminders every 60s)")
+    """Run the scheduler loop — reminders every 60s, inbox every 5 minutes."""
+    logger.info("📋 Background scheduler started (reminders every 60s, inbox every 5 min)")
+    tick = 0
     while True:
         try:
             _check_for_upcoming_checkouts()
         except Exception as e:
             logger.error(f"Scheduler loop error: {e}")
+        if tick % 5 == 0:
+            try:
+                from app.database import SessionLocal
+                from app.services.inbox import poll_inbox
+
+                db = SessionLocal()
+                try:
+                    count, note = poll_inbox(db)
+                    if count:
+                        logger.info("Inbox: %s", note)
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.error(f"Inbox poll error: {e}")
+        tick += 1
         time.sleep(60)
 
     # Clear old reminders at midnight logic:
