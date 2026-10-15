@@ -3,7 +3,7 @@
 from datetime import date, datetime, timedelta, time
 
 from fastapi import APIRouter, Request, Depends, Form, Query
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -207,6 +207,37 @@ async def edit_employee(
     )
 
     return RedirectResponse(url="/admin", status_code=303)
+
+
+@router.post("/admin/employee/{emp_id}/test-email")
+async def test_employee_email(
+    emp_id: int,
+    request: Request,
+    email: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Send one test message to the address in the edit dialog."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return JSONResponse({"ok": False, "message": "Not allowed."}, status_code=403)
+
+    target = db.query(Employee).filter(Employee.id == emp_id).first()
+    if not target:
+        return JSONResponse({"ok": False, "message": "That person is not on the roster."}, status_code=404)
+
+    from app.services.email import send_test_email
+
+    address = email.strip() or (target.email or "")
+    ok, message = send_test_email(address, target.name)
+    if ok and address != (target.email or ""):
+        message += " Save the employee so check-in mail uses this address."
+    log_action(
+        db, action="test_email", entity_type="Employee",
+        entity_id=target.id, employee_id=employee.id,
+        new_values={"to": address, "ok": ok},
+        ip_address=request.client.host if request.client else "",
+    )
+    return JSONResponse({"ok": ok, "message": message})
 
 
 @router.post("/admin/employee/{emp_id}/delete")

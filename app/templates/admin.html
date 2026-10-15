@@ -278,6 +278,13 @@
                     <label class="block text-xs text-gray-500 mb-1">Email <span
                             class="text-gray-600">(optional)</span></label>
                     <input type="email" name="email" id="edit-email" class="form-input">
+                    <div class="flex items-center justify-between gap-2 mt-2">
+                        <button type="button" id="btn-test-email" onclick="sendTestEmail()"
+                            class="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-900/50 text-gray-300 hover:text-white border border-white/10 hover:border-white/20 transition-all">
+                            Send test email
+                        </button>
+                        <p id="edit-email-status" class="text-[11px] text-gray-500 text-right"></p>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">Role</label>
@@ -322,7 +329,10 @@
 
 {% block scripts %}
 <script>
+    var editEmployeeId = null;
+
     function openEditModal(id, name, email, role, vacationDays, sickDays) {
+        editEmployeeId = id;
         document.getElementById('edit-form').action = '/admin/employee/' + id + '/edit';
         document.getElementById('edit-name').value = name;
         document.getElementById('edit-vacation').value = vacationDays != null ? vacationDays : 22;
@@ -330,8 +340,41 @@
         document.getElementById('edit-email').value = email;
         document.getElementById('edit-role').value = role;
         document.getElementById('edit-pin').value = '';
+        var status = document.getElementById('edit-email-status');
+        status.textContent = '';
+        status.className = 'text-[11px] text-gray-500 text-right';
         var modal = document.getElementById('edit-modal');
         modal.style.display = 'flex';
+    }
+
+    function sendTestEmail() {
+        var status = document.getElementById('edit-email-status');
+        var address = (document.getElementById('edit-email').value || '').trim();
+        if (!editEmployeeId) return;
+        if (!address) {
+            status.textContent = 'Enter an email address first.';
+            status.className = 'text-[11px] text-warning-400 text-right';
+            return;
+        }
+        var btn = document.getElementById('btn-test-email');
+        btn.disabled = true;
+        status.textContent = 'Sending…';
+        status.className = 'text-[11px] text-gray-400 text-right';
+        var body = new FormData();
+        body.append('email', address);
+        fetch('/admin/employee/' + editEmployeeId + '/test-email', { method: 'POST', body: body })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                status.textContent = data.message || (data.ok ? 'Sent.' : 'Not sent.');
+                status.className = data.ok
+                    ? 'text-[11px] text-success-400 text-right'
+                    : 'text-[11px] text-danger-400 text-right';
+            })
+            .catch(function () {
+                status.textContent = 'Could not reach the tracker.';
+                status.className = 'text-[11px] text-danger-400 text-right';
+            })
+            .then(function () { btn.disabled = false; });
     }
 
     function closeEditModal() {

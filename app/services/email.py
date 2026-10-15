@@ -64,7 +64,7 @@ def _get_checkout_greeting(name: str) -> str:
     return random.choice(_CHECKOUT_GREETINGS).format(name=name)
 
 
-def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None) -> bool:
+def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None) -> bool:
     """Send an email via SMTP. Returns True on success, False on failure.
     
     Supports CID image embedding and Plain Text fallbacks.
@@ -167,7 +167,36 @@ pre{{background:#0f172a;color:#cbd5e1;padding:20px;border-radius:12px;white-spac
 
     except Exception as e:
         logger.error(f"Failed to send email to {to_email}: {e}")
+        if errors is not None:
+            errors.append(str(e))
         return False
+
+
+def send_test_email(to_email: str, person_name: str) -> tuple[bool, str]:
+    """One plain message so a manager can prove SMTP reaches this address."""
+    to_email = (to_email or "").strip()
+    if "@" not in to_email:
+        return False, "Enter an email address first."
+    if not EMAIL_ENABLED:
+        return False, "SMTP is not set. Restart the tracker from start-sdc.cmd so the Gmail settings load."
+    name = (person_name or "there").strip() or "there"
+    subject = f"{APP_NAME} test email"
+    text = (
+        f"This is a test message for {name}.\n"
+        "If you can read this, the time tracker can send mail."
+    )
+    html = (
+        f"<p>This is a test message for <strong>{name}</strong>.</p>"
+        "<p>If you can read this, the time tracker can send mail.</p>"
+    )
+    errors: list = []
+    ok = _send_email(to_email, subject, html, text, errors=errors)
+    if ok:
+        return True, f"Sent a test to {to_email}. Check the inbox and spam."
+    detail = errors[0] if errors else "Unknown SMTP error."
+    if len(detail) > 280:
+        detail = detail[:280] + "…"
+    return False, f"Not sent. {detail}"
 
 
 def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime,
