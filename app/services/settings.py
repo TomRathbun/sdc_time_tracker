@@ -63,6 +63,26 @@ FEATURE_DEFAULTS = {
         ),
         "description": "Canned reasons for check-in/out time variances (one per line). Employees can also choose Other and type a reason.",
     },
+    "summary_daily_enabled": {
+        "value": "true",
+        "description": "Email every manager the day's check-ins and check-outs. Sent once, if the kiosk is on within 3 hours after the time below. Weekdays only.",
+    },
+    "summary_daily_time": {
+        "value": "1700",
+        "description": "Time of day to send the daily summary (kiosk clock).",
+    },
+    "summary_weekly_enabled": {
+        "value": "true",
+        "description": "Email every manager the week's hours and punches. A Monday send covers the previous week.",
+    },
+    "summary_weekly_time": {
+        "value": "1715",
+        "description": "Time of day to send the weekly summary (kiosk clock).",
+    },
+    "summary_weekly_day": {
+        "value": "friday",
+        "description": "Weekday the weekly summary is sent.",
+    },
 }
 
 

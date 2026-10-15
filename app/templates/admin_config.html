@@ -179,6 +179,68 @@
 
         </div>
 
+        <!-- Manager summaries -->
+        <div class="glass-card p-6 mb-6">
+            <h2 class="text-lg font-semibold text-white mb-1">Summary emails</h2>
+            <p class="text-gray-500 text-xs mb-4">Goes to every active manager who has an email address. The kiosk clock is the clock that matters. Each mail is sent once, as long as the tracker is running within 3 hours after the time.</p>
+
+            <div class="space-y-3">
+                <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5">
+                    <label class="flex items-center justify-between cursor-pointer" for="summary_daily_enabled">
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm">End of day summary</p>
+                            <p class="text-xs text-gray-500">{{ settings.summary_daily_enabled.description }}</p>
+                        </div>
+                        <div class="relative flex-shrink-0 ml-3">
+                            <input type="checkbox" id="summary_daily_enabled" name="summary_daily_enabled" value="on"
+                                class="sr-only peer" {% if settings.summary_daily_enabled.enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-surface-900/80 border border-white/10 rounded-full peer-checked:bg-primary-600 peer-checked:border-primary-500/30 transition-all"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-gray-500 rounded-full peer-checked:translate-x-5 peer-checked:bg-white transition-all shadow-lg"></div>
+                        </div>
+                    </label>
+                    <div class="mt-3">
+                        <label class="text-xs text-gray-400" for="summary_daily_time">Send at</label>
+                        {% set raw = settings.summary_daily_time.value %}
+                        <input type="time" id="summary_daily_time" name="summary_daily_time"
+                            value="{{ raw[:2] }}:{{ raw[2:] }}"
+                            class="form-input mt-1 py-2 font-mono max-w-[160px]">
+                    </div>
+                </div>
+
+                <div class="p-4 rounded-xl bg-surface-900/40 border border-white/5">
+                    <label class="flex items-center justify-between cursor-pointer" for="summary_weekly_enabled">
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm">End of week summary</p>
+                            <p class="text-xs text-gray-500">{{ settings.summary_weekly_enabled.description }}</p>
+                        </div>
+                        <div class="relative flex-shrink-0 ml-3">
+                            <input type="checkbox" id="summary_weekly_enabled" name="summary_weekly_enabled" value="on"
+                                class="sr-only peer" {% if settings.summary_weekly_enabled.enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-surface-900/80 border border-white/10 rounded-full peer-checked:bg-primary-600 peer-checked:border-primary-500/30 transition-all"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-gray-500 rounded-full peer-checked:translate-x-5 peer-checked:bg-white transition-all shadow-lg"></div>
+                        </div>
+                    </label>
+                    <div class="mt-3 flex flex-wrap gap-3">
+                        <div>
+                            <label class="text-xs text-gray-400" for="summary_weekly_day">Day</label>
+                            <select id="summary_weekly_day" name="summary_weekly_day" class="form-input mt-1 py-2">
+                                {% for day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %}
+                                <option value="{{ day }}" {% if settings.summary_weekly_day.value == day %}selected{% endif %}>{{ day|capitalize }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-gray-400" for="summary_weekly_time">Send at</label>
+                            {% set raww = settings.summary_weekly_time.value %}
+                            <input type="time" id="summary_weekly_time" name="summary_weekly_time"
+                                value="{{ raww[:2] }}:{{ raww[2:] }}"
+                                class="form-input mt-1 py-2 font-mono max-w-[160px]">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Touchscreen Features -->
         <div class="glass-card p-6 mb-6">
             <h2 class="text-lg font-semibold text-white mb-1 flex items-center gap-2">

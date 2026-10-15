@@ -925,9 +925,17 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
             if key in (
                 "login_surface_checked_in_after",
                 "login_surface_checked_in_after_friday",
+                "summary_daily_time",
+                "summary_weekly_time",
             ):
                 from app.services.settings import format_hhmm_setting
                 value = format_hhmm_setting(str(value or ""))
+            elif key == "summary_weekly_day":
+                day = str(value or "").strip().lower()
+                value = day if day in (
+                    "monday", "tuesday", "wednesday", "thursday",
+                    "friday", "saturday", "sunday",
+                ) else "friday"
         set_setting(db, key, value)
 
     log_action(

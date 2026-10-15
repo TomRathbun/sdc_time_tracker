@@ -107,6 +107,17 @@ def _scheduler_loop():
                     db.close()
             except Exception as e:
                 logger.error(f"Inbox poll error: {e}")
+        try:
+            from app.database import SessionLocal
+            from app.services.summary_email import send_scheduled_summaries
+
+            db = SessionLocal()
+            try:
+                send_scheduled_summaries(db)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Summary email error: {e}")
         tick += 1
         time.sleep(60)
 
