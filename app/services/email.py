@@ -1,6 +1,8 @@
 import os
 import random
 import smtplib
+import socket
+import ssl
 import logging
 import base64
 from datetime import date, datetime, timedelta
@@ -16,6 +18,62 @@ from app.database import SessionLocal
 from app.services.settings import get_setting
 
 logger = logging.getLogger(__name__)
+
+
+class _SMTP4(smtplib.SMTP):
+    """SMTP that connects over IPv4. A thin client often has a broken IPv6
+    route, and Gmail then drops the greeting: 'connection unexpectedly closed'."""
+
+    def _get_socket(self, host, port, timeout):
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        last = None
+        for af, socktype, proto, _canon, sa in infos:
+            sock = socket.socket(af, socktype, proto)
+            try:
+                sock.settimeout(timeout)
+                sock.connect(sa)
+                return sock
+            except OSError as exc:
+                last = exc
+                sock.close()
+        raise last or OSError(f"No IPv4 address for {host}")
+
+
+class _SMTP4SSL(smtplib.SMTP_SSL):
+    def _get_socket(self, host, port, timeout):
+        raw = _SMTP4._get_socket(self, host, port, timeout)
+        context = self.context or ssl.create_default_context()
+        return context.wrap_socket(raw, server_hostname=host)
+
+
+def _open_smtp():
+    """Open smtp.gmail.com in the way a Windows kiosk can actually finish."""
+    host = (SMTP_HOST or "").strip()
+    port = int(SMTP_PORT)
+    ctx = ssl.create_default_context()
+    # A Windows computer name in EHLO (underscores, spaces) makes Gmail hang up.
+    try:
+        if port == 465:
+            return _SMTP4SSL(
+                host, port, local_hostname="sdc-time-tracker", timeout=30, context=ctx,
+            )
+        server = _SMTP4(host, port, local_hostname="sdc-time-tracker", timeout=30)
+    except Exception as exc:
+        raise OSError(f"Could not connect to {host}:{port}. {exc}") from exc
+    if port != 465 and SMTP_USE_TLS:
+        try:
+            server.starttls(context=ctx)
+            server.ehlo("sdc-time-tracker")
+        except Exception as exc:
+            try:
+                server.close()
+            except Exception:
+                pass
+            raise OSError(
+                f"STARTTLS failed on {host}:{port}. Use port 587. {exc}"
+            ) from exc
+    return server
+
 
 # ── Rotating greetings ──────────────────────────────────────────────
 
@@ -148,17 +206,21 @@ pre{{background:#0f172a;color:#cbd5e1;padding:20px;border-radius:12px;white-spac
                             img.add_header("Content-Disposition", "inline", filename=os.path.basename(path))
                             msg_root.attach(img)
 
-        # Send
-        if SMTP_USE_TLS:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-        else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-
-        if SMTP_USER and SMTP_PASSWORD:
-            server.login(SMTP_USER, SMTP_PASSWORD)
+        # Send. IPv4 + a plain EHLO name: Gmail otherwise closes the connection
+        # on a Windows thin client before login.
+        server = _open_smtp()
+        user = (SMTP_USER or "").strip()
+        # Gmail shows the app password in groups of four. Spaces must not be sent.
+        password = (SMTP_PASSWORD or "").replace(" ", "")
+        if user and password:
+            try:
+                server.login(user, password)
+            except Exception as exc:
+                try:
+                    server.quit()
+                except Exception:
+                    pass
+                raise OSError(f"Gmail login failed. Check the app password. {exc}") from exc
 
         server.sendmail(SMTP_FROM, [to_email], msg_root.as_string())
         server.quit()
