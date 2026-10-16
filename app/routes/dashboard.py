@@ -17,6 +17,7 @@ from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
     projected_checkout_from_entries, format_beod_length,
+    friday_required_hours,
 )
 from app.services.leave_balance import get_leave_balance
 
@@ -85,12 +86,13 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         else:
             status = "checked_out"
 
-    target_hours = get_target_hours(today)
-    is_workday = target_hours > 0
+    target_hours = friday_required_hours(db, employee.id, today)
+    is_workday = get_target_hours(today) > 0
     projected = projected_checkout_from_entries(
         todays_entries,
         today,
         beod_claimed=bool(daily_summary and daily_summary.lunch_end_of_day),
+        required_hours=target_hours,
     ) if status == "checked_in" else None
     projected_checkout = projected.standard if projected else None
     projected_checkout_beod = projected.beod if projected else None

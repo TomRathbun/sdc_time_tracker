@@ -14,7 +14,9 @@ from app.config import SESSION_COOKIE_NAME, BEOD_MINIMUM_HOURS
 from app.models import Employee, TimeEntry, EntryType, LeaveRequest, LeaveStatus, DailySummary, OffsiteEntry, Role
 from app.services.audit import log_action
 from app.services.settings import get_setting, get_bool_setting, parse_hhmm_setting
-from app.services.time_calc import projected_checkout_from_entries, beod_offered_on
+from app.services.time_calc import (
+    projected_checkout_from_entries, beod_offered_on, friday_required_hours,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -92,6 +94,7 @@ def _get_employee_status(db: Session, employees):
             last_time = entries[-1].declared_time
             proj = projected_checkout_from_entries(
                 entries, today, beod_claimed=emp.id in beod_claimed_ids,
+                required_hours=friday_required_hours(db, emp.id, today),
             )
             status_map[emp.id] = _empty_status(
                 status="checked_in",

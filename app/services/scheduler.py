@@ -12,7 +12,10 @@ def _check_for_upcoming_checkouts():
     """Email a one-time checkout code 15 minutes before the projected checkout."""
     from app.database import SessionLocal
     from app.models import DailySummary, Employee, Role, TimeEntry
-    from app.services.time_calc import beod_offered_on, format_beod_length, projected_checkout_from_entries
+    from app.services.time_calc import (
+        beod_offered_on, format_beod_length, friday_required_hours,
+        projected_checkout_from_entries,
+    )
     from app.services.email import send_checkout_reminder
     from app.services.email_checkout import cancel_checkout_token, issue_checkout_token
     from app.services.time_state import STATUS_CHECKED_IN, current_status
@@ -47,8 +50,10 @@ def _check_for_upcoming_checkouts():
                 DailySummary.date == today,
             ).first()
             beod_claimed = bool(summary and summary.lunch_end_of_day)
+            required = friday_required_hours(db, emp.id, today)
             projected = projected_checkout_from_entries(
                 entries, today, beod_claimed=beod_claimed,
+                required_hours=required,
             )
             expected = projected.standard if projected else None
             if expected is None:

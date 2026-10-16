@@ -15,7 +15,7 @@ from app.models import (
 )
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import (
-    update_daily_summary, get_target_hours, normalize_beod_length, format_beod_length,
+    update_daily_summary, get_target_hours, friday_required_hours, normalize_beod_length, format_beod_length,
     beod_offered_on, beod_pref_ui, remember_beod_pref,
 )
 from app.services.time_state import (
@@ -251,7 +251,7 @@ async def checkin_submit(
         from app.services.email import queue_checkin_email
         from app.models import LeaveRequest, LeaveStatus
 
-        target = get_target_hours(today)
+        target = friday_required_hours(db, employee.id, today)
         expected_checkout = declared_time + timedelta(hours=target)
 
         # Gather upcoming leave in next 2 weeks

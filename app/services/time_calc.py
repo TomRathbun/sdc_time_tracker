@@ -31,6 +31,32 @@ class ProjectedCheckout(NamedTuple):
     beod_claimed: bool = False
 
 
+def friday_required_hours(db: Session, employee_id: int, work_date: date) -> float:
+    """Hours still required on this date before someone may leave.
+
+    Monday–Thursday stay at 9. Friday starts at 4 and drops by any hours
+    worked above the Monday–Thursday target of 36. Approved leave is not
+    extra time. The result is never below 0 and never above the normal day.
+    """
+    base = get_target_hours(work_date)
+    if work_date.weekday() != 4 or base <= 0:
+        return base
+    monday = work_date - timedelta(days=work_date.weekday())
+    worked = 0.0
+    target = 0.0
+    for offset in range(4):
+        day = monday + timedelta(days=offset)
+        target += get_target_hours(day)
+        summary = db.query(DailySummary).filter(
+            DailySummary.employee_id == employee_id,
+            DailySummary.date == day,
+        ).first()
+        if summary and summary.total_hours:
+            worked += float(summary.total_hours)
+    surplus = max(0.0, round(worked - target, 2))
+    return round(max(0.0, base - surplus), 2)
+
+
 def hours_to_meet_target(work_date: date, *, beod: bool = False) -> float:
     """Clock hours needed to meet FOSC target.
 
@@ -61,14 +87,23 @@ def projected_checkout_time(
     completed_hours: float = 0.0,
     *,
     beod: bool = False,
+    required_hours: Optional[float] = None,
 ) -> Optional[datetime]:
     """Projected checkout = open check-in + remaining hours to hit the day target.
 
+    required_hours overrides the weekday target (Friday early-leave credit).
     Returns None when there is no remaining target (weekend, already met, or
-    a return punch after a full day). Callers should hide the projection after
-    checkout (no open check-in) and after midnight (new work_date).
+    a return punch after a full day).
     """
-    remaining = hours_to_meet_target(work_date, beod=beod) - (completed_hours or 0.0)
+    if required_hours is None:
+        goal = hours_to_meet_target(work_date, beod=beod)
+    else:
+        goal = required_hours
+        if beod:
+            needed = required_hours - BEOD_CREDIT_HOURS
+            if needed >= BEOD_MINIMUM_HOURS:
+                goal = needed
+    remaining = goal - (completed_hours or 0.0)
     if remaining <= 0:
         return None
     return checkin_time + timedelta(hours=remaining)
@@ -79,6 +114,7 @@ def projected_checkout_from_entries(
     work_date: date,
     *,
     beod_claimed: bool = False,
+    required_hours: Optional[float] = None,
 ) -> ProjectedCheckout:
     """Projected checkout for an open session (empty if checked out / not in)."""
     pending: Optional[TimeEntry] = None
@@ -93,9 +129,11 @@ def projected_checkout_from_entries(
     completed = calculate_clock_hours(time_entries)
     standard = projected_checkout_time(
         pending.declared_time, work_date, completed, beod=False,
+        required_hours=required_hours,
     )
     beod = projected_checkout_time(
         pending.declared_time, work_date, completed, beod=True,
+        required_hours=required_hours,
     )
     if beod_claimed:
         return ProjectedCheckout(beod or standard, None, True)
@@ -287,7 +325,7 @@ def update_daily_summary(
     phone_hours = calculate_phone_hours(phone_entries)
     # Work hours that count toward the BEOD 6h floor (not leave)
     work_hours = round(clock_hours + offsite_hours + phone_hours, 2)
-    target_hours = get_target_hours(work_date)
+    target_hours = friday_required_hours(db, employee_id, work_date)
 
     summary = db.query(DailySummary).filter(
         DailySummary.employee_id == employee_id,
