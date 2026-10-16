@@ -15,7 +15,7 @@ FEATURE_DEFAULTS = {
     },
     "checkout_reminder_enabled": {
         "value": "true",
-        "description": "Send reminder email before expected checkout time",
+        "description": "Email the employee 15 minutes before the projected checkout. The mail has a one-time code. Replying with that code and a declared time checks them out.",
     },
     "onscreen_numpad_enabled": {
         "value": "false",

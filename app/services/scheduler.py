@@ -3,20 +3,18 @@
 import logging
 import threading
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 logger = logging.getLogger(__name__)
 
-# Track which employee+date combos already got a reminder (avoid duplicates)
-_sent_reminders: set = set()
-
 
 def _check_for_upcoming_checkouts():
-    """Scan for employees who should check out in ~15 minutes and send reminders."""
+    """Email a one-time checkout code 15 minutes before the projected checkout."""
     from app.database import SessionLocal
-    from app.models import Employee, TimeEntry, EntryType
-    from app.services.time_calc import get_target_hours
+    from app.models import DailySummary, Employee, Role, TimeEntry
+    from app.services.time_calc import beod_offered_on, format_beod_length, projected_checkout_from_entries
     from app.services.email import send_checkout_reminder
+    from app.services.email_checkout import cancel_checkout_token, issue_checkout_token
     from app.config import EMAIL_ENABLED
     from app.services.settings import get_bool_setting
 
@@ -25,7 +23,6 @@ def _check_for_upcoming_checkouts():
 
     db = SessionLocal()
     try:
-        # Check feature flag
         if not get_bool_setting(db, "checkout_reminder_enabled"):
             return
 
@@ -34,49 +31,58 @@ def _check_for_upcoming_checkouts():
 
         employees = db.query(Employee).filter(
             Employee.is_active == True,
+            Employee.role != Role.customer,
             Employee.email != None,
             Employee.email != "",
         ).all()
 
         for emp in employees:
-            reminder_key = f"{emp.id}_{today.isoformat()}"
-            if reminder_key in _sent_reminders:
-                continue
-
-            # Find their latest check-in today
-            last_checkin = db.query(TimeEntry).filter(
+            entries = db.query(TimeEntry).filter(
                 TimeEntry.employee_id == emp.id,
                 TimeEntry.date == today,
-                TimeEntry.entry_type == EntryType.check_in,
-            ).order_by(TimeEntry.declared_time.desc()).first()
-
-            if not last_checkin:
-                continue
-
-            # Check if they already checked out after this check-in
-            last_checkout = db.query(TimeEntry).filter(
-                TimeEntry.employee_id == emp.id,
-                TimeEntry.date == today,
-                TimeEntry.entry_type == EntryType.check_out,
-                TimeEntry.declared_time > last_checkin.declared_time,
+            ).all()
+            summary = db.query(DailySummary).filter(
+                DailySummary.employee_id == emp.id,
+                DailySummary.date == today,
             ).first()
-
-            if last_checkout:
-                continue  # Already checked out
-
-            # Calculate expected checkout time
-            target_hours = get_target_hours(today)
-            if target_hours <= 0:
+            beod_claimed = bool(summary and summary.lunch_end_of_day)
+            projected = projected_checkout_from_entries(
+                entries, today, beod_claimed=beod_claimed,
+            )
+            expected = projected.standard if projected else None
+            if expected is None:
                 continue
 
-            expected_checkout = last_checkin.declared_time + timedelta(hours=target_hours)
+            minutes_until = (expected - now).total_seconds() / 60
+            if not (0 < minutes_until <= 15):
+                continue
 
-            # Send reminder if checkout is 13-17 minutes away (window to avoid missing it)
-            minutes_until = (expected_checkout - now).total_seconds() / 60
-            if 0 < minutes_until <= 17:
-                logger.info(f"Sending checkout reminder to {emp.name} (checkout at {expected_checkout.strftime('%H:%M')})")
-                send_checkout_reminder(emp, expected_checkout)
-                _sent_reminders.add(reminder_key)
+            open_checkin = None
+            for entry in sorted(entries, key=lambda row: (row.declared_time, row.id or 0)):
+                if entry.entry_type.value == "check_in":
+                    open_checkin = entry
+                elif entry.entry_type.value == "check_out":
+                    open_checkin = None
+            if open_checkin is None:
+                continue
+
+            token = issue_checkout_token(db, emp, open_checkin, expected)
+            if token is None:
+                continue
+
+            fields = f"CODE: {token.code}\nDECLARED TIME: {expected.strftime('%H:%M')}\nREASON:"
+            if beod_offered_on(today):
+                claim = "yes" if emp.beod_pref_known and emp.beod_pref_claim else "no"
+                length = format_beod_length(emp.beod_pref_hours or 1)
+                fields += f"\nBEOD: {claim}\nBEOD LENGTH: {length}"
+
+            logger.info(
+                "Sending checkout reply mail to %s (checkout at %s)",
+                emp.name, expected.strftime("%H:%M"),
+            )
+            if not send_checkout_reminder(emp, expected, token.code, fields):
+                cancel_checkout_token(db, token)
+                logger.error("Checkout reminder failed for %s; code withdrawn", emp.name)
 
     except Exception as e:
         logger.error(f"Scheduler error: {e}")
@@ -85,28 +91,26 @@ def _check_for_upcoming_checkouts():
 
 
 def _scheduler_loop():
-    """Run the scheduler loop — reminders every 60s, inbox every 5 minutes."""
-    logger.info("📋 Background scheduler started (reminders every 60s, inbox every 5 min)")
-    tick = 0
+    """Reminders every 60s. Inbox every 60s so a checkout reply is picked up quickly."""
+    logger.info("Background scheduler started (checkout reminder and inbox every 60s)")
     while True:
         try:
             _check_for_upcoming_checkouts()
         except Exception as e:
             logger.error(f"Scheduler loop error: {e}")
-        if tick % 5 == 0:
-            try:
-                from app.database import SessionLocal
-                from app.services.inbox import poll_inbox
+        try:
+            from app.database import SessionLocal
+            from app.services.inbox import poll_inbox
 
-                db = SessionLocal()
-                try:
-                    count, note = poll_inbox(db)
-                    if count:
-                        logger.info("Inbox: %s", note)
-                finally:
-                    db.close()
-            except Exception as e:
-                logger.error(f"Inbox poll error: {e}")
+            db = SessionLocal()
+            try:
+                count, note = poll_inbox(db)
+                if count:
+                    logger.info("Inbox: %s", note)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Inbox poll error: {e}")
         try:
             from app.database import SessionLocal
             from app.services.summary_email import send_scheduled_summaries
@@ -118,12 +122,7 @@ def _scheduler_loop():
                 db.close()
         except Exception as e:
             logger.error(f"Summary email error: {e}")
-        tick += 1
         time.sleep(60)
-
-    # Clear old reminders at midnight logic:
-    # The _sent_reminders set uses date in the key, so old entries
-    # won't match tomorrow. We could periodically clean but it's harmless.
 
 
 def start_scheduler():

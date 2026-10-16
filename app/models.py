@@ -308,3 +308,21 @@ class InboundEmail(Base):
     body_text = Column(Text, default="")
     received_at = Column(DateTime, nullable=True)
     fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CheckoutToken(Base):
+    """One-time code mailed 15 minutes before checkout. A reply spends it."""
+    __tablename__ = "checkout_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    checkin_entry_id = Column(Integer, ForeignKey("time_entries.id"), nullable=False, index=True)
+    work_date = Column(Date, nullable=False)
+    code = Column(String(16), nullable=False, unique=True, index=True)
+    expected_time = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    notified_uid = Column(Integer, nullable=True)
+
+    employee = relationship("Employee")

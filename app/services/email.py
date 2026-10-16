@@ -438,13 +438,16 @@ def queue_checkin_email(name: str, email: str, checkin_time: datetime,
     threading.Thread(target=_run, daemon=True, name="checkin-email").start()
 
 
-def send_checkout_reminder(employee, checkout_time: datetime):
-    """Send a checkout reminder email."""
-    if not employee.email:
+def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_fields: str):
+    """Remind the employee and give them a one-time reply that checks them out."""
+    address = (getattr(employee, "email", None) or "").strip()
+    name = getattr(employee, "name", None) or "there"
+    if not address or not code:
         return False
 
-    greeting = _get_checkout_greeting(employee.name)
+    greeting = _get_checkout_greeting(name)
     co_str = checkout_time.strftime("%H:%M")
+    fields = reply_fields.strip()
 
     images = [
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
@@ -455,49 +458,23 @@ def send_checkout_reminder(employee, checkout_time: datetime):
         <tr>
             <td align="center">
                 <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;box-shadow:0 10px 25px rgba(0,0,0,0.4);">
-                    <!-- Header -->
                     <tr>
                         <td style="background:linear-gradient(135deg,#b45309,#d97706);padding:32px 40px;">
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                <tr>
-                                    <td>
-                                        <div style="font-size:24px;font-weight:700;color:#ffffff;margin-bottom:4px;">{greeting}</div>
-                                        <div style="font-size:14px;color:rgba(255,255,255,0.8);">Checkout Reminder</div>
-                                    </td>
-                                    <td align="right" width="60">
-                                        <img src="cid:app_logo" width="60" height="60" style="border-radius:12px;border:1px solid rgba(255,255,255,0.2);">
-                                    </td>
-                                </tr>
-                            </table>
+                            <div style="font-size:24px;font-weight:700;color:#ffffff;margin-bottom:4px;">{greeting}</div>
+                            <div style="font-size:14px;color:rgba(255,255,255,0.8);">Checkout in about 15 minutes</div>
                         </td>
                     </tr>
-                    <!-- Content -->
                     <tr>
                         <td style="padding:32px 40px;text-align:center;">
                             <div style="font-size:16px;color:#cbd5e1;margin-bottom:24px;">
-                                Your expected checkout time is in about <strong style="color:#fbbf24;">15 minutes</strong>.
+                                Projected checkout is <strong style="color:#fbbf24;">{co_str}</strong>.
                             </div>
-                            
-                            <table align="center" border="0" cellspacing="0" cellpadding="20" bgcolor="#1e293b" style="border-radius:12px;">
-                                <tr>
-                                    <td align="center">
-                                        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:8px;">Checkout Time</div>
-                                        <div style="font-size:48px;font-weight:700;color:#fbbf24;font-family:monospace;">{co_str}</div>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            <div style="margin-top:24px;font-size:15px;color:#94a3b8;">
-                                Don't forget to log your check-out before you leave! 👋
+                            <div style="font-size:15px;color:#e2e8f0;text-align:left;">
+                                Reply to this email to check out. Leave the code unchanged.
+                                Change the declared time if you are leaving at a different time.
+                                If that time is not close to now, add a reason.
                             </div>
-
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:32px;border-top:1px solid #1e293b;padding-top:20px;">
-                                <tr>
-                                    <td align="center" style="font-size:13px;color:#64748b;">
-                                        {APP_NAME} &bull; Team Attendance
-                                    </td>
-                                </tr>
-                            </table>
+                            <pre style="margin-top:20px;text-align:left;background:#020617;color:#f8fafc;padding:16px;border-radius:8px;font-size:14px;">{fields}</pre>
                         </td>
                     </tr>
                 </table>
@@ -506,19 +483,23 @@ def send_checkout_reminder(employee, checkout_time: datetime):
     </table>"""
 
     text = f"""{greeting}
-    
-Your expected checkout time is in about 15 minutes: {co_str}.
 
-Don't forget to log your check-out before you leave!
+Projected checkout is {co_str}, about 15 minutes from now.
+
+Reply to this email to check out. Leave the code unchanged.
+Change DECLARED TIME if you are leaving at a different time.
+If that time is not close to now, fill in REASON.
+
+{fields}
 
 {APP_NAME}"""
 
     return _send_email(
-        employee.email,
-        f"⏰ Checkout Reminder at {co_str} — {APP_NAME}",
+        address,
+        f"Checkout at {co_str} — reply to check out",
         html,
         text,
-        images
+        images,
     )
 
 
