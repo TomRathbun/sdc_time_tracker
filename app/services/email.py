@@ -17,6 +17,7 @@ from app.config import (
 )
 from app.database import SessionLocal
 from app.services.settings import get_setting
+from app.services.email_layout import render_email, stat_tile
 
 logger = logging.getLogger(__name__)
 
@@ -250,9 +251,11 @@ def send_test_email(to_email: str, person_name: str) -> tuple[bool, str]:
         f"This is a test message for {name}.\n"
         "If you can read this, the time tracker can send mail."
     )
-    html = (
-        f"<p>This is a test message for <strong>{name}</strong>.</p>"
-        "<p>If you can read this, the time tracker can send mail.</p>"
+    html = render_email(
+        "Test email",
+        f"<p style=\"margin:0 0 12px;\">This is a test message for <strong style=\"color:#f8fafc;\">{name}</strong>.</p>"
+        "<p style=\"margin:0;\">If you can read this, the time tracker can send mail.</p>",
+        kicker=APP_NAME,
     )
     errors: list = []
     ok = _send_email(to_email, subject, html, text, errors=errors)
@@ -339,60 +342,23 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
             </tr>
         </table>"""
 
-    html = f"""
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#020617" style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;margin:0;padding:20px;">
-        <tr>
-            <td align="center">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;box-shadow:0 10px 25px rgba(0,0,0,0.4);">
-                    <!-- Header -->
-                    <tr>
-                        <td style="background:linear-gradient(135deg,#1e40af,#7c3aed);padding:32px 40px;">
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                <tr>
-                                    <td>
-                                        <div style="font-size:24px;font-weight:700;color:#ffffff;margin-bottom:4px;">{greeting}</div>
-                                        <div style="font-size:14px;color:rgba(255,255,255,0.8);">{today_str}</div>
-                                    </td>
-                                    <td align="right" width="60">
-                                        <img src="cid:app_logo" width="60" height="60" style="border-radius:12px;border:1px solid rgba(255,255,255,0.2);">
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <!-- Content -->
-                    <tr>
-                        <td style="padding:32px 40px;">
-                            <table width="100%" border="0" cellspacing="0" cellpadding="12">
-                                <tr>
-                                    <td width="50%" bgcolor="#1e293b" style="border-radius:12px;text-align:center;padding:20px;">
-                                        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:8px;">Checked In</div>
-                                        <div style="font-size:32px;font-weight:700;color:#4ade80;font-family:monospace;">{ci_str}</div>
-                                    </td>
-                                    <td width="50%" bgcolor="#1e293b" style="border-radius:12px;text-align:center;padding:20px;">
-                                        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:8px;">Expected Checkout</div>
-                                        <div style="font-size:32px;font-weight:700;color:#60a5fa;font-family:monospace;">{co_str}</div>
-                                    </td>
-                                </tr>
-                            </table>
-
-                            {leave_html}
-                            {weapon_html}
-
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:32px;">
-                                <tr>
-                                    <td align="center" style="font-size:13px;color:#64748b;">
-                                        <p>{APP_NAME} &bull; Electronic Time Keeping</p>
-                                        <p style="margin-top:8px;">Have a productive and safe day!</p>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>"""
+    html = render_email(
+        greeting,
+        f"""
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:8px;">
+            <tr>
+                {stat_tile("Checked in", ci_str, "#4ade80")}
+                <td width="12"></td>
+                {stat_tile("Expected checkout", co_str, "#38bdf8")}
+            </tr>
+        </table>
+        {leave_html}
+        {weapon_html}
+        <p style="margin:24px 0 0;color:#94a3b8;">Have a productive and safe day.</p>
+        """,
+        kicker=today_str,
+        show_logo=True,
+    )
 
     text = f"""{greeting}
     
@@ -455,36 +421,16 @@ def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_f
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
     ]
 
-    html = f"""
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#020617" style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;margin:0;padding:20px;">
-        <tr>
-            <td align="center">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;box-shadow:0 10px 25px rgba(0,0,0,0.4);">
-                    <tr>
-                        <td style="background:linear-gradient(135deg,#b45309,#d97706);padding:32px 40px;">
-                            <div style="font-size:24px;font-weight:700;color:#ffffff;margin-bottom:4px;">{greeting}</div>
-                            <div style="font-size:14px;color:rgba(255,255,255,0.8);">Checkout in about 15 minutes</div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding:32px 40px;text-align:center;">
-                            <div style="font-size:16px;color:#cbd5e1;margin-bottom:24px;">
-                                Projected checkout is <strong style="color:#fbbf24;">{co_str}</strong>.
-                            </div>
-                            <div style="font-size:15px;color:#e2e8f0;text-align:left;">
-                                Reply to this email to check out. Leave the code unchanged.
-                                DECLARED TIME is already the projected checkout.
-                                You may move it by up to 15 minutes.
-                                A larger change has to be done on the kiosk.
-                                The confirmation email can take up to 5 minutes.
-                            </div>
-                            <pre style="margin-top:20px;text-align:left;background:#020617;color:#f8fafc;padding:16px;border-radius:8px;font-size:14px;">{fields}</pre>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>"""
+    html = render_email(
+        greeting,
+        f"""
+        <p style="margin:8px 0 16px;">Projected checkout is <strong style="color:#fbbf24;">{co_str}</strong>, about 15 minutes from now.</p>
+        <p style="margin:0 0 16px;">Reply to this email to check out. Leave the code unchanged. DECLARED TIME is already the projected checkout. You may move it by up to 15 minutes. A larger change has to be done on the kiosk. The confirmation email can take up to 5 minutes.</p>
+        <pre style="margin:0;text-align:left;background:#020617;color:#f8fafc;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);font-size:14px;font-family:'JetBrains Mono',Consolas,monospace;">{fields}</pre>
+        """,
+        kicker="Checkout",
+        show_logo=True,
+    )
 
     text = f"""{greeting}
 
@@ -524,75 +470,40 @@ def send_policy_violation_email(employee_name: str, employee_email: str, manager
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
     ]
 
-    html = f"""
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#020617" style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;margin:0;padding:20px;">
-        <tr>
-            <td align="center">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #7f1d1d;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
-                    <!-- Header -->
-                    <tr>
-                        <td style="background:linear-gradient(135deg,#7f1d1d,#b91c1c);padding:32px 40px;">
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                <tr>
-                                    <td>
-                                        <div style="font-size:24px;font-weight:700;color:#ffffff;margin-bottom:4px;">⚠️ Policy Alert</div>
-                                        <div style="font-size:14px;color:rgba(255,255,255,0.8);">Threshold Exceeded</div>
-                                    </td>
-                                    <td align="right" width="60">
-                                        <img src="cid:app_logo" width="60" height="60" style="border-radius:12px;border:1px solid rgba(255,255,255,0.2);">
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <!-- Content -->
-                    <tr>
-                        <td style="padding:32px 40px;">
-                            <p style="color:#cbd5e1;font-size:15px;line-height:1.6;margin-bottom:24px;">
-                                A {type_str.lower()} was logged with a time difference exceeding the threshold of <strong>{threshold} minutes</strong>.
-                            </p>
-                            
-                            <table width="100%" border="0" cellspacing="0" cellpadding="15" bgcolor="#1e293b" style="border-radius:12px;margin-bottom:24px;">
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Employee</td>
-                                    <td style="color:#ffffff;font-size:14px;font-weight:600;border-bottom:1px solid #334155;">{employee_name}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Action</td>
-                                    <td style="color:#ffffff;font-size:14px;font-weight:600;border-bottom:1px solid #334155;">{type_str}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Set Time</td>
-                                    <td style="color:#fbbf24;font-size:14px;font-weight:700;border-bottom:1px solid #334155;">{declared_str}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Actual Time</td>
-                                    <td style="color:#60a5fa;font-size:14px;font-weight:700;border-bottom:1px solid #334155;">{actual_str}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;">Differential</td>
-                                    <td style="color:#f87171;font-size:14px;font-weight:700;">{int(diff_minutes)} minutes</td>
-                                </tr>
-                            </table>
-                            
-                            <table width="100%" border="0" cellspacing="0" cellpadding="16" bgcolor="#020617" style="border-radius:8px;border:1px solid #374151;">
-                                <tr>
-                                    <td>
-                                        <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Employee Comment:</div>
-                                        <div style="font-style:italic;color:#e2e8f0;font-size:15px;line-height:1.6;">"{comments}"</div>
-                                    </td>
-                                </tr>
-                            </table>
-                            
-                            <p style="margin-top:32px;padding-top:20px;border-top:1px solid #1e293b;font-size:12px;color:#64748b;text-align:center;">
-                                Automated Policy Notification from {APP_NAME}
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>"""
+    html = render_email(
+        "Policy alert",
+        f"""
+        <p style="margin:8px 0 16px;">A {type_str.lower()} was logged with a time difference exceeding the threshold of <strong style="color:#f8fafc;">{threshold} minutes</strong>.</p>
+        <table width="100%" border="0" cellspacing="0" cellpadding="12" bgcolor="#1e293b" style="background:#1e293b;border-radius:12px;border:1px solid rgba(255,255,255,0.06);">
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Employee</td>
+                <td style="color:#f8fafc;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.06);">{employee_name}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Action</td>
+                <td style="color:#f8fafc;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.06);">{type_str}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Set time</td>
+                <td style="color:#fbbf24;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06);">{declared_str}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Actual time</td>
+                <td style="color:#38bdf8;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06);">{actual_str}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;">Difference</td>
+                <td style="color:#f87171;font-weight:700;">{int(diff_minutes)} minutes</td>
+            </tr>
+        </table>
+        <div style="margin-top:16px;padding:16px;background:#020617;border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+            <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;">Comment</div>
+            <div style="color:#e2e8f0;">"{comments}"</div>
+        </div>
+        """,
+        kicker="Threshold exceeded",
+        show_logo=True,
+    )
 
     text = f"""⚠️ POLICY ALERT: {type_str} Time Differential — {employee_name}
 
@@ -643,76 +554,41 @@ def send_past_day_modification_email(modifier_name: str, employee_name: str, tar
             </tr>"""
             details_text += f"{label}: {value}\n"
 
-    html = f"""
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#020617" style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;margin:0;padding:20px;">
-        <tr>
-            <td align="center">
-                <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #334155;box-shadow:0 10px 25px rgba(0,0,0,0.4);">
-                    <!-- Header -->
-                    <tr>
-                        <td style="background:linear-gradient(135deg,#4338ca,#6366f1);padding:32px 40px;">
-                            <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                                <tr>
-                                    <td>
-                                        <div style="font-size:24px;font-weight:700;color:#ffffff;margin-bottom:4px;">Audit Alert</div>
-                                        <div style="font-size:14px;color:rgba(255,255,255,0.8);">Timesheet Modification Detected</div>
-                                    </td>
-                                    <td align="right" width="60">
-                                        <img src="cid:app_logo" width="60" height="60" style="border-radius:12px;border:1px solid rgba(255,255,255,0.2);">
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <!-- Content -->
-                    <tr>
-                        <td style="padding:32px 40px;">
-                            <p style="color:#cbd5e1;font-size:15px;line-height:1.6;margin-bottom:24px;">
-                                A manual correction or entry was logged for a previous workday.
-                            </p>
-                            
-                            <table width="100%" border="0" cellspacing="0" cellpadding="15" bgcolor="#1e293b" style="border-radius:12px;margin-bottom:24px;">
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Modified Record</td>
-                                    <td style="color:#ffffff;font-size:14px;font-weight:600;border-bottom:1px solid #334155;">{employee_name}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Target Date</td>
-                                    <td style="color:#60a5fa;font-size:14px;font-weight:700;border-bottom:1px solid #334155;">{target_date}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Summary</td>
-                                    <td style="color:#ffffff;font-size:14px;font-weight:600;border-bottom:1px solid #334155;">{action_description}</td>
-                                </tr>
-                                {details_html}
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;border-bottom:1px solid #334155;">Performed By</td>
-                                    <td style="color:#cbd5e1;font-size:14px;border-bottom:1px solid #334155;">{modifier_name}</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#94a3b8;font-size:14px;">Submission Time</td>
-                                    <td style="color:#cbd5e1;font-size:14px;">{now_str}</td>
-                                </tr>
-                            </table>
-                            
-                            <table width="100%" border="0" cellspacing="0" cellpadding="16" bgcolor="#020617" style="border-radius:8px;border:1px solid #374151;">
-                                <tr>
-                                    <td>
-                                        <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Justification / Comments:</div>
-                                        <div style="font-style:italic;color:#e2e8f0;font-size:15px;line-height:1.6;">"{comments}"</div>
-                                    </td>
-                                </tr>
-                            </table>
-                            
-                            <p style="margin-top:32px;padding-top:20px;border-top:1px solid #1e293b;font-size:12px;color:#64748b;text-align:center;">
-                                Audit Notification from {APP_NAME}
-                            </p>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>"""
+    html = render_email(
+        "Record adjusted",
+        f"""
+        <p style="margin:8px 0 16px;">A correction was logged for a previous workday.</p>
+        <table width="100%" border="0" cellspacing="0" cellpadding="12" bgcolor="#1e293b" style="background:#1e293b;border-radius:12px;border:1px solid rgba(255,255,255,0.06);">
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Record</td>
+                <td style="color:#f8fafc;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.06);">{employee_name}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Date</td>
+                <td style="color:#38bdf8;font-weight:700;border-bottom:1px solid rgba(255,255,255,0.06);">{target_date}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">Summary</td>
+                <td style="color:#f8fafc;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.06);">{action_description}</td>
+            </tr>
+            {details_html}
+            <tr>
+                <td style="color:#94a3b8;border-bottom:1px solid rgba(255,255,255,0.06);">By</td>
+                <td style="color:#cbd5e1;border-bottom:1px solid rgba(255,255,255,0.06);">{modifier_name}</td>
+            </tr>
+            <tr>
+                <td style="color:#94a3b8;">When</td>
+                <td style="color:#cbd5e1;">{now_str}</td>
+            </tr>
+        </table>
+        <div style="margin-top:16px;padding:16px;background:#020617;border-radius:12px;border:1px solid rgba(255,255,255,0.08);">
+            <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:8px;">Comment</div>
+            <div style="color:#e2e8f0;">"{comments}"</div>
+        </div>
+        """,
+        kicker="Timesheet",
+        show_logo=True,
+    )
 
     text = f"""RECORD MODIFIED: {employee_name}
 

@@ -14,6 +14,7 @@ from app.models import (
     PhoneSupportEntry, Role, TimeEntry,
 )
 from app.services.email import _send_email
+from app.services.email_layout import render_email
 from app.services.settings import get_bool_setting, get_setting, parse_hhmm_setting, set_setting
 from app.services.time_calc import (
     BEOD_CREDIT_HOURS,
@@ -152,15 +153,15 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
 
 def _th(label: str) -> str:
     return (
-        f'<th align="left" style="padding:6px 8px;border-bottom:2px solid #cbd5e1;'
-        f'background:#0f172a;color:#fff;font-size:12px;">{escape(label)}</th>'
+        '<th align="left" style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.08);'
+        f'color:#94a3b8;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">{escape(label)}</th>'
     )
 
 
 def _td(value: str, bold: bool = False) -> str:
-    weight = "font-weight:600;" if bold else ""
+    weight = "font-weight:600;color:#f8fafc;" if bold else "color:#e2e8f0;"
     return (
-        f'<td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;{weight}">'
+        f'<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);{weight}">'
         f"{escape(value)}</td>"
     )
 
@@ -177,7 +178,7 @@ def _daily_bodies(rows: list[dict], work_date: date) -> tuple[str, str]:
         if row["empty"] and not row["target"]:
             continue
         present += 1
-        shade = "#f8fafc" if present % 2 == 0 else "#ffffff"
+        shade = "#1e293b" if present % 2 == 0 else "#0f172a"
         cells = "".join(_td(value, bold=(key == "name")) for key, value in (
             ("name", row["name"]),
             ("in", row["in"]),
@@ -201,14 +202,15 @@ def _daily_bodies(rows: list[dict], work_date: date) -> tuple[str, str]:
             '<tr><td colspan="8" style="padding:12px;color:#64748b;">No time recorded.</td></tr>'
         )
         text_lines.append("No time recorded.")
-    html = (
-        f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:15px;">'
-        f"<strong>SDC daily summary — {escape(title)}</strong></p>"
-        f'<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;'
-        f'font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#0f172a;">'
-        f"<tr>{head}</tr>{''.join(body_rows)}</table>"
-        f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#64748b;">'
-        f"Hours are clock + offsite + phone + approved BEOD + approved leave.</p>"
+    html = render_email(
+        f"Daily summary",
+        (
+            f'<table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:13px;">'
+            f"<tr>{head}</tr>{''.join(body_rows)}</table>"
+            '<p style="margin:16px 0 0;font-size:12px;color:#64748b;">'
+            "Hours are clock + offsite + phone + approved BEOD + approved leave.</p>"
+        ),
+        kicker=title,
     )
     return html, "\n".join(text_lines)
 
@@ -223,7 +225,7 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
     grand = 0.0
     grand_target = 0.0
     for index, (name, days) in enumerate(people_days):
-        shade = "#f8fafc" if index % 2 else "#ffffff"
+        shade = "#1e293b" if index % 2 else "#0f172a"
         total = round(sum(day["hours"] for day in days), 2)
         target = round(sum(day["target"] for day in days), 2)
         grand += total
@@ -269,21 +271,22 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
             )
         if lines:
             punch_html.append(
-                f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#0f172a;margin:8px 0 2px;">'
+                '<p style="margin:14px 0 2px;color:#f8fafc;font-size:13px;">'
                 f"<strong>{escape(name)}</strong></p>"
-                f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#334155;margin:0;">'
+                '<p style="margin:0;font-size:12px;color:#94a3b8;">'
                 + "<br>".join(lines) + "</p>"
             )
-    html = (
-        f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:15px;">'
-        f"<strong>SDC weekly summary — {escape(title)}</strong></p>"
-        f'<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;'
-        f'font-family:Segoe UI,Arial,sans-serif;font-size:13px;color:#0f172a;">'
-        f"<tr>{head}</tr>{''.join(body_rows)}"
-        f'<tr style="background:#e2e8f0;">{foot}</tr></table>'
-        + "".join(punch_html)
-        + '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:12px;color:#64748b;">'
-        f"Each day is clock + offsite + phone + approved BEOD + approved leave.</p>"
+    html = render_email(
+        "Weekly summary",
+        (
+            '<table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:13px;">'
+            f"<tr>{head}</tr>{''.join(body_rows)}"
+            f'<tr style="background:#1e293b;">{foot}</tr></table>'
+            + "".join(punch_html)
+            + '<p style="margin:16px 0 0;font-size:12px;color:#64748b;">'
+            "Each day is clock + offsite + phone + approved BEOD + approved leave.</p>"
+        ),
+        kicker=title,
     )
     text_lines.append(f"All — {_hours(round(grand, 2))} / {_hours(round(grand_target, 2))}")
     return html, "\n".join(text_lines)

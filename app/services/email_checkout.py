@@ -18,6 +18,7 @@ from app.models import (
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
+from app.services.email_layout import render_email
 from app.services.settings import get_bool_setting
 from app.services.time_calc import (
     beod_offered_on,
@@ -103,16 +104,20 @@ def _notify(employee: Employee, subject: str, text: str, reply_message_id: str =
     if not address:
         logger.error("Checkout mail not sent: %s has no email", employee.name)
         return False
+    title = subject
     message_id = (reply_message_id or "").strip()
     if message_id and not message_id.startswith("<"):
         message_id = f"<{message_id.strip('<>')}>"
     if message_id:
         base = (reply_subject or subject).strip()
         subject = base if base.lower().startswith("re:") else f"Re: {base}"
-    html = (
-        '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;">'
-        + "<br>".join(text.splitlines())
-        + "</p>"
+    html = render_email(
+        title,
+        "".join(
+            f'<p style="margin:0 0 10px;">{escape(line) if line else "&nbsp;"}</p>'
+            for line in text.splitlines()
+        ) or "<p></p>",
+        kicker="SDC Time Tracker",
     )
     ok = _send_email(address, subject, html, text, in_reply_to=message_id)
     if ok:

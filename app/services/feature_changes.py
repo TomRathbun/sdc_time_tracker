@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import APP_NAME, EMAIL_ENABLED
 from app.models import Employee, FeatureChange, Role
 from app.services.email import _send_email
+from app.services.email_layout import render_email
 
 logger = logging.getLogger(__name__)
 
@@ -141,24 +142,22 @@ def parse_audience(value: str) -> list[str]:
 
 
 def _compose(features: list[FeatureChange]) -> tuple[str, str]:
-    blocks = []
-    html_blocks = []
-    for feature in features:
-        blocks.append(f"{feature.title}\n{feature.summary}")
-        html_blocks.append(
-            f"<p><strong>{escape(feature.title)}</strong><br>{escape(feature.summary)}</p>"
-        )
+    blocks = [f"{feature.title}\n{feature.summary}" for feature in features]
     text = (
         "Hello,\n\n"
         "Here are updates to the SDC Time Tracker.\n\n"
         + "\n\n".join(blocks)
         + f"\n\n{APP_NAME}"
     )
-    html = (
-        '<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#0f172a;">'
-        "<p>Hello,</p><p>Here are updates to the SDC Time Tracker.</p>"
-        + "".join(html_blocks)
-        + f"<p style=\"color:#64748b;\">{escape(APP_NAME)}</p></div>"
+    html = render_email(
+        "Updates",
+        "<p style=\"margin:0 0 12px;\">Hello,</p>"
+        "<p style=\"margin:0 0 16px;\">Here are updates to the SDC Time Tracker.</p>"
+        + "".join(
+            f'<p style="margin:0 0 14px;"><strong style="color:#f8fafc;">{escape(feature.title)}</strong><br>{escape(feature.summary)}</p>'
+            for feature in features
+        ),
+        kicker=APP_NAME,
     )
     return html, text
 
