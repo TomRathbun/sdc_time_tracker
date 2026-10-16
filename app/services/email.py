@@ -140,7 +140,6 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: str = ""
 
     if not EMAIL_ENABLED:
         # Dev mode: save email as HTML file for preview
-        import os
         from datetime import datetime as dt
         os.makedirs("dev_emails", exist_ok=True)
         
