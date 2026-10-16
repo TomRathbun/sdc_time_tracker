@@ -82,19 +82,22 @@ From another PC on the same network, use this machine’s IPv4 address, for exam
 
 ### 7. Start automatically at logon (optional)
 
-1. Create `C:\sdc_time_tracker\start-sdc.cmd`:
+Use the PowerShell starter. It does not print the mail password.
 
-```bat
-@echo off
-cd /d C:\sdc_time_tracker
-uv run python run.py --no-ssl
+1. Copy `smtp.local.ps1.example` to `smtp.local.ps1` and put the Gmail app password in that file only.
+2. Start with:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\sdc_time_tracker\start-sdc.ps1
 ```
 
-2. Press **Win+R**, type `shell:startup`, press Enter.  
-3. Put a shortcut to `start-sdc.cmd` in that folder.  
-4. Log in as the kiosk Windows account at boot so the server starts.
+The window should say `Mail: on` and nothing else about the account.
 
-Or use **Task Scheduler**: trigger **At log on**, action **Start a program** → `C:\sdc_time_tracker\start-sdc.cmd`, set “Start in” to `C:\sdc_time_tracker`.
+`start-sdc.cmd` does the same if you prefer cmd. Its secrets go in `smtp.local.cmd`, copied from `smtp.local.cmd.example`. Do not leave `set SMTP_...` lines in the starter. With echo on, those lines print the password, and a password with spaces is easy to break.
+
+Shortcut: press **Win+R**, type `shell:startup`, and point the shortcut at the PowerShell command above. Log in as the kiosk account at boot.
+
+Task Scheduler: trigger **At log on**, program `powershell.exe`, arguments `-NoProfile -ExecutionPolicy Bypass -File C:\sdc_time_tracker\start-sdc.ps1`, start in `C:\sdc_time_tracker`.
 
 ---
 

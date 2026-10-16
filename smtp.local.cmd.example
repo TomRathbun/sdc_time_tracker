@@ -1,0 +1,9 @@
+@echo off
+REM Copy this file to smtp.local.cmd in the same folder.
+REM Quotes matter: an app password contains spaces.
+set "SMTP_HOST=smtp.gmail.com"
+set "SMTP_PORT=587"
+set "SMTP_USER=your-account@gmail.com"
+set "SMTP_PASSWORD=16-char-app-password"
+set "SMTP_FROM=your-account@gmail.com"
+set "SMTP_USE_TLS=true"

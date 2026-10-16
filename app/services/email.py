@@ -244,7 +244,7 @@ def send_test_email(to_email: str, person_name: str) -> tuple[bool, str]:
     if "@" not in to_email:
         return False, "Enter an email address first."
     if not EMAIL_ENABLED:
-        return False, "SMTP is not set. Restart the tracker from start-sdc.cmd so the Gmail settings load."
+        return False, "SMTP is not set. Restart from start-sdc.ps1 so the Gmail settings load."
     name = (person_name or "there").strip() or "there"
     subject = f"{APP_NAME} test email"
     text = (

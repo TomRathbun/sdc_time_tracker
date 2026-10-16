@@ -1,0 +1,8 @@
+# Copy this file to smtp.local.ps1 in the same folder.
+# smtp.local.ps1 is not committed. Do not put the password in start-sdc.ps1.
+$env:SMTP_HOST = "smtp.gmail.com"
+$env:SMTP_PORT = "587"
+$env:SMTP_USER = "your-account@gmail.com"
+$env:SMTP_PASSWORD = "16-char-app-password"
+$env:SMTP_FROM = "your-account@gmail.com"
+$env:SMTP_USE_TLS = "true"

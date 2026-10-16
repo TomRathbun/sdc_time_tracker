@@ -25,3 +25,5 @@ certs/
 
 dev_emails/
 go_live_pins.txt
+smtp.local.ps1
+smtp.local.cmd
