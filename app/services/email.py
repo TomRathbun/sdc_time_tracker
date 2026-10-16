@@ -123,7 +123,7 @@ def _get_checkout_greeting(name: str) -> str:
     return random.choice(_CHECKOUT_GREETINGS).format(name=name)
 
 
-def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None) -> bool:
+def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "") -> bool:
     """Send an email via SMTP. Returns True on success, False on failure.
     
     Supports CID image embedding and Plain Text fallbacks.
@@ -184,6 +184,9 @@ pre{{background:#0f172a;color:#cbd5e1;padding:20px;border-radius:12px;white-spac
         msg_root["Subject"] = subject
         msg_root["From"] = SMTP_FROM
         msg_root["To"] = to_email
+        if in_reply_to:
+            msg_root["In-Reply-To"] = in_reply_to
+            msg_root["References"] = in_reply_to
 
         # Alternative container (Text vs HTML)
         msg_alt = MIMEMultipart("alternative")

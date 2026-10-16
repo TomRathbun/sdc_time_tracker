@@ -98,16 +98,28 @@ def parse_checkout_reply(body: str) -> dict | None:
     }
 
 
-def _notify(employee: Employee, subject: str, text: str) -> None:
+def _notify(employee: Employee, subject: str, text: str, reply_message_id: str = "", reply_subject: str = "") -> bool:
     address = (employee.email or "").strip()
     if not address:
-        return
+        logger.error("Checkout mail not sent: %s has no email", employee.name)
+        return False
+    message_id = (reply_message_id or "").strip()
+    if message_id and not message_id.startswith("<"):
+        message_id = f"<{message_id.strip('<>')}>"
+    if message_id:
+        base = (reply_subject or subject).strip()
+        subject = base if base.lower().startswith("re:") else f"Re: {base}"
     html = (
         '<p style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;">'
         + "<br>".join(text.splitlines())
         + "</p>"
     )
-    _send_email(address, subject, html, text)
+    ok = _send_email(address, subject, html, text, in_reply_to=message_id)
+    if ok:
+        logger.info("Checkout reply mailed to %s: %s", address, subject)
+    else:
+        logger.error("Checkout reply was not mailed to %s", address)
+    return ok
 
 
 def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, now: datetime) -> str | None:
@@ -224,7 +236,9 @@ def process_checkout_replies(db: Session) -> int:
                 _notify(
                     employee,
                     f"Checked out at {when}",
-                    f"Checked out at {when}. Hours recorded: {hours}.",
+                    f"Accepted. You are checked out at {when}.\nHours recorded: {hours}.",
+                    reply_message_id=message.message_id or "",
+                    reply_subject=message.subject or "",
                 )
                 token.notified_uid = message.imap_uid
                 db.commit()
@@ -235,6 +249,8 @@ def process_checkout_replies(db: Session) -> int:
                 employee,
                 "Check-out reply was not recorded",
                 fail + "\n\nReply again with the same CODE. DECLARED TIME must stay within 15 minutes of the projected checkout.",
+                reply_message_id=message.message_id or "",
+                reply_subject=message.subject or "",
             )
             token.notified_uid = message.imap_uid
             db.commit()
