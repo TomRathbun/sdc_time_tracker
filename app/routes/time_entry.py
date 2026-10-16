@@ -246,9 +246,9 @@ async def checkin_submit(
 
     # Send check-in confirmation email (non-blocking, if enabled)
     from app.services.settings import get_bool_setting
-    if employee.email and get_bool_setting(db, "checkin_email_enabled") and not returning:
-        import threading
-        from app.services.email import send_checkin_email
+    mail_to = (employee.email or "").strip()
+    if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning:
+        from app.services.email import queue_checkin_email
         from app.models import LeaveRequest, LeaveStatus
 
         target = get_target_hours(today)
@@ -271,11 +271,7 @@ async def checkin_submit(
             for lv in leaves
         ]
 
-        threading.Thread(
-            target=send_checkin_email,
-            args=(employee, declared_time, expected_checkout, upcoming_leave),
-            daemon=True,
-        ).start()
+        queue_checkin_email(employee.name, mail_to, declared_time, expected_checkout, upcoming_leave)
 
     # Detect gap: was there a previous checkout today?
     # If so, offer to log the gap as remote site work

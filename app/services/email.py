@@ -5,6 +5,7 @@ import socket
 import ssl
 import logging
 import base64
+import threading
 from datetime import date, datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -409,6 +410,32 @@ Have a productive day!
         text,
         images
     )
+
+
+class _MailPerson:
+    """Plain name and address. A live database row must not be used from a thread."""
+
+    def __init__(self, name: str, email: str):
+        self.name = name
+        self.email = email
+
+
+def queue_checkin_email(name: str, email: str, checkin_time: datetime,
+                        checkout_time: datetime, upcoming_leave: list = None):
+    """Send the check-in note without touching the request's database session."""
+    person = _MailPerson(name or "", (email or "").strip())
+    if not person.email:
+        return
+
+    def _run():
+        try:
+            ok = send_checkin_email(person, checkin_time, checkout_time, upcoming_leave)
+            if not ok:
+                logger.error("Check-in email was not sent to %s", person.email)
+        except Exception:
+            logger.exception("Check-in email failed for %s", person.email)
+
+    threading.Thread(target=_run, daemon=True, name="checkin-email").start()
 
 
 def send_checkout_reminder(employee, checkout_time: datetime):

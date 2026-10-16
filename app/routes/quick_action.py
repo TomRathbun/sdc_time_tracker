@@ -1,5 +1,6 @@
 """Quick check-in / check-out routes — PIN-verified, no session required."""
 
+import logging
 import math
 from datetime import date, datetime, timedelta
 
@@ -34,6 +35,7 @@ from app.services.audit import log_action
 from app.services.settings import get_bool_setting
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 def round_down_5(dt: datetime) -> datetime:
@@ -294,11 +296,12 @@ async def quick_checkin(
         ip_address=request.client.host if request.client else "",
     )
 
-    # Morning check-in email only on the first punch of the day
+    # Morning check-in email only on the first punch of the day.
+    # Copy the address first. The mail thread must not use the database row.
     from app.services.settings import get_bool_setting
-    if emp.email and get_bool_setting(db, "checkin_email_enabled") and not returning:
-        import threading
-        from app.services.email import send_checkin_email
+    mail_to = (emp.email or "").strip()
+    if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning:
+        from app.services.email import queue_checkin_email
         from app.services.time_calc import get_target_hours
         from app.models import LeaveRequest, LeaveStatus
 
@@ -321,11 +324,9 @@ async def quick_checkin(
             for lv in leaves
         ]
 
-        threading.Thread(
-            target=send_checkin_email,
-            args=(emp, rounded_time, expected_checkout, upcoming_leave),
-            daemon=True,
-        ).start()
+        queue_checkin_email(emp.name, mail_to, rounded_time, expected_checkout, upcoming_leave)
+    elif not returning and not mail_to:
+        logger.info("Check-in mail skipped for %s: no email saved on that person", emp.name)
 
     if returning:
         msg = f"Returned at {rounded_time.strftime('%H:%M')} — check out when the extra work is done"
