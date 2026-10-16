@@ -473,8 +473,10 @@ def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_f
                             </div>
                             <div style="font-size:15px;color:#e2e8f0;text-align:left;">
                                 Reply to this email to check out. Leave the code unchanged.
-                                You may move DECLARED TIME by up to 15 minutes.
+                                DECLARED TIME is already the projected checkout.
+                                You may move it by up to 15 minutes.
                                 A larger change has to be done on the kiosk.
+                                The confirmation email can take up to 5 minutes.
                             </div>
                             <pre style="margin-top:20px;text-align:left;background:#020617;color:#f8fafc;padding:16px;border-radius:8px;font-size:14px;">{fields}</pre>
                         </td>
@@ -489,8 +491,10 @@ def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_f
 Projected checkout is {co_str}, about 15 minutes from now.
 
 Reply to this email to check out. Leave the code unchanged.
-You may move DECLARED TIME by up to 15 minutes.
+DECLARED TIME is already the projected checkout.
+You may move it by up to 15 minutes.
 A larger change has to be done on the kiosk.
+The confirmation email can take up to 5 minutes.
 
 {fields}
 

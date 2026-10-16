@@ -15,6 +15,7 @@ def _check_for_upcoming_checkouts():
     from app.services.time_calc import beod_offered_on, format_beod_length, projected_checkout_from_entries
     from app.services.email import send_checkout_reminder
     from app.services.email_checkout import cancel_checkout_token, issue_checkout_token
+    from app.services.time_state import STATUS_CHECKED_IN, current_status
     from app.config import EMAIL_ENABLED
     from app.services.settings import get_bool_setting
 
@@ -64,6 +65,8 @@ def _check_for_upcoming_checkouts():
                 elif entry.entry_type.value == "check_out":
                     open_checkin = None
             if open_checkin is None:
+                continue
+            if current_status(db, emp.id, today) != STATUS_CHECKED_IN:
                 continue
 
             token = issue_checkout_token(db, emp, open_checkin, expected)
