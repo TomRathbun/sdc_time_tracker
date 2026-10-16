@@ -11,7 +11,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 - **Past-day entry** — log or correct previous workdays (manager rules apply)
 - **Offsite / remote work** — dedicated offsite logging with gap detection
 - **Phone support hours** — additive hours that roll into FOSC totals. The login roster phone icon takes a PIN and a day (yesterday is the default, for a night call logged the next morning). It does not punch in or out.
-- **Checkout reply** — 15 minutes before the projected checkout, the employee gets one email with a one-time code and a declared time. Replying with those lines checks them out. The code works until noon the next day and only from that person's saved address. Turn the reminder off under Admin → Configuration.
+- **Checkout reply** — 15 minutes before the projected checkout, the employee gets one email with a one-time code and a declared time. Replying checks them out. The time can move up to 15 minutes either way. No reason is asked. A bigger change is done on the kiosk. The code works until noon the next day and only from that person's saved address.
 
 ### FOSC rules
 - **Paid lunch** inside the scheduled work window

@@ -15,7 +15,7 @@ FEATURE_DEFAULTS = {
     },
     "checkout_reminder_enabled": {
         "value": "true",
-        "description": "Email the employee 15 minutes before the projected checkout. The mail has a one-time code. Replying with that code and a declared time checks them out.",
+        "description": "Email the employee 15 minutes before the projected checkout. A reply with the one-time code checks them out. The declared time can move up to 15 minutes. No reason is asked.",
     },
     "onscreen_numpad_enabled": {
         "value": "false",

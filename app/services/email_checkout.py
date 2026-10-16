@@ -26,14 +26,12 @@ from app.services.time_calc import (
     remember_beod_pref,
     update_daily_summary,
 )
-from app.services.time_offset import needs_offset_approval, offset_approved_default
 from app.services.time_state import can_check_out
 
 logger = logging.getLogger(__name__)
 
 _CODE_RE = re.compile(r"(?im)^\s*CODE:\s*([A-Fa-f0-9]{8})\s*$")
 _TIME_RE = re.compile(r"(?im)^\s*DECLARED\s*TIME:\s*(\d{1,2}):(\d{2})\s*$")
-_REASON_RE = re.compile(r"(?im)^\s*REASON:\s*(.*?)\s*$")
 _BEOD_RE = re.compile(r"(?im)^\s*BEOD:\s*(yes|no)\s*$")
 _BEOD_LEN_RE = re.compile(r"(?im)^\s*BEOD\s*LENGTH:\s*(\S+)\s*$")
 
@@ -89,17 +87,12 @@ def parse_checkout_reply(body: str) -> dict | None:
     hour, minute = int(clock.group(1)), int(clock.group(2))
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         return {"code": code.group(1).upper(), "bad_time": True}
-    reason = ""
-    reason_match = _REASON_RE.search(body)
-    if reason_match:
-        reason = reason_match.group(1).strip()[:300]
     beod_match = _BEOD_RE.search(body)
     length_match = _BEOD_LEN_RE.search(body)
     return {
         "code": code.group(1).upper(),
         "hour": hour,
         "minute": minute,
-        "reason": reason,
         "beod": bool(beod_match and beod_match.group(1).lower() == "yes"),
         "beod_length": length_match.group(1) if length_match else "",
     }
@@ -123,11 +116,12 @@ def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, 
     state_err = can_check_out(db, employee.id, token.work_date, declared_time=declared)
     if state_err:
         return state_err
-    reason = (parsed.get("reason") or "").strip()
-    if needs_offset_approval(db, declared, now) and not reason:
+    shift = abs((declared - token.expected_time).total_seconds()) / 60
+    if shift > 15:
         return (
-            "That declared time is far from now. Reply again with the same code, "
-            "the time, and a REASON line."
+            "This reply only checks out within 15 minutes of "
+            f"{token.expected_time.strftime('%H:%M')}. "
+            "Use the kiosk for a larger change."
         )
 
     claim_beod = bool(parsed.get("beod")) and beod_offered_on(token.work_date)
@@ -138,8 +132,6 @@ def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, 
     comment = "Email check-out"
     if claim_beod:
         comment += f" + BEOD {format_beod_length(requested or 1)}"
-    if reason:
-        comment += f" — {reason}"
 
     entry = TimeEntry(
         employee_id=employee.id,
@@ -150,7 +142,7 @@ def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, 
         location_type=LocationType.office,
         is_remote=False,
         comments=comment,
-        offset_approved=offset_approved_default(db, declared, now),
+        offset_approved=True,
     )
     db.add(entry)
     db.commit()
@@ -242,7 +234,7 @@ def process_checkout_replies(db: Session) -> int:
             _notify(
                 employee,
                 "Check-out reply was not recorded",
-                fail + "\n\nReply again with the same CODE and a corrected DECLARED TIME.",
+                fail + "\n\nReply again with the same CODE. DECLARED TIME must stay within 15 minutes of the projected checkout.",
             )
             token.notified_uid = message.imap_uid
             db.commit()

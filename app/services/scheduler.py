@@ -70,7 +70,7 @@ def _check_for_upcoming_checkouts():
             if token is None:
                 continue
 
-            fields = f"CODE: {token.code}\nDECLARED TIME: {expected.strftime('%H:%M')}\nREASON:"
+            fields = f"CODE: {token.code}\nDECLARED TIME: {expected.strftime('%H:%M')}"
             if beod_offered_on(today):
                 claim = "yes" if emp.beod_pref_known and emp.beod_pref_claim else "no"
                 length = format_beod_length(emp.beod_pref_hours or 1)
