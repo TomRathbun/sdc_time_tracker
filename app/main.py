@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import APP_NAME, APP_VERSION
 from app.database import init_db
-from app.routes import auth, dashboard, time_entry, leave, admin, reports, quick_action, suggestions, inbox
+from app.routes import auth, dashboard, time_entry, leave, admin, reports, quick_action, suggestions, inbox, changes
 
 # Create a static directory if not exists
 Path("app/static/css").mkdir(parents=True, exist_ok=True)
@@ -29,6 +29,7 @@ app.include_router(reports.router)
 app.include_router(quick_action.router)
 app.include_router(suggestions.router)
 app.include_router(inbox.router)
+app.include_router(changes.router)
 
 
 @app.middleware("http")

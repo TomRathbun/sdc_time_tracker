@@ -14,6 +14,12 @@
                 id="btn-data-reset">
                 Data reset
             </a>
+            {% if employee.role.value == 'manager' %}
+            <a href="/admin/changes"
+                class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 hover:border-primary-500/30 hover:bg-primary-500/5 text-gray-300 hover:text-white text-sm font-medium transition-all">
+                Team email
+            </a>
+            {% endif %}
             <a href="/admin/config"
                 class="flex items-center gap-2 px-4 py-2 rounded-xl bg-surface-800/50 border border-white/5 hover:border-primary-500/30 hover:bg-primary-500/5 text-gray-300 hover:text-white text-sm font-medium transition-all"
                 id="btn-config">

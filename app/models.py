@@ -326,3 +326,17 @@ class CheckoutToken(Base):
     notified_uid = Column(Integer, nullable=True)
 
     employee = relationship("Employee")
+
+
+class FeatureChange(Base):
+    """A user-facing change a manager can email to the team."""
+    __tablename__ = "feature_changes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(80), nullable=False, unique=True, index=True)
+    title = Column(String(200), nullable=False)
+    summary = Column(Text, default="")
+    added_on = Column(Date, nullable=False)
+    audience = Column(String(200), nullable=False, default="employee")
+    emailed = Column(Boolean, default=False, nullable=False)
+    emailed_at = Column(DateTime, nullable=True)
