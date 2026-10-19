@@ -14,6 +14,7 @@ from app.models import (
     PhoneSupportEntry, Role, TimeEntry,
 )
 from app.services.email import _send_email
+from app.services.leave_sync import trim_week_leave
 from app.services.email_layout import render_email
 from app.services.settings import get_bool_setting, get_setting, parse_hhmm_setting, set_setting
 from app.services.time_calc import (
@@ -32,11 +33,11 @@ _WINDOW_MINUTES = 180
 _WEEKDAYS = (
     "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
 )
-_LEAVE_LABEL = {
-    LeaveType.vacation: "vacation",
-    LeaveType.sick: "sick",
-    LeaveType.covid_sick: "covid sick",
-    LeaveType.uae_holiday: "UAE holiday",
+_LEAVE_CODE = {
+    LeaveType.vacation: "V",
+    LeaveType.sick: "S",
+    LeaveType.covid_sick: "S",
+    LeaveType.uae_holiday: "H",
 }
 
 
@@ -115,14 +116,14 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
 
     beod = 0.0
     leave_h = 0.0
-    leave_label = ""
+    leave_code = ""
     if summary is not None:
         if summary.lunch_end_of_day and summary.lunch_approved and work >= BEOD_MINIMUM_HOURS:
             requested = resolve_beod_request(True, None, summary.beod_requested_hours)
             beod = requested if requested > 0 else BEOD_CREDIT_HOURS
         if summary.leave_approved and summary.leave_hours:
             leave_h = float(summary.leave_hours)
-            leave_label = _LEAVE_LABEL.get(summary.leave_type, "leave")
+            leave_code = _LEAVE_CODE.get(summary.leave_type, "L")
 
     total = round(work + beod + leave_h, 2)
     target = get_target_hours(work_date)
@@ -131,11 +132,11 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         notes.append("still checked in")
     if offsite_open:
         notes.append("offsite open")
-    if leave_h:
-        notes.append(f"{leave_label} {_hours(leave_h)}")
+    if leave_h and leave_code:
+        notes.append(f"{leave_code}({_hours(leave_h)})")
     if beod:
         notes.append(f"BEOD {_hours(beod)}")
-    if target and total + 0.01 < target and not still_in:
+    if target and total + 0.01 < target and not still_in and not leave_h:
         notes.append("short")
 
     return {
@@ -145,10 +146,28 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         "offsite": "; ".join(offsite_bits) if offsite_bits else "—",
         "phone": _hours(phone_h) if phone_h else "—",
         "hours": total,
+        "work_hours": round(work + beod, 2),
+        "leave_h": leave_h,
+        "leave_code": leave_code,
         "target": target,
         "notes": ", ".join(notes),
         "empty": not entries and not offsites and not phones and not leave_h,
     }
+
+
+def _week_cell(day: dict) -> str:
+    """A leave day reads V(9) or S(6.5). Work on that day is shown beside it."""
+    mark = ""
+    if day.get("leave_h") and day.get("leave_code"):
+        mark = f"{day['leave_code']}({_hours(day['leave_h'])})"
+    worked = float(day.get("work_hours") or 0)
+    if mark and worked <= 0.01:
+        return mark
+    if mark:
+        return f"{_hours(worked)} {mark}"
+    if day.get("empty"):
+        return "—"
+    return _hours(day["hours"])
 
 
 def _th(label: str) -> str:
@@ -232,7 +251,7 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
         grand_target += target
         cells = _td(name, bold=True)
         for day in days:
-            cells += _td("—" if day["empty"] else _hours(day["hours"]))
+            cells += _td(_week_cell(day))
         cells += _td(_hours(total), bold=True) + _td(_hours(target))
         body_rows.append(f'<tr style="background:{shade};">{cells}</tr>')
         text_lines.append(f"{name} — {_hours(total)} / {_hours(target)}")
@@ -240,10 +259,11 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
             if day["empty"]:
                 continue
             text_lines.append(
-                f"  {day['day_name'][:3]} in {day['in']}; out {day['out']}"
+                f"  {day['day_name'][:3]} {_week_cell(day)}"
+                + ("" if day["in"] in ("", "—") else f" in {day['in']}")
+                + ("" if day["out"] in ("", "—", "still in") else f"; out {day['out']}")
                 + ("" if day["offsite"] == "—" else f"; offsite {day['offsite']}")
                 + ("" if day["phone"] == "—" else f"; phone {day['phone']}")
-                + f"; {_hours(day['hours'])}"
             )
         text_lines.append("")
     foot = (
@@ -258,16 +278,12 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
         for day in days:
             if day["empty"]:
                 continue
-            extra = ""
-            if day["offsite"] != "—":
-                extra += f"; offsite {day['offsite']}"
-            if day["phone"] != "—":
-                extra += f"; phone {day['phone']}"
-            if day["notes"]:
-                extra += f"; {day['notes']}"
             lines.append(
-                f"{escape(day['day_name'][:3])} in {escape(day['in'])}; "
-                f"out {escape(day['out'])}{escape(extra)}; {_hours(day['hours'])}"
+                f"{escape(day['day_name'][:3])} {escape(_week_cell(day))}"
+                + ("" if day["in"] in ("", "—") else f" in {escape(day['in'])}")
+                + ("" if day["out"] in ("", "—", "still in") else f"; out {escape(day['out'])}")
+                + ("" if day["offsite"] == "—" else f"; offsite {escape(day['offsite'])}")
+                + ("" if day["phone"] == "—" else f"; phone {escape(day['phone'])}")
             )
         if lines:
             punch_html.append(
@@ -322,6 +338,7 @@ def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
         week_start = today - timedelta(days=today.weekday())
     people_days = []
     for person in _people(db):
+        trim_week_leave(db, person.id, week_start)
         days = []
         for offset in range(5):
             day = week_start + timedelta(days=offset)

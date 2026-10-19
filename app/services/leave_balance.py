@@ -60,11 +60,37 @@ def hours_for_workdays(start: date, end: date) -> float:
     return round(sum(get_target_hours(d) for d in iter_workdays(start, end)), 2)
 
 
+def _charged_day_hours(db: Session, employee_id: int, work_date: date, leave_type: LeaveType) -> float:
+    """Hours this leave day costs. A trimmed day is below the normal target."""
+    summary = (
+        db.query(DailySummary)
+        .filter(
+            DailySummary.employee_id == employee_id,
+            DailySummary.date == work_date,
+            DailySummary.leave_approved == True,  # noqa: E712
+        )
+        .first()
+    )
+    if summary and summary.leave_hours and _same_leave_type(summary.leave_type, leave_type):
+        return round(float(summary.leave_hours), 2)
+    return get_target_hours(work_date)
+
+
+def _same_leave_type(stored, expected: LeaveType) -> bool:
+    if stored is None:
+        return False
+    current = stored.value if isinstance(stored, LeaveType) else str(stored)
+    wanted = expected.value if isinstance(expected, LeaveType) else str(expected)
+    return current == wanted
+
+
 def _hours_for_requests(
+    db: Session,
+    employee_id: int,
     requests: list[LeaveRequest],
     year: int,
 ) -> tuple[float, set[date]]:
-    """Sum target hours of workdays in year. Each date counts once."""
+    """Sum charged hours of workdays in year. Each date counts once."""
     y_start, y_end = year_bounds(year)
     seen: set[date] = set()
     hours = 0.0
@@ -77,7 +103,7 @@ def _hours_for_requests(
             if d in seen:
                 continue
             seen.add(d)
-            hours += get_target_hours(d)
+            hours += _charged_day_hours(db, employee_id, d, req.leave_type)
     return round(hours, 2), seen
 
 
@@ -125,8 +151,8 @@ def _bucket_balance(
     types: list[LeaveType],
 ) -> dict:
     entitlement = entitlement_hours(days)
-    used_req, covered_used = _hours_for_requests(approved, year)
-    pending_req, covered_pending = _hours_for_requests(pending, year)
+    used_req, covered_used = _hours_for_requests(db, employee.id, approved, year)
+    pending_req, covered_pending = _hours_for_requests(db, employee.id, pending, year)
     covered = covered_used | covered_pending
     used = round(used_req + _partial_hours(
         db, employee.id, year, types, covered, approved=True,
