@@ -142,6 +142,16 @@ FEATURE_CATALOG = (
             "Import TEMPO on Reports first if that column should be filled in."
         ),
     },
+    {
+        "slug": "manager-add-beod",
+        "title": "Manager can put BEOD back",
+        "added_on": date(2026, 10, 19),
+        "audience": "manager,supervisor",
+        "summary": (
+            "On the timesheet, a Monday–Thursday day that has time but no BEOD shows + BEOD. "
+            "That puts the employee's usual length back and counts it, as long as the day has at least 6 hours of work."
+        ),
+    },
 )
 
 

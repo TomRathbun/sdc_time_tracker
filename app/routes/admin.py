@@ -16,7 +16,12 @@ from app.models import (
 )
 from app.services.audit import log_action
 from app.services.time_calc import (
-    get_target_hours, update_daily_summary, format_beod_length,
+    BEOD_CREDIT_HOURS,
+    beod_offered_on,
+    format_beod_length,
+    get_target_hours,
+    normalize_beod_length,
+    update_daily_summary,
 )
 from app.services.time_offset import reject_time_offset
 from app.services.leave_sync import apply_leave_approval
@@ -565,6 +570,12 @@ async def team_timesheet(
                 "is_leave": is_leave_approved,
                 "lunch_pending": lunch_pending,
                 "lunch_approved": lunch_approved_flag,
+                "can_add_beod": (
+                    beod_offered_on(d)
+                    and d <= today
+                    and not (s and s.lunch_end_of_day)
+                    and (bool(check_ins) or worked > 0)
+                ),
                 "summary_id": s.id if s else None,
                 "leave_request_id": l_req.id if is_leave_pending else None,
                 "clock_hours": s.clock_hours if s else 0.0,
@@ -780,6 +791,54 @@ async def approve_lunch(
     ).start()
 
     return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.post("/admin/set-beod", response_class=HTMLResponse)
+async def set_beod(
+    request: Request,
+    employee_id: int = Form(...),
+    work_date: str = Form(...),
+    week: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Manager adds an approved BEOD claim on a day that lost it."""
+    actor = get_current_employee(request, db)
+    if not actor or actor.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    back = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
+    try:
+        day = date.fromisoformat(work_date)
+    except ValueError:
+        return RedirectResponse(url=back, status_code=303)
+    if not beod_offered_on(day) or day > date.today():
+        return RedirectResponse(url=back, status_code=303)
+
+    person = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not person:
+        return RedirectResponse(url=back, status_code=303)
+
+    hours = BEOD_CREDIT_HOURS
+    if getattr(person, "beod_pref_known", False) and person.beod_pref_hours:
+        hours = normalize_beod_length(person.beod_pref_hours)
+
+    updated = update_daily_summary(
+        db, person.id, day,
+        lunch_end_of_day=True,
+        lunch_approved=True,
+        beod_requested_hours=hours,
+    )
+    log_action(
+        db, action="set_beod", entity_type="DailySummary",
+        entity_id=updated.id, employee_id=actor.id,
+        new_values={
+            "target_employee": person.id,
+            "date": str(day),
+            "beod_hours": updated.beod_hours,
+        },
+        ip_address=request.client.host if request.client else "",
+    )
+    return RedirectResponse(url=back, status_code=303)
 
 
 @router.post("/admin/approve-pto", response_class=HTMLResponse)

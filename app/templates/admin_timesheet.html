@@ -280,6 +280,19 @@
                                 </form>
                                 {% endif %}
 
+                                {% if not viewer_is_customer and cell.can_add_beod %}
+                                <form method="POST" action="/admin/set-beod" class="mt-1">
+                                    <input type="hidden" name="employee_id" value="{{ row.employee.id }}">
+                                    <input type="hidden" name="work_date" value="{{ cell.date.isoformat() }}">
+                                    <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+                                    <button type="submit"
+                                        class="w-full px-1 py-0.5 rounded text-[10px] font-semibold bg-primary-500/15 text-primary-300 hover:bg-primary-500/30 border border-primary-500/20"
+                                        title="Put BEOD back on this day">
+                                        + BEOD
+                                    </button>
+                                </form>
+                                {% endif %}
+
                                 {% if cell.pto_pending %}
                                 <div class="text-[10px] text-amber-300 text-center mt-0.5">
                                     {{ cell.leave_type_label or "Leave" }}
