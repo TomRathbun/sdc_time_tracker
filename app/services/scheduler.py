@@ -13,6 +13,7 @@ def _check_for_upcoming_checkouts():
     from app.database import SessionLocal
     from app.models import DailySummary, Employee, Role, TimeEntry
     from app.services.time_calc import (
+        BEOD_CREDIT_HOURS, BEOD_MINIMUM_HOURS,
         beod_offered_on, format_beod_length, friday_required_hours,
         projected_checkout_from_entries,
     )
@@ -50,9 +51,24 @@ def _check_for_upcoming_checkouts():
                 DailySummary.date == today,
             ).first()
             beod_claimed = bool(summary and summary.lunch_end_of_day)
+            if beod_claimed:
+                credit = float(summary.beod_requested_hours or BEOD_CREDIT_HOURS)
+            elif (
+                beod_offered_on(today)
+                and getattr(emp, "beod_pref_known", False)
+                and emp.beod_pref_claim
+            ):
+                # Quick check-in does not tick the box. Use the saved routine
+                # so the mail arrives 15 minutes before the usual leave time.
+                beod_claimed = True
+                credit = float(emp.beod_pref_hours or BEOD_CREDIT_HOURS)
+            else:
+                credit = 0.0
             required = friday_required_hours(db, emp.id, today)
+            if credit > 0 and required - credit >= BEOD_MINIMUM_HOURS:
+                required = round(required - credit, 2)
             projected = projected_checkout_from_entries(
-                entries, today, beod_claimed=beod_claimed,
+                entries, today, beod_claimed=False,
                 required_hours=required,
             )
             expected = projected.standard if projected else None
@@ -60,7 +76,9 @@ def _check_for_upcoming_checkouts():
                 continue
 
             minutes_until = (expected - now).total_seconds() / 60
-            if not (0 < minutes_until <= 15):
+            # The 15 minutes before leave, plus a short catch-up if the
+            # tracker was restarted just after that time.
+            if not (-30 < minutes_until <= 15):
                 continue
 
             open_checkin = None
