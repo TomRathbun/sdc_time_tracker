@@ -295,14 +295,9 @@ async def my_time_report(
         off_h = round(calculate_offsite_hours(day_off), 2)
         phone_h = round(calculate_phone_hours(day_phone), 2)
         beod = float(summary.beod_hours or 0) if summary else 0.0
-        # Past days use the stored FOSC total so approvals match the timesheet.
-        if summary and d != today:
-            clock = float(summary.clock_hours or 0)
-            off_h = float(summary.offsite_hours or 0)
-            phone_h = float(summary.phone_hours or 0)
-            fosc = float(summary.total_hours or 0)
-        else:
-            fosc = round(clock + off_h + phone_h + beod, 2)
+        # Hours come from the punches on the page, including a past day that was
+        # edited after the stored summary was written.
+        fosc = round(clock + off_h + phone_h + beod, 2)
 
         leave_h = float(summary.leave_hours or 0) if summary else 0.0
         leave_ok = bool(summary and summary.leave_approved and leave_h)
@@ -353,7 +348,7 @@ async def my_time_report(
             url += f"&employee_id={emp_id}"
         return url
 
-    return templates.TemplateResponse("my_time.html", {
+    response = templates.TemplateResponse("my_time.html", {
         "request": request,
         "employee": viewer,
         "subject": subject,
@@ -368,3 +363,5 @@ async def my_time_report(
         "next_url": _href(next_week, subject.id),
         "week_compliant": totals["effective"] + 0.01 >= totals["target"],
     })
+    response.headers["Cache-Control"] = "no-store"
+    return response
