@@ -120,6 +120,17 @@ FEATURE_CATALOG = (
             "Anything else is fixed on the dashboard. A confirmation is sent either way."
         ),
     },
+    {
+        "slug": "remove-full-leave",
+        "title": "Remove a full day of leave",
+        "added_on": date(2026, 10, 19),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "Leave shows a Remove button on your own requests. "
+            "That clears a full day that should have been a partial day. "
+            "Enter the partial hours under Partial PTO. A manager can remove an approved request from Leave approvals."
+        ),
+    },
 )
 
 

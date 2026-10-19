@@ -189,6 +189,7 @@
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Period</th>
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Status</th>
                         <th class="text-left py-3 px-3 text-gray-400 font-medium">Submitted</th>
+                        <th class="text-right py-3 px-3 text-gray-400 font-medium"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -205,9 +206,18 @@
                                 {% elif req.status.value == 'rejected' %}bg-danger-500/10 text-danger-400
                                 {% else %}bg-warning-500/10 text-warning-400{% endif %}">
                                 {{ req.status.value.title() }}
+                                {% if 'Withdrawn' in (req.comments or '') %} · removed{% endif %}
                             </span>
                         </td>
                         <td class="py-3 px-3 text-gray-500 text-xs">{{ req.created_at.strftime("%Y-%m-%d") }}</td>
+                        <td class="py-3 px-3 text-right">
+                            {% if req.status.value != 'rejected' %}
+                            <form method="POST" action="/leave/{{ req.id }}/remove" class="inline">
+                                <input type="hidden" name="next_page" value="/leave">
+                                <button type="submit" class="text-xs text-danger-300 hover:text-white">Remove</button>
+                            </form>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

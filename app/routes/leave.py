@@ -52,7 +52,11 @@ async def leave_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     return templates.TemplateResponse(
-        "leave.html", _leave_page_context(request, db, employee)
+        "leave.html",
+        _leave_page_context(
+            request, db, employee,
+            success=request.query_params.get("ok") or None,
+        ),
     )
 
 
@@ -285,3 +289,45 @@ async def reject_leave(
         )
 
     return RedirectResponse(url="/leave/approvals?ok=rejected", status_code=303)
+
+
+@router.post("/leave/{leave_id}/remove")
+async def remove_leave(
+    leave_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    next_page: str = Form("/leave"),
+):
+    """Take an approved or pending full-day leave back off the timesheet."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    leave = db.query(LeaveRequest).filter(LeaveRequest.id == leave_id).first()
+    allowed = next_page if next_page in ("/leave", "/leave/approvals") else "/leave"
+    if not leave or leave.status == LeaveStatus.rejected:
+        return RedirectResponse(url=allowed, status_code=303)
+    is_owner = leave.employee_id == employee.id
+    is_manager = employee.role in (Role.manager, Role.supervisor)
+    if not is_owner and not is_manager:
+        return RedirectResponse(url="/leave", status_code=303)
+
+    old_status = leave.status.value
+    leave.status = LeaveStatus.rejected
+    note = "Withdrawn so a partial day can be entered."
+    leave.comments = f"{(leave.comments or '').strip()}\n{note}".strip()
+    db.commit()
+    clear_full_day_leave_for_request(db, leave)
+    log_action(
+        db, action="remove_leave", entity_type="LeaveRequest",
+        entity_id=leave.id, employee_id=employee.id,
+        old_values={"status": old_status},
+        new_values={"status": "removed", "dates": f"{leave.start_date} to {leave.end_date}"},
+        ip_address=request.client.host if request.client else "",
+    )
+    if allowed == "/leave/approvals":
+        return RedirectResponse(url="/leave/approvals?ok=removed", status_code=303)
+    return RedirectResponse(
+        url="/leave?ok=Full+day+removed.+Enter+the+partial+hours+under+Partial+PTO.",
+        status_code=303,
+    )
