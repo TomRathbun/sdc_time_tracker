@@ -138,13 +138,15 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
     work = round(clock + offsite_h + phone_h, 2)
 
     beod = 0.0
+    beod_pending = False
     leave_h = 0.0
     leave_code = ""
     leave_pending = False
     if summary is not None:
-        if summary.lunch_end_of_day and summary.lunch_approved and work >= BEOD_MINIMUM_HOURS:
+        if summary.lunch_end_of_day and work >= BEOD_MINIMUM_HOURS:
             requested = resolve_beod_request(True, None, summary.beod_requested_hours)
             beod = requested if requested > 0 else BEOD_CREDIT_HOURS
+            beod_pending = not bool(summary.lunch_approved)
         if summary.leave_hours:
             leave_h = float(summary.leave_hours)
             leave_code = _leave_code_for(summary.leave_type)
@@ -156,6 +158,7 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
             leave_code = _leave_code_for(pending.leave_type)
             leave_pending = True
 
+    time_pending = any(not bool(getattr(entry, "offset_approved", True)) for entry in entries)
     total = round(work + beod + leave_h, 2)
     target = get_target_hours(work_date)
     notes = []
@@ -169,7 +172,12 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
             note += " pending"
         notes.append(note)
     if beod:
-        notes.append(f"BEOD {_hours(beod)}")
+        note = f"BEOD {_hours(beod)}"
+        if beod_pending:
+            note += " pending"
+        notes.append(note)
+    if time_pending:
+        notes.append("time pending")
     if target and total + 0.01 < target and not still_in and not leave_h:
         notes.append("short")
 
@@ -184,6 +192,8 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         "leave_h": leave_h,
         "leave_code": leave_code,
         "leave_pending": leave_pending,
+        "time_pending": time_pending,
+        "beod_pending": beod_pending,
         "target": target,
         "notes": ", ".join(notes),
         "empty": not entries and not offsites and not phones and not leave_h,
@@ -199,12 +209,18 @@ def _week_cell(day: dict) -> str:
             mark += " pending"
     worked = float(day.get("work_hours") or 0)
     if mark and worked <= 0.01:
-        return mark
-    if mark:
-        return f"{_hours(worked)} {mark}"
-    if day.get("empty"):
-        return "—"
-    return _hours(day["hours"])
+        text = mark
+    elif mark:
+        text = f"{_hours(worked)} {mark}"
+    elif day.get("empty"):
+        text = "—"
+    else:
+        text = _hours(day["hours"])
+    if day.get("time_pending") and text != "—":
+        text += " time pending"
+    if day.get("beod_pending") and text != "—":
+        text += " BEOD pending"
+    return text
 
 
 def _th(label: str) -> str:

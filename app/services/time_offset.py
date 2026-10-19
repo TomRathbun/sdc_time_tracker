@@ -90,9 +90,21 @@ def resolve_offset_comment(
 
 
 def reject_time_offset(entry) -> dict:
-    """Disapprove a variance: declared time reverts to the actual submission time."""
+    """Disapprove a variance: declared time reverts to the actual submission time.
+
+    A past-day entry has no original punch. Rejecting it must not move the
+    clock onto the day the form was filled in. The hours stay until someone
+    edits that day.
+    """
     old_declared = entry.declared_time
     actual = entry.submission_time
+    if actual is not None and getattr(entry, "date", None) and actual.date() != entry.date:
+        return {
+            "entry_id": entry.id,
+            "old_declared": str(old_declared),
+            "new_declared": str(old_declared),
+            "kept": True,
+        }
     entry.declared_time = actual
     entry.offset_approved = True
     return {

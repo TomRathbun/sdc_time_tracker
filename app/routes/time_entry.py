@@ -1092,7 +1092,7 @@ async def past_day_submit(
         location_type=LocationType.office,
         is_remote=False,
         comments=comments or f"Past day entry ({selected_date})",
-        offset_approved=True,
+        offset_approved=False,
     )
     db.add(ci)
 
@@ -1106,7 +1106,7 @@ async def past_day_submit(
         location_type=LocationType.office,
         is_remote=False,
         comments=comments or f"Past day entry ({selected_date})",
-        offset_approved=True,
+        offset_approved=False,
     )
     db.add(co)
 
@@ -1259,7 +1259,7 @@ async def past_day_extra_session(
         location_type=LocationType.office,
         is_remote=False,
         comments=f"{RETURN_CHECKIN_COMMENT} — {note}",
-        offset_approved=True,
+        offset_approved=False,
     )
     extra_co = TimeEntry(
         employee_id=employee.id,
@@ -1270,7 +1270,7 @@ async def past_day_extra_session(
         location_type=LocationType.office,
         is_remote=False,
         comments=f"{RECHECKOUT_COMMENT} — {note}",
-        offset_approved=True,
+        offset_approved=False,
     )
     db.add(return_ci)
     db.add(extra_co)
