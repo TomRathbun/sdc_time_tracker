@@ -288,5 +288,22 @@ def _run_migrations():
             cursor.execute("PRAGMA foreign_keys=ON")
             print("✅ Migration: Offsite end can stay open until check-in")
 
+    if "daily_summaries" in {
+        row[0] for row in cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }:
+        # Friday's recorded target is always 4h. Extra weekday hours move
+        # the leave time only; an earlier build had written that credit here.
+        cursor.execute(
+            """
+            UPDATE daily_summaries
+            SET target_hours = 4
+            WHERE strftime('%w', date) = '5' AND target_hours != 4
+            """
+        )
+        if cursor.rowcount:
+            print(f"✅ Migration: Restored Friday target on {cursor.rowcount} day(s)")
+
     conn.commit()
     conn.close()

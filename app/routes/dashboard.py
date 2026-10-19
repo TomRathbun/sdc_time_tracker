@@ -86,13 +86,13 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         else:
             status = "checked_out"
 
-    target_hours = friday_required_hours(db, employee.id, today)
-    is_workday = get_target_hours(today) > 0
+    target_hours = get_target_hours(today)
+    is_workday = target_hours > 0
     projected = projected_checkout_from_entries(
         todays_entries,
         today,
         beod_claimed=bool(daily_summary and daily_summary.lunch_end_of_day),
-        required_hours=target_hours,
+        required_hours=friday_required_hours(db, employee.id, today),
     ) if status == "checked_in" else None
     projected_checkout = projected.standard if projected else None
     projected_checkout_beod = projected.beod if projected else None

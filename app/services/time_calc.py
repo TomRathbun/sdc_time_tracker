@@ -32,11 +32,11 @@ class ProjectedCheckout(NamedTuple):
 
 
 def friday_required_hours(db: Session, employee_id: int, work_date: date) -> float:
-    """Hours still required on this date before someone may leave.
+    """Hours this person may count toward leaving early on Friday.
 
-    Monday–Thursday stay at 9. Friday starts at 4 and drops by any hours
-    worked above the Monday–Thursday target of 36. Approved leave is not
-    extra time. The result is never below 0 and never above the normal day.
+    This does not change the recorded target. Monday–Thursday stay at 9.
+    Friday starts at 4 and drops by hours worked above the Monday–Thursday
+    target of 36. Approved leave is not extra time. Never below 0.
     """
     base = get_target_hours(work_date)
     if work_date.weekday() != 4 or base <= 0:
@@ -325,7 +325,7 @@ def update_daily_summary(
     phone_hours = calculate_phone_hours(phone_entries)
     # Work hours that count toward the BEOD 6h floor (not leave)
     work_hours = round(clock_hours + offsite_hours + phone_hours, 2)
-    target_hours = friday_required_hours(db, employee_id, work_date)
+    target_hours = get_target_hours(work_date)
 
     summary = db.query(DailySummary).filter(
         DailySummary.employee_id == employee_id,

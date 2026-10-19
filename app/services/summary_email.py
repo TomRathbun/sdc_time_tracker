@@ -21,7 +21,7 @@ from app.services.time_calc import (
     calculate_clock_hours,
     calculate_offsite_hours,
     calculate_phone_hours,
-    friday_required_hours,
+    get_target_hours,
     resolve_beod_request,
 )
 
@@ -125,7 +125,7 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
             leave_label = _LEAVE_LABEL.get(summary.leave_type, "leave")
 
     total = round(work + beod + leave_h, 2)
-    target = friday_required_hours(db, employee.id, work_date)
+    target = get_target_hours(work_date)
     notes = []
     if still_in:
         notes.append("still checked in")

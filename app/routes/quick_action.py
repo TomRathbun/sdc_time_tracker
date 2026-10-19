@@ -404,7 +404,7 @@ def _checkout_preview_payload(db: Session, emp_id: int, checkout_time: datetime 
     offsite_h = calculate_offsite_hours(offsites)
     phone_h = calculate_phone_hours(phones)
     work = round(clock + offsite_h + phone_h, 2)
-    target = friday_required_hours(db, emp_id, today)
+    target = get_target_hours(today)
     beod_eligible = work >= BEOD_MINIMUM_HOURS
     beod_offered = beod_offered_on(today)
     beod_blanket = get_bool_setting(db, "beod_blanket_approval")
