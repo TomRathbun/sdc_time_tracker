@@ -65,7 +65,6 @@ def _pending_request(db: Session, employee_id: int, work_date: date) -> LeaveReq
         )
         .first()
     )
-    return value.strftime("%H:%M") if value else "—"
 
 
 def _hours(value: float) -> str:
@@ -405,6 +404,112 @@ def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
         f"{(week_start + timedelta(days=4)).strftime('%d %b')}"
     )
     return _deliver(db, subject, html, text)
+
+
+def send_reconciliation(db: Session, through: date, weeks: int) -> tuple[bool, str]:
+    """Email managers one or more finished weeks, with Lockheed TEMPO beside SDC."""
+    from app.models import TempoWeekly
+
+    count = max(1, min(int(weeks or 1), 8))
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    last_done = this_monday if today.weekday() > 4 else this_monday - timedelta(days=7)
+    end = through - timedelta(days=through.weekday())
+    if end > last_done:
+        end = last_done
+    starts = [end - timedelta(days=7 * (count - 1 - i)) for i in range(count)]
+
+    tempo_rows = (
+        db.query(TempoWeekly)
+        .filter(TempoWeekly.week_start >= starts[0], TempoWeekly.week_start <= end)
+        .all()
+    )
+    tempo = {(row.employee_id, row.week_start): float(row.hours or 0) for row in tempo_rows}
+
+    html_parts = []
+    text_parts = ["SDC time for Lockheed reconciliation", ""]
+    missing_tempo = False
+    for week_start in starts:
+        people_days = []
+        for person in _people(db):
+            trim_week_leave(db, person.id, week_start)
+            days = []
+            for offset in range(5):
+                day = week_start + timedelta(days=offset)
+                facts = _day_facts(db, person, day)
+                facts["day_name"] = day.strftime("%A")
+                days.append(facts)
+            people_days.append((person, days))
+        block_html, block_text, absent = _reconcile_week(people_days, week_start, tempo)
+        if absent:
+            missing_tempo = True
+        html_parts.append(block_html)
+        text_parts.append(block_text)
+        text_parts.append("")
+
+    note = "SDC hours include pending leave and unapproved punches. "
+    if missing_tempo:
+        note += "A blank TEMPO cell means that week has not been imported yet."
+    else:
+        note += "Diff is SDC minus Lockheed TEMPO. A negative diff is a shortfall."
+    html = render_email(
+        "Lockheed reconciliation",
+        "".join(html_parts) + f'<p style="margin:16px 0 0;font-size:12px;color:#64748b;">{escape(note)}</p>',
+        kicker=f"{starts[0].strftime('%d %b')} – {(end + timedelta(days=4)).strftime('%d %b %Y')}",
+    )
+    subject = (
+        f"SDC reconcile — {starts[0].strftime('%d %b')} to "
+        f"{(end + timedelta(days=4)).strftime('%d %b')}"
+    )
+    if not _managers(db):
+        return False, "No manager has an email address."
+    if not EMAIL_ENABLED:
+        return False, "SMTP is not configured."
+    if not _deliver(db, subject, html, "\n".join(text_parts)):
+        return False, "The email was not sent. A manager needs an email address, and SMTP has to be on."
+    span = f"{starts[0].strftime('%d %b')} – {(end + timedelta(days=4)).strftime('%d %b')}"
+    return True, f"Sent {count} week(s), {span}, to the managers."
+
+
+def _reconcile_week(people_days, week_start: date, tempo: dict) -> tuple[str, str, bool]:
+    week_end = week_start + timedelta(days=4)
+    title = f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}"
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+    head = (
+        _th("Name") + "".join(_th(name) for name in day_names)
+        + _th("SDC") + _th("Target") + _th("TEMPO") + _th("Diff")
+    )
+    body_rows = []
+    text_lines = [title]
+    absent = False
+    for index, (person, days) in enumerate(people_days):
+        shade = "#1e293b" if index % 2 else "#0f172a"
+        total = round(sum(day["hours"] for day in days), 2)
+        target = round(sum(day["target"] for day in days), 2)
+        charged = tempo.get((person.id, week_start))
+        if charged is None:
+            absent = True
+            tempo_cell = "—"
+            diff_cell = "—"
+            diff_text = "TEMPO not imported"
+        else:
+            diff = round(total - charged, 2)
+            tempo_cell = _hours(charged)
+            diff_cell = _hours(diff)
+            diff_text = f"TEMPO {tempo_cell} diff {diff_cell}"
+        cells = _td(person.name, bold=True)
+        for day in days:
+            cells += _td(_week_cell(day))
+        cells += _td(_hours(total), bold=True) + _td(_hours(target))
+        cells += _td(tempo_cell) + _td(diff_cell)
+        body_rows.append(f'<tr style="background:{shade};">{cells}</tr>')
+        text_lines.append(f"{person.name} — SDC {_hours(total)} / {_hours(target)} · {diff_text}")
+    html = (
+        f'<p style="margin:18px 0 8px;color:#f8fafc;font-size:14px;"><strong>{escape(title)}</strong></p>'
+        '<table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:13px;">'
+        f"<tr>{head}</tr>{''.join(body_rows)}</table>"
+    )
+    return html, "\n".join(text_lines), absent
 
 
 def _is_due(now: datetime, hhmm: str, last_sent: str) -> bool:

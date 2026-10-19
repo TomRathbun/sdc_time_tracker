@@ -68,6 +68,41 @@
         <a href="/reports/tempo" class="btn-secondary px-5 whitespace-nowrap">Enter / import TEMPO hours</a>
     </div>
 
+    <div class="glass-card p-6 mb-6 border border-white/5">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+            <div>
+                <h2 class="text-base font-semibold text-white">Email weeks to managers</h2>
+                <p class="text-xs text-gray-500 mt-1 max-w-xl">
+                    Sends the previous week, or several weeks, for Lockheed reconciliation.
+                    Each person shows SDC hours, the 40-hour target, imported TEMPO hours, and the difference.
+                    Import TEMPO first if you want that column filled in.
+                </p>
+            </div>
+            <form method="POST" action="/reports/email-weeks" class="flex flex-wrap items-end gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1" for="reconcile-week">Through week</label>
+                    <input type="date" id="reconcile-week" name="week" value="{{ prev_week|default('', true) }}"
+                        class="form-input font-mono text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1" for="reconcile-count">Weeks</label>
+                    <select id="reconcile-count" name="weeks" class="form-select text-sm w-28">
+                        {% for n in [1, 2, 3, 4, 6, 8] %}
+                        <option value="{{ n }}" {% if n == 1 %}selected{% endif %}>{{ n }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary px-6 whitespace-nowrap">Email managers</button>
+            </form>
+        </div>
+        {% if request.query_params.get('emailed') %}
+        <p class="mt-4 text-sm text-success-300">{{ request.query_params.get('emailed') }}</p>
+        {% endif %}
+        {% if request.query_params.get('email_err') %}
+        <p class="mt-4 text-sm text-danger-300">{{ request.query_params.get('email_err') }}</p>
+        {% endif %}
+    </div>
+
     <!-- FOSC quarterly (primary) -->
     <div class="glass-card p-6 mb-6 border border-primary-500/20">
         <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">

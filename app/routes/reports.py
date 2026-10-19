@@ -47,7 +47,38 @@ async def reports_page(request: Request, db: Session = Depends(get_db)):
         "fosc_week_start": week_start.isoformat(),
         "fosc_year": today.year,
         "fosc_quarter": current_quarter,
+        "prev_week": (_monday(date.today()) - timedelta(days=7)).isoformat(),
     })
+
+
+@router.post("/reports/email-weeks")
+async def email_weeks_to_managers(
+    request: Request,
+    week: str = Form(""),
+    weeks: int = Form(1),
+    db: Session = Depends(get_db),
+):
+    """Email one or more finished weeks to every manager."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        through = _monday(date.fromisoformat(week)) if week else _monday(date.today()) - timedelta(days=7)
+    except ValueError:
+        through = _monday(date.today()) - timedelta(days=7)
+
+    from app.services.summary_email import send_reconciliation
+    ok, note = send_reconciliation(db, through, weeks)
+    log_action(
+        db, action="email_reconciliation", entity_type="Report",
+        entity_id=None, employee_id=employee.id,
+        new_values={"week": through.isoformat(), "weeks": weeks, "ok": ok, "note": note},
+        ip_address=request.client.host if request.client else "",
+    )
+    from urllib.parse import quote
+    key = "emailed" if ok else "email_err"
+    return RedirectResponse(url=f"/reports?{key}={quote(note)}", status_code=303)
 
 
 @router.get("/reports/export/fosc-weekly")

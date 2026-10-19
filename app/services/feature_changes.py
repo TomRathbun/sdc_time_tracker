@@ -131,6 +131,17 @@ FEATURE_CATALOG = (
             "Enter the partial hours under Partial PTO. A manager can remove an approved request from Leave approvals."
         ),
     },
+    {
+        "slug": "reconcile-email",
+        "title": "Email weeks for Lockheed reconciliation",
+        "added_on": date(2026, 10, 19),
+        "audience": "manager,supervisor",
+        "summary": (
+            "Reports can email the previous week, or several weeks, to every manager. "
+            "The mail shows SDC hours, the target, Lockheed TEMPO hours, and the difference. "
+            "Import TEMPO on Reports first if that column should be filled in."
+        ),
+    },
 )
 
 
