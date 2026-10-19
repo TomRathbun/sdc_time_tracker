@@ -130,6 +130,19 @@ def _scheduler_loop():
                 db.close()
         except Exception as e:
             logger.error(f"Summary email error: {e}")
+        try:
+            from app.database import SessionLocal
+            from app.services.missed_entry import remind_missed_entries
+
+            db = SessionLocal()
+            try:
+                sent = remind_missed_entries(db)
+                if sent:
+                    logger.info("Missed-entry reminders sent: %s", sent)
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Missed-entry reminder error: {e}")
         time.sleep(60)
 
 

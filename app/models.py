@@ -328,6 +328,24 @@ class CheckoutToken(Base):
     employee = relationship("Employee")
 
 
+class MissedEntryToken(Base):
+    """One-time code for an end-of-day reminder. A reply records the simple fix."""
+    __tablename__ = "missed_entry_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    work_date = Column(Date, nullable=False, index=True)
+    kind = Column(String(20), nullable=False)  # absent | checkout
+    code = Column(String(16), nullable=False, unique=True, index=True)
+    checkin_entry_id = Column(Integer, ForeignKey("time_entries.id"), nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    notified_uid = Column(Integer, nullable=True)
+
+    employee = relationship("Employee")
+
+
 class FeatureChange(Base):
     """A user-facing change a manager can email to the team."""
     __tablename__ = "feature_changes"

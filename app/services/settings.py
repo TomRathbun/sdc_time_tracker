@@ -17,6 +17,14 @@ FEATURE_DEFAULTS = {
         "value": "true",
         "description": "Email the employee 15 minutes before the projected checkout. A reply with the one-time code checks them out. The declared time can move up to 15 minutes. No reason is asked.",
     },
+    "missed_entry_enabled": {
+        "value": "true",
+        "description": "At the end of the day, email anyone who never punched in, or who is still checked in. A reply can record leave or a checkout. Anything else is fixed on the dashboard.",
+    },
+    "missed_entry_time": {
+        "value": "1730",
+        "description": "Time of day to send the missed-entry reminder (kiosk clock). Sent once, if the tracker is on within 3 hours after this time.",
+    },
     "onscreen_numpad_enabled": {
         "value": "false",
         "description": "Show on-screen number pad for PIN entry (touchscreen mode)",

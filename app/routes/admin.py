@@ -927,6 +927,7 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
                 "login_surface_checked_in_after_friday",
                 "summary_daily_time",
                 "summary_weekly_time",
+                "missed_entry_time",
             ):
                 from app.services.settings import format_hhmm_setting
                 value = format_hhmm_setting(str(value or ""))

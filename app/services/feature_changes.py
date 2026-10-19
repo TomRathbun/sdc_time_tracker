@@ -108,6 +108,18 @@ FEATURE_CATALOG = (
             "cancels a long one. Approved leave does not count as extra time."
         ),
     },
+    {
+        "slug": "missed-entry-reply",
+        "title": "Missed entry reminder",
+        "added_on": date(2026, 10, 19),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "At the end of the day, anyone who never punched in, or who is still checked in, "
+            "gets one email. A missed day can be answered Vacation, Sick, COVID, or National Holiday. "
+            "A missed check-out can be answered with the time and a short reason. "
+            "Anything else is fixed on the dashboard. A confirmation is sent either way."
+        ),
+    },
 )
 
 

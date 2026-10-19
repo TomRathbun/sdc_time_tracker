@@ -149,9 +149,13 @@ def poll_inbox(db: Session) -> tuple[int, str]:
             pass
     try:
         from app.services.email_checkout import process_checkout_replies
+        from app.services.missed_entry import process_missed_replies
         checked_out = process_checkout_replies(db)
         if checked_out:
             note += f" Checked out {checked_out} from email."
+        missed = process_missed_replies(db)
+        if missed:
+            note += f" Recorded {missed} missed-entry reply."
     except Exception as exc:
         logger.error("Checkout reply handling failed: %s", exc)
     return stored, note
