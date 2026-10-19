@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.config import BEOD_MINIMUM_HOURS, EMAIL_ENABLED
 from app.models import (
-    DailySummary, Employee, EntryType, LeaveType, OffsiteEntry,
-    PhoneSupportEntry, Role, TimeEntry,
+    DailySummary, Employee, EntryType, LeaveRequest, LeaveStatus, LeaveType,
+    OffsiteEntry, PhoneSupportEntry, Role, TimeEntry,
 )
 from app.services.email import _send_email
 from app.services.leave_sync import trim_week_leave
@@ -42,6 +42,29 @@ _LEAVE_CODE = {
 
 
 def _hm(value: datetime | None) -> str:
+    return value.strftime("%H:%M") if value else "—"
+
+
+def _leave_code_for(leave_type) -> str:
+    if isinstance(leave_type, str):
+        try:
+            leave_type = LeaveType(leave_type)
+        except ValueError:
+            return "L"
+    return _LEAVE_CODE.get(leave_type, "L")
+
+
+def _pending_request(db: Session, employee_id: int, work_date: date) -> LeaveRequest | None:
+    return (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.employee_id == employee_id,
+            LeaveRequest.status == LeaveStatus.pending,
+            LeaveRequest.start_date <= work_date,
+            LeaveRequest.end_date >= work_date,
+        )
+        .first()
+    )
     return value.strftime("%H:%M") if value else "—"
 
 
@@ -117,13 +140,21 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
     beod = 0.0
     leave_h = 0.0
     leave_code = ""
+    leave_pending = False
     if summary is not None:
         if summary.lunch_end_of_day and summary.lunch_approved and work >= BEOD_MINIMUM_HOURS:
             requested = resolve_beod_request(True, None, summary.beod_requested_hours)
             beod = requested if requested > 0 else BEOD_CREDIT_HOURS
-        if summary.leave_approved and summary.leave_hours:
+        if summary.leave_hours:
             leave_h = float(summary.leave_hours)
-            leave_code = _LEAVE_CODE.get(summary.leave_type, "L")
+            leave_code = _leave_code_for(summary.leave_type)
+            leave_pending = not bool(summary.leave_approved)
+    if leave_h <= 0:
+        pending = _pending_request(db, employee.id, work_date)
+        if pending is not None and get_target_hours(work_date) > 0:
+            leave_h = get_target_hours(work_date)
+            leave_code = _leave_code_for(pending.leave_type)
+            leave_pending = True
 
     total = round(work + beod + leave_h, 2)
     target = get_target_hours(work_date)
@@ -133,7 +164,10 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
     if offsite_open:
         notes.append("offsite open")
     if leave_h and leave_code:
-        notes.append(f"{leave_code}({_hours(leave_h)})")
+        note = f"{leave_code}({_hours(leave_h)})"
+        if leave_pending:
+            note += " pending"
+        notes.append(note)
     if beod:
         notes.append(f"BEOD {_hours(beod)}")
     if target and total + 0.01 < target and not still_in and not leave_h:
@@ -149,6 +183,7 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         "work_hours": round(work + beod, 2),
         "leave_h": leave_h,
         "leave_code": leave_code,
+        "leave_pending": leave_pending,
         "target": target,
         "notes": ", ".join(notes),
         "empty": not entries and not offsites and not phones and not leave_h,
@@ -160,6 +195,8 @@ def _week_cell(day: dict) -> str:
     mark = ""
     if day.get("leave_h") and day.get("leave_code"):
         mark = f"{day['leave_code']}({_hours(day['leave_h'])})"
+        if day.get("leave_pending"):
+            mark += " pending"
     worked = float(day.get("work_hours") or 0)
     if mark and worked <= 0.01:
         return mark
@@ -227,7 +264,7 @@ def _daily_bodies(rows: list[dict], work_date: date) -> tuple[str, str]:
             f'<table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:13px;">'
             f"<tr>{head}</tr>{''.join(body_rows)}</table>"
             '<p style="margin:16px 0 0;font-size:12px;color:#64748b;">'
-            "Hours are clock + offsite + phone + approved BEOD + approved leave.</p>"
+            "Hours are clock + offsite + phone + approved BEOD + leave. Pending leave is counted and marked pending.</p>"
         ),
         kicker=title,
     )
@@ -300,7 +337,7 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
             f'<tr style="background:#1e293b;">{foot}</tr></table>'
             + "".join(punch_html)
             + '<p style="margin:16px 0 0;font-size:12px;color:#64748b;">'
-            "Each day is clock + offsite + phone + approved BEOD + approved leave.</p>"
+            "Each day is clock + offsite + phone + approved BEOD + leave. Pending leave is counted and marked pending.</p>"
         ),
         kicker=title,
     )
