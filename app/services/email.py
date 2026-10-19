@@ -7,6 +7,7 @@ import logging
 import base64
 import threading
 from datetime import date, datetime, timedelta
+from email.mime.application import MIMEApplication
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.image import MIMEImage
@@ -124,7 +125,7 @@ def _get_checkout_greeting(name: str) -> str:
     return random.choice(_CHECKOUT_GREETINGS).format(name=name)
 
 
-def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "") -> bool:
+def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "", attachments: list = None) -> bool:
     """Send an email via SMTP. Returns True on success, False on failure.
     
     Supports CID image embedding and Plain Text fallbacks.
@@ -226,7 +227,29 @@ pre{{background:#0f172a;color:#cbd5e1;padding:20px;border-radius:12px;white-spac
                     pass
                 raise OSError(f"Gmail login failed. Check the app password. {exc}") from exc
 
-        server.sendmail(SMTP_FROM, [to_email], msg_root.as_string())
+        outgoing = msg_root
+        if attachments:
+            mixed = MIMEMultipart("mixed")
+            mixed["Subject"] = subject
+            mixed["From"] = SMTP_FROM
+            mixed["To"] = to_email
+            if in_reply_to:
+                mixed["In-Reply-To"] = in_reply_to
+                mixed["References"] = in_reply_to
+            del msg_root["Subject"]
+            del msg_root["From"]
+            del msg_root["To"]
+            mixed.attach(msg_root)
+            for filename, payload in attachments:
+                part = MIMEApplication(
+                    payload,
+                    _subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                part.add_header("Content-Disposition", "attachment", filename=filename)
+                mixed.attach(part)
+            outgoing = mixed
+
+        server.sendmail(SMTP_FROM, [to_email], outgoing.as_string())
         server.quit()
         logger.info(f"Email sent to {to_email}: {subject}")
         return True

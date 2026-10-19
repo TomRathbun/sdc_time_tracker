@@ -138,8 +138,9 @@ FEATURE_CATALOG = (
         "audience": "manager,supervisor",
         "summary": (
             "Reports can email the previous week, or several weeks, to every manager. "
-            "The mail shows SDC hours, the target, Lockheed TEMPO hours, and the difference. "
-            "Import TEMPO on Reports first if that column should be filled in."
+            "The attachment is the same Excel workbook as the quarterly package: "
+            "one Time Keeping sheet per week and the Discrepancy Tracker. "
+            "Import TEMPO on Reports first if that comparison should be filled in."
         ),
     },
     {
