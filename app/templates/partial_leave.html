@@ -119,11 +119,11 @@
                 <!-- Hours -->
                 <div>
                     <label for="leave_hours" class="block text-sm font-medium text-gray-300 mb-2">PTO Hours</label>
-                    <p class="text-xs text-gray-500 mb-3">Enter 0 to remove PTO for this date. This day is {{ target }}h.
+                    <p class="text-xs text-gray-500 mb-3">Enter 0 to remove PTO for this date. Quarter hours are allowed, such as 5.75. This day is {{ target }}h.
                         {% if balance %}Vacation {{ '%g'|format(balance.vacation.remaining) }}h left ({{ '%g'|format(balance.vacation.entitlement_days) }} days). Sick {{ '%g'|format(balance.sick.remaining) }}h left ({{ '%g'|format(balance.sick.entitlement_days) }} days).{% endif %}
                     </p>
                     <div class="relative">
-                        <input type="number" name="leave_hours" id="leave_hours" step="0.5" min="0" max="{{ target }}"
+                        <input type="number" name="leave_hours" id="leave_hours" step="0.25" min="0" max="{{ target }}"
                             value="{{ current_leave_hours if current_leave_hours > 0 else '' }}" required
                             class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3.5 text-white text-lg font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
                             placeholder="e.g. 5">
