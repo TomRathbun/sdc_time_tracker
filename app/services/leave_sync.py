@@ -133,3 +133,58 @@ def trim_week_leave(db: Session, employee_id: int, week_start: date) -> float:
         excess = round(excess - cut, 2)
         removed = round(removed + cut, 2)
     return removed
+
+
+def trim_historical_leave(db: Session) -> float:
+    """Apply the extra-hours leave reduction to every finished week.
+
+    Runs once. Later weeks are handled when the weekly summary is sent.
+    """
+    from datetime import timedelta
+
+    from app.models import Employee, Role
+    from app.services.settings import get_setting, set_setting
+
+    if get_setting(db, "leave_trim_retro") == "done":
+        return 0.0
+
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    this_friday = this_monday + timedelta(days=4)
+    last_monday = this_monday if this_friday < today else this_monday - timedelta(days=7)
+
+    people = (
+        db.query(Employee)
+        .filter(Employee.is_active == True, Employee.role != Role.customer)  # noqa: E712
+        .all()
+    )
+    removed = 0.0
+    for person in people:
+        first = (
+            db.query(DailySummary.date)
+            .filter(
+                DailySummary.employee_id == person.id,
+                DailySummary.leave_approved == True,  # noqa: E712
+                DailySummary.leave_hours > 0,
+            )
+            .order_by(DailySummary.date)
+            .first()
+        )
+        if not first:
+            continue
+        monday = first[0] - timedelta(days=first[0].weekday())
+        while monday <= last_monday:
+            for offset in range(5):
+                day = monday + timedelta(days=offset)
+                existing = (
+                    db.query(DailySummary)
+                    .filter(DailySummary.employee_id == person.id, DailySummary.date == day)
+                    .first()
+                )
+                if existing:
+                    update_daily_summary(db, person.id, day)
+            removed = round(removed + trim_week_leave(db, person.id, monday), 2)
+            monday += timedelta(days=7)
+
+    set_setting(db, "leave_trim_retro", "done")
+    return removed

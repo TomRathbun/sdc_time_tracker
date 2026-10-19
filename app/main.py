@@ -108,6 +108,10 @@ async def startup():
     db = SessionLocal()
     try:
         seed_settings(db)
+        from app.services.leave_sync import trim_historical_leave
+        trimmed = trim_historical_leave(db)
+        if trimmed:
+            print(f"Reduced {trimmed}h of leave on earlier weeks where work ran over 40.")
     finally:
         db.close()
 
