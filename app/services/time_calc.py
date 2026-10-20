@@ -455,3 +455,51 @@ def get_weekly_summary(
         "total_target": total_target,
         "week_compliant": total_worked >= (total_target - 0.01),
     }
+
+
+def checkin_notice(db: Session, employee, checkin_time: datetime) -> dict:
+    """Facts for the check-in email: BEOD leave time, reminder time, week so far."""
+    today = checkin_time.date()
+    required = friday_required_hours(db, employee.id, today)
+    standard = checkin_time + timedelta(hours=required)
+    usual = False
+    credit = 0.0
+    if beod_offered_on(today):
+        if getattr(employee, "beod_pref_known", False) and employee.beod_pref_claim:
+            usual = True
+            credit = float(employee.beod_pref_hours or BEOD_CREDIT_HOURS)
+        else:
+            credit = BEOD_CREDIT_HOURS
+    beod_at = None
+    if credit > 0 and required - credit >= BEOD_MINIMUM_HOURS:
+        beod_at = checkin_time + timedelta(hours=round(required - credit, 2))
+    leave_at = beod_at if usual and beod_at else standard
+    monday = today - timedelta(days=today.weekday())
+    week = get_weekly_summary(db, employee.id, monday)
+    days = []
+    done = 0.0
+    for row in week["days"]:
+        day = row["date"]
+        future = day > today
+        if not future:
+            done += float(row["effective"] or 0)
+        if future:
+            shown = "—"
+        elif day == today and float(row["effective"] or 0) < 0.05:
+            shown = "in"
+        else:
+            shown = f"{float(row['effective']):.2f}"
+        days.append({
+            "label": day.strftime("%a"),
+            "hours": shown,
+            "today": day == today,
+        })
+    return {
+        "beod_at": beod_at,
+        "beod_label": format_beod_length(credit) if beod_at else "",
+        "beod_usual": usual,
+        "reminder_at": leave_at - timedelta(minutes=15),
+        "week_days": days,
+        "week_done": round(done, 2),
+        "week_target": week["total_target"],
+    }

@@ -153,6 +153,16 @@ FEATURE_CATALOG = (
             "That puts the employee's usual length back and counts it, as long as the day has at least 6 hours of work."
         ),
     },
+    {
+        "slug": "checkin-week-progress",
+        "title": "Check-in email shows the week",
+        "added_on": date(2026, 10, 20),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "The check-in email now shows the BEOD leave time, when the checkout email will arrive, "
+            "and the hours already logged Monday through Friday."
+        ),
+    },
 )
 
 

@@ -249,10 +249,12 @@ async def checkin_submit(
     mail_to = (employee.email or "").strip()
     if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning:
         from app.services.email import queue_checkin_email
+        from app.services.time_calc import checkin_notice
         from app.models import LeaveRequest, LeaveStatus
 
         target = friday_required_hours(db, employee.id, today)
         expected_checkout = declared_time + timedelta(hours=target)
+        notice = checkin_notice(db, employee, declared_time)
 
         # Gather upcoming leave in next 2 weeks
         cutoff = today + timedelta(days=14)
@@ -271,7 +273,7 @@ async def checkin_submit(
             for lv in leaves
         ]
 
-        queue_checkin_email(employee.name, mail_to, declared_time, expected_checkout, upcoming_leave)
+        queue_checkin_email(employee.name, mail_to, declared_time, expected_checkout, upcoming_leave, notice)
 
     # Detect gap: was there a previous checkout today?
     # If so, offer to log the gap as remote site work

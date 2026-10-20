@@ -291,7 +291,7 @@ def send_test_email(to_email: str, person_name: str) -> tuple[bool, str]:
 
 
 def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime,
-                       upcoming_leave: list = None):
+                       upcoming_leave: list = None, notice: dict = None):
     """Send a check-in confirmation email to the employee."""
     if not employee.email:
         return False
@@ -300,6 +300,7 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
     ci_str = checkin_time.strftime("%H:%M")
     co_str = checkout_time.strftime("%H:%M")
     today_str = checkin_time.strftime("%A, %B %d, %Y")
+    notice = notice or {}
 
     images = [
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
@@ -365,6 +366,68 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
             </tr>
         </table>"""
 
+    beod_html = ""
+    beod_text = ""
+    beod_at = notice.get("beod_at")
+    reminder_at = notice.get("reminder_at")
+    if beod_at:
+        beod_str = beod_at.strftime("%H:%M")
+        usual = "Your usual BEOD" if notice.get("beod_usual") else "If you take BEOD"
+        length = notice.get("beod_label") or "1h"
+        beod_html = f"""
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:12px;">
+            <tr>
+                {stat_tile(f"BEOD checkout ({length})", beod_str, "#fbbf24")}
+                <td width="12"></td>
+                {stat_tile("Checkout email", reminder_at.strftime("%H:%M") if reminder_at else "—", "#c4b5fd")}
+            </tr>
+        </table>"""
+        beod_text = f"\n{usual}: leave at {beod_str}.\n"
+    elif reminder_at:
+        beod_text = ""
+    if reminder_at:
+        sent = reminder_at.strftime("%H:%M")
+        if notice.get("beod_usual") and beod_at:
+            note = f"The checkout email is sent at {sent}, 15 minutes before your BEOD leave time."
+        elif beod_at:
+            note = f"The checkout email is sent at {sent}, 15 minutes before {co_str}. Taking BEOD moves that earlier."
+        else:
+            note = f"The checkout email is sent at {sent}, 15 minutes before you are due to leave."
+        beod_html += f'<p style="margin:14px 0 0;font-size:13px;line-height:1.5;color:#94a3b8;">{note}</p>'
+        beod_text += note + "\n"
+
+    week_html = ""
+    week_text = ""
+    week_days = notice.get("week_days") or []
+    if week_days:
+        heads = ""
+        cells = ""
+        for day in week_days:
+            color = "#f8fafc" if day.get("today") else "#cbd5e1"
+            weight = "700" if day.get("today") else "500"
+            heads += (
+                f'<td style="padding:6px 4px;text-align:center;font-size:11px;'
+                f'letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">{day["label"]}</td>'
+            )
+            cells += (
+                f'<td style="padding:4px;text-align:center;font-size:14px;font-weight:{weight};color:{color};">{day["hours"]}</td>'
+            )
+        done = notice.get("week_done", 0)
+        target = notice.get("week_target", 40)
+        week_html = f"""
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:24px;background-color:#1e293b;border-radius:8px;border:1px solid #334155;">
+            <tr><td style="padding:16px;">
+                <div style="font-size:14px;font-weight:600;color:#e2e8f0;margin-bottom:10px;">This week</div>
+                <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                    <tr>{heads}</tr>
+                    <tr>{cells}</tr>
+                </table>
+                <div style="margin-top:10px;font-size:13px;color:#94a3b8;">{done:.2f}h of {target:.0f}h so far</div>
+            </td></tr>
+        </table>"""
+        week_text = "\nThis week: " + "  ".join(f"{d['label']} {d['hours']}" for d in week_days)
+        week_text += f"\n{done:.2f}h of {target:.0f}h so far\n"
+
     html = render_email(
         greeting,
         f"""
@@ -375,6 +438,8 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
                 {stat_tile("Expected checkout", co_str, "#38bdf8")}
             </tr>
         </table>
+        {beod_html}
+        {week_html}
         {leave_html}
         {weapon_html}
         <p style="margin:24px 0 0;color:#94a3b8;">Have a productive and safe day.</p>
@@ -389,7 +454,7 @@ You have successfully checked in for {today_str}.
 
 Checked In: {ci_str}
 Expected Checkout: {co_str}
-{leave_text}{weapon_text}
+{beod_text}{week_text}{leave_text}{weapon_text}
 
 Have a productive day!
 {APP_NAME}"""
@@ -412,7 +477,8 @@ class _MailPerson:
 
 
 def queue_checkin_email(name: str, email: str, checkin_time: datetime,
-                        checkout_time: datetime, upcoming_leave: list = None):
+                        checkout_time: datetime, upcoming_leave: list = None,
+                        notice: dict = None):
     """Send the check-in note without touching the request's database session."""
     person = _MailPerson(name or "", (email or "").strip())
     if not person.email:
@@ -420,7 +486,7 @@ def queue_checkin_email(name: str, email: str, checkin_time: datetime,
 
     def _run():
         try:
-            ok = send_checkin_email(person, checkin_time, checkout_time, upcoming_leave)
+            ok = send_checkin_email(person, checkin_time, checkout_time, upcoming_leave, notice)
             if not ok:
                 logger.error("Check-in email was not sent to %s", person.email)
         except Exception:

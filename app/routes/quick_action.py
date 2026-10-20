@@ -302,11 +302,12 @@ async def quick_checkin(
     mail_to = (emp.email or "").strip()
     if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning:
         from app.services.email import queue_checkin_email
-        from app.services.time_calc import get_target_hours
+        from app.services.time_calc import checkin_notice
         from app.models import LeaveRequest, LeaveStatus
 
         target_hrs = friday_required_hours(db, emp.id, today)
         expected_checkout = rounded_time + timedelta(hours=target_hrs)
+        notice = checkin_notice(db, emp, rounded_time)
 
         cutoff = today + timedelta(days=14)
         leaves = db.query(LeaveRequest).filter(
@@ -324,7 +325,7 @@ async def quick_checkin(
             for lv in leaves
         ]
 
-        queue_checkin_email(emp.name, mail_to, rounded_time, expected_checkout, upcoming_leave)
+        queue_checkin_email(emp.name, mail_to, rounded_time, expected_checkout, upcoming_leave, notice)
     elif not returning and not mail_to:
         logger.info("Check-in mail skipped for %s: no email saved on that person", emp.name)
 
