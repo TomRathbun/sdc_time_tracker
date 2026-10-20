@@ -273,6 +273,7 @@ def write_week_sheet(
     ]
     row = 6
     meta: list[dict] = []
+    team = {key: [0.0] * 5 for _, key, kind in rows if kind == "num"}
     for emp in employees:
         by_day = {d: _day_data(db, emp.id, d) for d in days}
         ws.merge_cells(start_row=row, start_column=1, end_row=row + len(rows) + 1, end_column=1)
@@ -317,57 +318,119 @@ def write_week_sheet(
                     cell.fill = beod_fill
                 elif key == "holiday" and value:
                     cell.fill = orange
-            total = ws.cell(row, 10, f"=SUM(C{row}:G{row})")
-            total.number_format = "0.0"
-            total.font = Font(bold=True)
+            if kind == "num":
+                week_sum = round(sum(float(by_day[days[i]][key] or 0) for i in range(5)), 2)
+                for i in range(5):
+                    team[key][i] += float(by_day[days[i]][key] or 0)
+                total = ws.cell(row, 10, week_sum)
+            else:
+                total = ws.cell(row, 10, None)
+            if kind == "num":
+                total.number_format = "0.0"
+                total.font = Font(bold=True)
             total.border = thin
             total.alignment = center
             row += 1
 
+        def _num(key, index):
+            return float(by_day[days[index]][key] or 0)
+
         ws.cell(row, 2, "PTO Total").font = Font(bold=True, size=10)
-        pto_row = row
+        pto_days = []
         for i in range(7):
-            col = get_column_letter(3 + i)
-            cell = ws.cell(row, 3 + i, f"=SUM({col}{leave_first}:{col}{leave_last})")
-            cell.number_format = "0.0"
+            cell = ws.cell(row, 3 + i)
             cell.font = Font(bold=True)
-            cell.fill = gray if i >= 5 else pto_fill
             cell.border = thin
             cell.alignment = center
-        pto_total = ws.cell(row, 10, f"=SUM(C{row}:G{row})")
+            if i >= 5:
+                cell.value = "—"
+                cell.fill = gray
+            else:
+                amount = round(_num("vacation", i) + _num("sick", i) + _num("covid", i) + _num("holiday", i), 2)
+                pto_days.append(amount)
+                cell.value = amount
+                cell.number_format = "0.0"
+                cell.fill = pto_fill
+        pto_total = ws.cell(row, 10, round(sum(pto_days), 2))
         pto_total.number_format = "0.0"
         pto_total.font = Font(bold=True)
         pto_total.fill = pto_fill
         pto_total.border = thin
+        pto_total.alignment = center
         row += 1
 
         ws.cell(row, 2, "Overall Total").font = Font(bold=True, size=10)
+        overall_days = []
         for i in range(7):
-            col = get_column_letter(3 + i)
-            cell = ws.cell(
-                row, 3 + i,
-                f"={col}{fosc_row}+{col}{beod_row}+{col}{pto_row}",
-            )
-            cell.number_format = "0.0"
+            cell = ws.cell(row, 3 + i)
             cell.font = Font(bold=True)
-            cell.fill = gray if i >= 5 else peach
             cell.border = thin
             cell.alignment = center
-        overall = ws.cell(row, 10, f"=SUM(C{row}:G{row})")
+            if i >= 5:
+                cell.value = "—"
+                cell.fill = gray
+            else:
+                amount = round(_num("fosc", i) + _num("beod", i) + pto_days[i], 2)
+                overall_days.append(amount)
+                cell.value = amount
+                cell.number_format = "0.0"
+                cell.fill = peach
+        overall = ws.cell(row, 10, round(sum(overall_days), 2))
         overall.number_format = "0.0"
         overall.font = Font(bold=True, color="FFFFFF")
         overall.fill = header_fill
         overall.border = thin
+        overall.alignment = center
         meta.append({
             "employee_id": emp.id,
             "name": emp.name,
             "role": emp.role,
-            "fosc_row": fosc_row,
-            "beod_row": beod_row,
-            "pto_row": pto_row,
             "week_start": week_start,
         })
         row += 2
+
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + 3, end_column=1)
+    team_name = ws.cell(row, 1, "Team total")
+    team_name.font = Font(bold=True, color="FFFFFF", size=12)
+    team_name.fill = header_fill
+    team_name.alignment = Alignment(horizontal="left", vertical="center")
+
+    def _team_line(label, keys, fill, font_color="000000"):
+        nonlocal row
+        ws.cell(row, 2, label).font = Font(bold=True, size=10)
+        week_sum = 0.0
+        for i in range(7):
+            cell = ws.cell(row, 3 + i)
+            cell.border = thin
+            cell.alignment = center
+            cell.font = Font(bold=True, color=font_color)
+            if i >= 5:
+                cell.value = "—"
+                cell.fill = gray
+            else:
+                amount = round(sum(team[key][i] for key in keys), 2)
+                week_sum += amount
+                cell.value = amount
+                cell.number_format = "0.0"
+                cell.fill = fill
+        total = ws.cell(row, 10, round(week_sum, 2))
+        total.number_format = "0.0"
+        total.font = Font(bold=True, color=font_color)
+        total.fill = fill
+        total.border = thin
+        total.alignment = center
+        row += 1
+
+    _team_line("BEOD", ["beod"], beod_fill)
+    _team_line("Normal Time - FOSC", ["fosc"], orange)
+    _team_line("PTO Total", ["vacation", "sick", "covid", "holiday"], pto_fill)
+    _team_line(
+        "Overall Total",
+        ["fosc", "beod", "vacation", "sick", "covid", "holiday"],
+        header_fill,
+        "FFFFFF",
+    )
 
     ws.column_dimensions["A"].width = 24
     ws.column_dimensions["B"].width = 26
@@ -628,6 +691,7 @@ def build_fosc_quarterly_workbook(db: Session, year: int, quarter: int) -> Bytes
     }
     row = 5
     first = row
+    sum_fosc = sum_beod = sum_pto = 0.0
     for emp in employees:
         fosc = beod = pto = 0.0
         day = q_start
@@ -639,12 +703,16 @@ def build_fosc_quarterly_workbook(db: Session, year: int, quarter: int) -> Bytes
                 pto += float(data["vacation"] or 0) + float(data["sick"] or 0)
                 pto += float(data["covid"] or 0) + float(data["holiday"] or 0)
             day += timedelta(days=1)
+        fosc, beod, pto = round(fosc, 2), round(beod, 2), round(pto, 2)
+        sum_fosc += fosc
+        sum_beod += beod
+        sum_pto += pto
         ws.cell(row, 1, emp.name).font = name_font
         ws.cell(row, 2, role_name.get(emp.role, "")).alignment = center
         for col, value, fill in (
-            (3, round(fosc, 2), orange),
-            (4, round(beod, 2), None),
-            (5, round(pto, 2), pto_fill),
+            (3, fosc, orange),
+            (4, beod, None),
+            (5, pto, pto_fill),
         ):
             cell = ws.cell(row, col, value)
             cell.number_format = "0.0"
@@ -652,7 +720,7 @@ def build_fosc_quarterly_workbook(db: Session, year: int, quarter: int) -> Bytes
             cell.border = thin
             if fill is not None:
                 cell.fill = fill
-        total = ws.cell(row, 6, f"=C{row}+D{row}+E{row}")
+        total = ws.cell(row, 6, round(fosc + beod + pto, 2))
         total.number_format = "0.0"
         total.font = Font(bold=True)
         total.fill = peach
@@ -666,8 +734,8 @@ def build_fosc_quarterly_workbook(db: Session, year: int, quarter: int) -> Bytes
     ws.cell(row, 1, "Total").font = Font(bold=True, color="FFFFFF", size=12)
     ws.cell(row, 1).fill = header_fill
     ws.cell(row, 2, "").fill = header_fill
-    for col, letter in ((3, "C"), (4, "D"), (5, "E"), (6, "F")):
-        cell = ws.cell(row, col, f"=SUM({letter}{first}:{letter}{last})" if last >= first else 0)
+    for col, value in ((3, sum_fosc), (4, sum_beod), (5, sum_pto), (6, sum_fosc + sum_beod + sum_pto)):
+        cell = ws.cell(row, col, round(value, 2) if last >= first else 0)
         cell.number_format = "0.0"
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = header_fill

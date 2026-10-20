@@ -114,11 +114,11 @@
                     FOSC quarterly totals
                 </h2>
                 <p class="text-xs text-gray-500 mt-1 max-w-xl">
-                    One sheet for the quarter. Each employee and manager has FOSC hours,
-                    BEOD, and PTO, with a sum at the bottom.
+                    Emails one sheet for the quarter. Each employee and manager has FOSC hours,
+                    BEOD, and PTO, with a team sum at the bottom.
                 </p>
             </div>
-            <form method="GET" action="/reports/export/fosc-quarterly" class="flex flex-wrap items-end gap-3">
+            <form method="POST" action="/reports/email-quarter" class="flex flex-wrap items-end gap-3">
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">Year</label>
                     <input type="number" name="year" min="2020" max="2100" value="{{ fosc_year }}"
@@ -132,9 +132,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="btn-primary px-6 whitespace-nowrap" id="btn-export-fosc-q">
-                    Download quarter
-                </button>
+                <button type="submit" class="btn-primary px-6 whitespace-nowrap">Email managers</button>
             </form>
         </div>
     </div>

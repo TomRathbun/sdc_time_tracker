@@ -81,6 +81,31 @@ async def email_weeks_to_managers(
     return RedirectResponse(url=f"/reports?{key}={quote(note)}", status_code=303)
 
 
+@router.post("/reports/email-quarter")
+async def email_quarter_to_managers(
+    request: Request,
+    year: int = Form(...),
+    quarter: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Email the quarterly totals workbook to every manager."""
+    employee = get_current_employee(request, db)
+    if not employee or employee.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    from urllib.parse import quote
+    from app.services.summary_email import send_quarter_report
+    ok, note = send_quarter_report(db, year, quarter)
+    log_action(
+        db, action="email_quarter", entity_type="Report",
+        entity_id=None, employee_id=employee.id,
+        new_values={"year": year, "quarter": quarter, "ok": ok, "note": note},
+        ip_address=request.client.host if request.client else "",
+    )
+    key = "emailed" if ok else "email_err"
+    return RedirectResponse(url=f"/reports?{key}={quote(note)}", status_code=303)
+
+
 @router.get("/reports/export/fosc-weekly")
 async def export_fosc_weekly(
     request: Request,

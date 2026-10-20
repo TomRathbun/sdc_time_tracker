@@ -449,6 +449,33 @@ def send_reconciliation(db: Session, through: date, weeks: int) -> tuple[bool, s
     return True, f"Sent the Excel workbook for {count} week(s), {span}, to the managers."
 
 
+def send_quarter_report(db: Session, year: int, quarter: int) -> tuple[bool, str]:
+    """Email managers the quarterly FOSC and PTO totals."""
+    from app.services.fosc_export import build_fosc_quarterly_workbook
+
+    if quarter < 1 or quarter > 4:
+        return False, "Pick a quarter from 1 to 4."
+    book = build_fosc_quarterly_workbook(db, year, quarter)
+    filename = f"FOSC_Q{quarter}_{year}.xlsx"
+    html = render_email(
+        f"Q{quarter} {year} totals",
+        (
+            f"<p style=\"margin:0 0 12px;\">The quarterly totals for <strong style=\"color:#f8fafc;\">Q{quarter} {year}</strong> are attached.</p>"
+            "<p style=\"margin:0;\">Each person has FOSC hours, BEOD, and PTO, with a team sum at the bottom.</p>"
+        ),
+        kicker=f"Q{quarter} {year}",
+    )
+    text = f"SDC quarterly totals Q{quarter} {year}. The Excel file {filename} is attached."
+    subject = f"SDC quarterly totals — Q{quarter} {year}"
+    if not _managers(db):
+        return False, "No manager has an email address."
+    if not EMAIL_ENABLED:
+        return False, "SMTP is not configured."
+    if not _deliver(db, subject, html, text, [(filename, book.getvalue())]):
+        return False, "The email was not sent. A manager needs an email address, and SMTP has to be on."
+    return True, f"Sent the Q{quarter} {year} totals to the managers."
+
+
 def _is_due(now: datetime, hhmm: str, last_sent: str) -> bool:
     if (last_sent or "") == now.date().isoformat():
         return False
