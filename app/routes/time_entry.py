@@ -11,7 +11,8 @@ from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
     TimeEntry, OffsiteEntry, PhoneSupportEntry, EntryType, LocationType,
-    RemoteAuthorization, AuthorizationStatus, Employee, Role
+    RemoteAuthorization, AuthorizationStatus, Employee, Role,
+    CheckoutToken, MissedEntryToken,
 )
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import (
@@ -1080,6 +1081,15 @@ async def past_day_submit(
         old_co = ", ".join(cos) if cos else "None"
 
     # DELETE EXISTING ENTRIES FOR THIS DAY (Clean slate for past day entry)
+    # Checkout and missed-entry codes point at those punches.
+    db.query(CheckoutToken).filter(
+        CheckoutToken.employee_id == employee.id,
+        CheckoutToken.work_date == selected_date,
+    ).delete(synchronize_session=False)
+    db.query(MissedEntryToken).filter(
+        MissedEntryToken.employee_id == employee.id,
+        MissedEntryToken.work_date == selected_date,
+    ).delete(synchronize_session=False)
     db.query(TimeEntry).filter(TimeEntry.employee_id == employee.id, TimeEntry.date == selected_date).delete()
     db.query(OffsiteEntry).filter(OffsiteEntry.employee_id == employee.id, OffsiteEntry.date == selected_date).delete()
     db.flush()

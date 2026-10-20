@@ -10,6 +10,7 @@ import logging
 import re
 import secrets
 from datetime import datetime, time, timedelta
+from html import escape
 
 from sqlalchemy.orm import Session
 
