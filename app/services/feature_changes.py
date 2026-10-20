@@ -137,10 +137,9 @@ FEATURE_CATALOG = (
         "added_on": date(2026, 10, 19),
         "audience": "manager,supervisor",
         "summary": (
-            "Reports can email the previous week, or several weeks, to every manager. "
-            "The attachment is the same Excel workbook as the quarterly package: "
-            "one Time Keeping sheet per week and the Discrepancy Tracker. "
-            "Import TEMPO on Reports first if that comparison should be filled in."
+            "Reports has two customer workbooks. The weekly sheet is declared in and out, BEOD, "
+            "FOSC, leave, a PTO total, and an overall total. The quarterly sheet lists each employee "
+            "and manager with FOSC hours and PTO hours, and a sum for both."
         ),
     },
     {

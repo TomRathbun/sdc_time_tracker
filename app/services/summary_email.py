@@ -429,15 +429,15 @@ def send_reconciliation(db: Session, through: date, weeks: int) -> tuple[bool, s
     html = render_email(
         "Lockheed reconciliation",
         (
-            f"<p style=\"margin:0 0 12px;\">The weekly time record for <strong style=\"color:#f8fafc;\">{escape(span)}</strong> is attached.</p>"
-            "<p style=\"margin:0;\">It uses the same sheets as the quarterly package: one Time Keeping sheet per week and the Discrepancy Tracker. Import TEMPO before sending if that comparison should be filled in.</p>"
+            f"<p style=\"margin:0 0 12px;\">The weekly attendance sheet for <strong style=\"color:#f8fafc;\">{escape(span)}</strong> is attached.</p>"
+            "<p style=\"margin:0;\">Each week is one sheet: declared in and out, BEOD, FOSC hours, PTO, and the overall total.</p>"
         ),
         kicker=span,
     )
     text = (
         f"SDC weekly reconciliation {span}.\n"
         f"The Excel file {filename} is attached. "
-        "It is the quarterly workbook format, for these weeks."
+        "One sheet per week, with FOSC, BEOD, and PTO."
     )
     subject = f"SDC weekly time record — {span}"
     if not _managers(db):

@@ -30,7 +30,7 @@
 <div class="max-w-6xl mx-auto">
     <div class="mb-8">
         <h1 class="text-2xl font-bold text-white">Reports</h1>
-        <p class="text-gray-400 mt-1">FOSC attendance is packaged <strong class="text-gray-300">each quarter</strong>; use weekly for mid-quarter checks</p>
+        <p class="text-gray-400 mt-1">Customer attendance sheets. Weekly is one sheet. Quarterly is team totals.</p>
     </div>
 
     <!-- Projected vacation schedule (customer print) -->
@@ -73,9 +73,8 @@
             <div>
                 <h2 class="text-base font-semibold text-white">Email weeks to managers</h2>
                 <p class="text-xs text-gray-500 mt-1 max-w-xl">
-                    Emails the previous week, or several weeks, as the quarterly Excel workbook:
-                    one Time Keeping sheet per week and the Discrepancy Tracker.
-                    Import TEMPO first if the Lockheed comparison should be filled in.
+                    Emails the previous week, or several weeks, as the customer attendance sheet.
+                    One sheet per week: declared in and out, BEOD, FOSC, PTO, and the overall total.
                 </p>
             </div>
             <form method="POST" action="/reports/email-weeks" class="flex flex-wrap items-end gap-3">
@@ -112,12 +111,11 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    FOSC quarterly package
+                    FOSC quarterly totals
                 </h2>
                 <p class="text-xs text-gray-500 mt-1 max-w-xl">
-                    Lean workbook for the whole quarter: weekly attendance tabs +
-                    <strong class="text-gray-400">Discrepancy Tracker</strong>
-                    (In / Out / Phone / Offsite / FOSC / leave · vs TEMPO).
+                    One sheet for the quarter. Each employee and manager has FOSC hours,
+                    BEOD, and PTO, with a sum at the bottom.
                 </p>
             </div>
             <form method="GET" action="/reports/export/fosc-quarterly" class="flex flex-wrap items-end gap-3">
@@ -145,9 +143,9 @@
     <div class="glass-card p-6 mb-8 border border-white/5">
         <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
             <div>
-                <h2 class="text-base font-semibold text-white">Single week (optional)</h2>
+                <h2 class="text-base font-semibold text-white">Weekly attendance sheet</h2>
                 <p class="text-xs text-gray-500 mt-1 max-w-xl">
-                    One week only — useful mid-quarter. Same row layout as the quarterly package sheets.
+                    One sheet. Declared in and out, BEOD, FOSC, each leave type, a PTO total, and the overall total.
                 </p>
             </div>
             <form method="GET" action="/reports/export/fosc-weekly" class="flex flex-wrap items-end gap-3">

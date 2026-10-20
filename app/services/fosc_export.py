@@ -16,10 +16,11 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 from sqlalchemy.orm import Session
 
+from app.services.time_calc import get_target_hours
 from app.config import BASE_DIR
 from app.models import (
     Employee, TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary,
-    EntryType, LeaveType, Role, TempoWeekly,
+    EntryType, LeaveType, LeaveRequest, LeaveStatus, Role, TempoWeekly,
 )
 
 # Reference template (user may slim sheets; we generate a lean workbook)
@@ -104,27 +105,63 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
     )
 
     vac = sick = covid = hol = None
-    fosc = None
+    work = None
+    beod = None
+    if d.weekday() < 5:
+        beod = 0.0
+        work = 0.0
     if summary:
-        fosc = summary.total_hours if summary.total_hours else None
-        if summary.leave_approved and summary.leave_hours:
-            lt = summary.leave_type
-            val = summary.leave_hours
-            if lt == LeaveType.vacation:
-                vac = val
-            elif lt == LeaveType.sick:
-                sick = val
-            elif lt == LeaveType.covid_sick:
-                covid = val
-            elif lt == LeaveType.uae_holiday:
-                hol = val
+        clock = float(summary.clock_hours or 0) + float(summary.offsite_hours or 0) + float(summary.phone_hours or 0)
+        claimed = 0.0
+        if summary.lunch_end_of_day or summary.beod_hours:
+            claimed = float(summary.beod_hours or summary.beod_requested_hours or 1.0)
+        if clock == 0 and summary.total_hours:
+            clock = max(0.0, float(summary.total_hours) - float(summary.beod_hours or 0))
+        if d.weekday() < 5:
+            work = round(clock, 2)
+            beod = round(claimed, 2)
+
+    lt = None
+    val = 0.0
+    if summary and summary.leave_hours:
+        lt = summary.leave_type
+        val = float(summary.leave_hours)
+    if val <= 0 and d.weekday() < 5:
+        pending = (
+            db.query(LeaveRequest)
+            .filter(
+                LeaveRequest.employee_id == emp_id,
+                LeaveRequest.status.in_([LeaveStatus.pending, LeaveStatus.approved]),
+                LeaveRequest.start_date <= d,
+                LeaveRequest.end_date >= d,
+            )
+            .first()
+        )
+        if pending:
+            lt = pending.leave_type
+            val = float(get_target_hours(d))
+    if val > 0:
+        if isinstance(lt, str):
+            try:
+                lt = LeaveType(lt)
+            except ValueError:
+                lt = None
+        if lt == LeaveType.vacation:
+            vac = val
+        elif lt == LeaveType.sick:
+            sick = val
+        elif lt == LeaveType.covid_sick:
+            covid = val
+        elif lt == LeaveType.uae_holiday:
+            hol = val
 
     return {
         "in": first_in,
         "out": last_out,
         "phone": phone_h,
         "offsite": off_h,
-        "fosc": fosc,
+        "fosc": work,
+        "beod": beod,
         "vacation": vac,
         "sick": sick,
         "covid": covid,
@@ -181,194 +218,168 @@ def write_week_sheet(
     *,
     title_suffix: str = "",
 ) -> list[dict]:
-    """Fill one worksheet with a single week of FOSC attendance data.
-
-    Returns per-employee metadata for the Discrepancy Tracker:
-    [{employee, name, sdc_total, tempo_hours, totals_row, tempo_row}, ...]
-    """
+    """One customer attendance sheet for a week. No TEMPO, signature, or remarks."""
     week_start = _monday(week_start)
     days = [week_start + timedelta(days=i) for i in range(7)]
     header_fill, header_font, name_font, cat_font, thin = _style_constants()
-    time_format = "HH:MM"
-    num_format = "0.0"
-    meta: list[dict] = []
+    orange = PatternFill("solid", fgColor="F8CBAD")
+    green = PatternFill("solid", fgColor="C6EFCE")
+    gray = PatternFill("solid", fgColor="D9D9D9")
+    peach = PatternFill("solid", fgColor="F4B183")
+    pto_fill = PatternFill("solid", fgColor="FFF2CC")
+    beod_fill = PatternFill("solid", fgColor="DDEBF7")
+    name_fill = PatternFill("solid", fgColor="D6DCE4")
+    center = Alignment(horizontal="center", vertical="center")
 
-    ws.merge_cells("A2:J2")
     title = "EADGE-T FOLLOW ON SERVICE CONTRACT - Weekly ATTENDANCE SHEET"
     if title_suffix:
         title = f"{title} ({title_suffix})"
-    ws["A2"] = title
-    ws["A2"].font = Font(bold=True, size=14, color="1F4E79")
+    ws.merge_cells("A1:J1")
+    ws["A1"] = title
+    ws["A1"].font = Font(bold=True, size=14, color="1F4E79")
+    ws["A2"] = "Week Starting"
+    ws["B2"] = datetime.combine(week_start, time.min)
+    ws["B2"].number_format = "M/D/YYYY"
+    ws.merge_cells("D2:J2")
+    ws["D2"] = "CONTRACT NO.: DP3/4/N/1/2021/7 : Purchase Order"
+    ws["D2"].font = Font(size=10, color="1F4E79")
 
-    ws["A3"] = "Week Starting"
-    ws["B3"] = datetime.combine(week_start, time.min)
-    ws["B3"].number_format = "YYYY-MM-DD"
-    ws["F3"] = "CONTRACT NO.: DP3/4/8/1/2021/7"
-
-    # Row 4 headers match contract template (M = Hours to Reduce for INDEX col 13)
-    headers = [
-        "Name", "", "M", "T", "W", "T", "F", "S", "S",
-        "Total Hours", "Signature", "Remarks", "Hours to Reduce",
-    ]
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(4, col, h)
+    headers = ["Name", "", "M", "T", "W", "T", "F", "S", "S", "Total Hours"]
+    for col, label in enumerate(headers, 1):
+        cell = ws.cell(4, col, label)
         cell.font = header_font
         cell.fill = header_fill
-        cell.alignment = Alignment(horizontal="center")
-
+        cell.alignment = center
     for i, d in enumerate(days):
         cell = ws.cell(5, 3 + i, d)
         cell.number_format = "DD-MMM"
-        cell.alignment = Alignment(horizontal="center")
-        cell.font = Font(size=9, italic=True)
+        cell.alignment = center
+        cell.font = Font(size=9, italic=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="2E75B6")
+        if i == 4:
+            cell.fill = PatternFill("solid", fgColor="548235")
+        elif i >= 5:
+            cell.fill = PatternFill("solid", fgColor="7F7F7F")
 
+    rows = [
+        ("In", "in", "time"),
+        ("Out", "out", "time"),
+        ("BEOD", "beod", "num"),
+        ("Normal Time - FOSC", "fosc", "num"),
+        ("Vacation", "vacation", "num"),
+        ("Sick Hours", "sick", "num"),
+        ("COVID Sick Hours", "covid", "num"),
+        ("UAE National Holiday", "holiday", "num"),
+    ]
     row = 6
+    meta: list[dict] = []
     for emp in employees:
         by_day = {d: _day_data(db, emp.id, d) for d in days}
-        name_row = row
+        ws.merge_cells(start_row=row, start_column=1, end_row=row + len(rows) + 1, end_column=1)
+        name_cell = ws.cell(row, 1, emp.name)
+        name_cell.font = name_font
+        name_cell.fill = name_fill
+        name_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-        ws.cell(row, 1, emp.name).font = name_font
-        row += 1
-
-        ws.cell(row, 1, "In").font = cat_font
-        for i, d in enumerate(days):
-            cell = ws.cell(row, 3 + i, _excel_time(by_day[d]["in"]))
-            if cell.value is not None:
-                cell.number_format = time_format
-            cell.border = thin
-        ws.cell(row, 12, "Time sheet should match TEMPO Inputs").font = Font(
-            size=8, italic=True, color="666666"
-        )
-        row += 1
-
-        ws.cell(row, 1, "Out").font = cat_font
-        for i, d in enumerate(days):
-            cell = ws.cell(row, 3 + i, _excel_time(by_day[d]["out"]))
-            if cell.value is not None:
-                cell.number_format = time_format
-            cell.border = thin
-        row += 1
-
-        ws.cell(row, 1, "Phone Support Hours").font = cat_font
-        for i, d in enumerate(days):
-            cell = ws.cell(row, 3 + i, by_day[d]["phone"])
-            if cell.value is not None:
-                cell.number_format = num_format
-            cell.border = thin
-        cell_tot = ws.cell(row, 10, f"=SUM(C{row}:I{row})")
-        cell_tot.number_format = num_format
-        row += 1
-
-        ws.cell(row, 1, "Off Site Work Hours").font = cat_font
-        for i, d in enumerate(days):
-            cell = ws.cell(row, 3 + i, by_day[d]["offsite"])
-            if cell.value is not None:
-                cell.number_format = num_format
-            cell.border = thin
-        cell_tot = ws.cell(row, 10, f"=SUM(C{row}:I{row})")
-        cell_tot.number_format = num_format
-        row += 1
-
-        fosc_row = row
-        ws.cell(row, 1, "Normal Time - FOSC").font = Font(bold=True, size=10)
-        for i, d in enumerate(days):
-            cell = ws.cell(row, 3 + i, by_day[d]["fosc"])
-            if cell.value is not None:
-                cell.number_format = num_format
-            cell.border = thin
-        cell_tot = ws.cell(row, 10, f"=SUM(C{row}:I{row})")
-        cell_tot.number_format = num_format
-        cell_tot.font = Font(bold=True)
-        row += 1
-
-        for label, key in [
-            ("Vacation", "vacation"),
-            ("Sick Hours", "sick"),
-            ("COVID Sick Hours", "covid"),
-            ("UAE National Holiday", "holiday"),
-        ]:
-            ws.cell(row, 1, label).font = cat_font
+        fosc_row = beod_row = None
+        leave_first = leave_last = None
+        for label, key, kind in rows:
+            ws.cell(row, 2, label).font = Font(bold=True, size=10) if key in ("fosc", "beod") else cat_font
+            if key == "fosc":
+                fosc_row = row
+            if key == "beod":
+                beod_row = row
+            if key == "vacation":
+                leave_first = row
+            if key == "holiday":
+                leave_last = row
             for i, d in enumerate(days):
-                cell = ws.cell(row, 3 + i, by_day[d][key])
-                if cell.value is not None:
-                    cell.number_format = num_format
+                cell = ws.cell(row, 3 + i)
                 cell.border = thin
-            cell_tot = ws.cell(row, 10, f"=SUM(C{row}:I{row})")
-            cell_tot.number_format = num_format
+                cell.alignment = center
+                weekend = i >= 5
+                if weekend:
+                    cell.value = "—"
+                    cell.fill = gray
+                    continue
+                value = by_day[d][key]
+                if kind == "time":
+                    cell.value = _excel_time(value)
+                    if cell.value is not None:
+                        cell.number_format = "HH:MM"
+                else:
+                    cell.value = 0 if value is None and key in ("beod", "fosc") else value
+                    if cell.value is not None:
+                        cell.number_format = "0.0"
+                if key == "fosc":
+                    cell.fill = green if i == 4 else orange
+                elif key == "beod" and value:
+                    cell.fill = beod_fill
+                elif key == "holiday" and value:
+                    cell.fill = orange
+            total = ws.cell(row, 10, f"=SUM(C{row}:G{row})")
+            total.number_format = "0.0"
+            total.font = Font(bold=True)
+            total.border = thin
+            total.alignment = center
             row += 1
 
-        first_cat = fosc_row
-        last_cat = row - 1
-        totals_row = row
-        first_name = emp.name.split()[0] if emp.name else "NAME"
-        ws.cell(row, 1, f"Totals {first_name}").font = Font(bold=True, size=10)
-        sdc_week = 0.0
-        for i, d in enumerate(days):
+        ws.cell(row, 2, "PTO Total").font = Font(bold=True, size=10)
+        pto_row = row
+        for i in range(7):
             col = get_column_letter(3 + i)
-            cell = ws.cell(row, 3 + i, f"=SUM({col}{first_cat}:{col}{last_cat})")
-            cell.number_format = num_format
-            cell.border = thin
+            cell = ws.cell(row, 3 + i, f"=SUM({col}{leave_first}:{col}{leave_last})")
+            cell.number_format = "0.0"
             cell.font = Font(bold=True)
-            day = by_day[d]
-            day_total = 0.0
-            for k in ("fosc", "vacation", "sick", "covid", "holiday"):
-                if day[k]:
-                    day_total += float(day[k])
-            sdc_week += day_total
-        # Template uses =SUM(J{fosc}:J{last_leave}) for week total on Totals row
-        cell = ws.cell(row, 10, f"=SUM(J{first_cat}:J{last_cat})")
-        cell.number_format = num_format
-        cell.font = Font(bold=True)
-        ws.cell(row, 11, "Signed: ")
+            cell.fill = gray if i >= 5 else pto_fill
+            cell.border = thin
+            cell.alignment = center
+        pto_total = ws.cell(row, 10, f"=SUM(C{row}:G{row})")
+        pto_total.number_format = "0.0"
+        pto_total.font = Font(bold=True)
+        pto_total.fill = pto_fill
+        pto_total.border = thin
         row += 1
 
-        tempo_row = row
-        tempo_h = _tempo_hours(db, emp.id, week_start)
-        ws.cell(row, 1, "Hours from TEMPO").font = Font(size=9, italic=True, color="666666")
+        ws.cell(row, 2, "Overall Total").font = Font(bold=True, size=10)
         for i in range(7):
-            ws.cell(row, 3 + i).border = thin
-        # Column J = week TEMPO total (Total Hours)
-        tcell = ws.cell(row, 10, tempo_h if tempo_h is not None else None)
-        if tempo_h is not None:
-            tcell.number_format = num_format
-        tcell.border = thin
-        # L = label, M (col 13) = hours-to-reduce — same formula as contract template:
-        #   =IF(SUM(J{totals}-J{tempo})>0, 0, SUM(J{totals}-J{tempo}))
-        # Only shortfalls (base hours < TEMPO) are non-zero; excess is zeroed.
-        ws.cell(row, 12, "Variance Reason:")
-        vcell = ws.cell(
-            row, 13,
-            f"=IF(SUM(J{totals_row}-J{tempo_row})>0,0,SUM(J{totals_row}-J{tempo_row}))",
-        )
-        vcell.number_format = num_format
-        vcell.border = thin
-
-        # Discrepancy Tracker: INDEX(..., MATCH(name)+offset, 13)
-        # offset = rows from employee name → Hours from TEMPO (always 11 with this block)
-        name_to_tempo_offset = tempo_row - name_row
-        row += 2
-
+            col = get_column_letter(3 + i)
+            cell = ws.cell(
+                row, 3 + i,
+                f"={col}{fosc_row}+{col}{beod_row}+{col}{pto_row}",
+            )
+            cell.number_format = "0.0"
+            cell.font = Font(bold=True)
+            cell.fill = gray if i >= 5 else peach
+            cell.border = thin
+            cell.alignment = center
+        overall = ws.cell(row, 10, f"=SUM(C{row}:G{row})")
+        overall.number_format = "0.0"
+        overall.font = Font(bold=True, color="FFFFFF")
+        overall.fill = header_fill
+        overall.border = thin
         meta.append({
             "employee_id": emp.id,
             "name": emp.name,
-            "sdc_total": round(sdc_week, 2),
-            "tempo_hours": tempo_h,
-            "name_row": name_row,
-            "totals_row": totals_row,
-            "tempo_row": tempo_row,
-            "name_to_tempo_offset": name_to_tempo_offset,
-            "sheet_title": ws.title,
+            "role": emp.role,
+            "fosc_row": fosc_row,
+            "beod_row": beod_row,
+            "pto_row": pto_row,
             "week_start": week_start,
         })
+        row += 2
 
-    ws.column_dimensions["A"].width = 22
-    ws.column_dimensions["B"].width = 3
-    for col in range(3, 10):
-        ws.column_dimensions[get_column_letter(col)].width = 8
-    ws.column_dimensions["J"].width = 12
-    ws.column_dimensions["K"].width = 14
-    ws.column_dimensions["L"].width = 18
-    ws.column_dimensions["M"].width = 14
+    ws.column_dimensions["A"].width = 24
+    ws.column_dimensions["B"].width = 26
+    for col in range(3, 11):
+        ws.column_dimensions[get_column_letter(col)].width = 12
+    ws.row_dimensions[1].height = 22
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+    ws.freeze_panes = "C6"
+    ws.oddHeader.left.text = title
     return meta
 
 
@@ -549,36 +560,13 @@ def _week_sheet_title(week_index: int) -> str:
 
 
 def build_fosc_weekly_workbook(db: Session, week_start: date) -> BytesIO:
-    """Single-week workbook (timekeeping + discrepancy tracker)."""
+    """Single-week customer attendance sheet."""
     week_start = _monday(week_start)
     employees = _active_employees(db)
     wb = Workbook()
     ws = wb.active
-    ws.title = _week_sheet_title(1)
-    meta = write_week_sheet(ws, db, week_start, employees)
-
-    disc = wb.create_sheet("Discrepancy Tracker")
-    write_discrepancy_sheet(
-        disc,
-        [(ws.title, week_start, meta)],
-        title="Hours Discrepancies",
-    )
-
-    _add_notes_sheet(wb, [
-        "",
-        "Cadence: FOSC attendance packages are prepared each quarter.",
-        f"This file: single week starting {_monday(week_start).isoformat()} (Monday).",
-        "In / Out: declared check-in / check-out (first in, last out).",
-        "Phone Support / Off Site: additive hours from the tracker.",
-        "Normal Time - FOSC: clock + phone + offsite + BEOD credit.",
-        "Leave rows: approved vacation / sick / COVID / UAE holiday hours.",
-        "Hours from TEMPO: loaded from SDC when TEMPO weekly hours were imported.",
-        "Discrepancy Tracker: INDEX/MATCH into each week sheet col M (Hours to Reduce).",
-        "Only shortfalls (base hours < TEMPO) appear; excess is zeroed.",
-        "",
-        "Import TEMPO hours on Reports before exporting for full variance analysis.",
-    ])
-
+    ws.title = f"Week {week_start.strftime('%d %b')}"[:31]
+    write_week_sheet(ws, db, week_start, employees)
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -586,47 +574,16 @@ def build_fosc_weekly_workbook(db: Session, week_start: date) -> BytesIO:
 
 
 def build_fosc_weeks_workbook(db: Session, mondays: list[date]) -> BytesIO:
-    """Same workbook as the quarterly package, for the weeks you pick.
-
-    One Time Keeping sheet per week, then the Discrepancy Tracker.
-    """
+    """One attendance sheet per week, in the customer format."""
     mondays = [_monday(day) for day in mondays]
     employees = _active_employees(db)
     wb = Workbook()
     default = wb.active
-    week_metas: list[tuple[str, date, list[dict]]] = []
-
     for idx, mon in enumerate(mondays, 1):
-        title = _week_sheet_title(idx)
-        if idx == 1:
-            ws = default
-            ws.title = title
-        else:
-            ws = wb.create_sheet(title)
-        meta = write_week_sheet(ws, db, mon, employees, title_suffix=f"Wk{idx}")
-        week_metas.append((ws.title, mon, meta))
-
-    disc = wb.create_sheet("Discrepancy Tracker")
-    write_discrepancy_sheet(disc, week_metas, title="Hours Discrepancies")
-
-    first, last = mondays[0], mondays[-1] + timedelta(days=4)
-    _add_notes_sheet(wb, [
-        "",
-        f"Weekly reconciliation: {first.isoformat()} → {last.isoformat()}.",
-        f"Sheets: {len(mondays)} weekly attendance tab(s) + Discrepancy Tracker.",
-        "Same layout as the quarterly FOSC package.",
-        "Discrepancy Tracker uses INDEX/MATCH into each Time Keeping Sheet (WkN), col M.",
-        "Hours to Reduce = only shortfalls where base hours < TEMPO.",
-        "Import TEMPO weekly hours on Reports before sending for a complete comparison.",
-        "",
-        "Generated by SDC Time Tracker.",
-    ])
-    wb.move_sheet("Export Notes", offset=-len(wb.sheetnames) + 1)
-    try:
-        wb.move_sheet("Discrepancy Tracker", offset=-len(wb.sheetnames) + 2)
-    except Exception:
-        pass
-
+        title = f"Week {mon.strftime('%d %b')}"[:31]
+        ws = default if idx == 1 else wb.create_sheet(title)
+        ws.title = title
+        write_week_sheet(ws, db, mon, employees, title_suffix=f"Wk{idx}")
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -634,60 +591,103 @@ def build_fosc_weeks_workbook(db: Session, mondays: list[date]) -> BytesIO:
 
 
 def build_fosc_quarterly_workbook(db: Session, year: int, quarter: int) -> BytesIO:
-    """
-    Full quarter package: one sheet per week + Discrepancy Tracker.
-
-    Lean export (timekeeping only) — no multi-year Data dumps.
-    Sheet names match the contract template: Time Keeping Sheet (Wk1) …
-    """
-    mondays = mondays_in_quarter(year, quarter)
+    """Quarter totals: FOSC, BEOD, and PTO for each employee and manager."""
+    q_start, q_end = quarter_bounds(year, quarter)
     employees = _active_employees(db)
     wb = Workbook()
-    default = wb.active
-    week_metas: list[tuple[str, date, list[dict]]] = []
+    ws = wb.active
+    ws.title = f"Q{quarter} {year}"
+    header_fill, header_font, name_font, _, thin = _style_constants()
+    center = Alignment(horizontal="center", vertical="center")
+    peach = PatternFill("solid", fgColor="F4B183")
+    pto_fill = PatternFill("solid", fgColor="FFF2CC")
+    orange = PatternFill("solid", fgColor="F8CBAD")
 
-    for idx, mon in enumerate(mondays, 1):
-        title = _week_sheet_title(idx)
-        if idx == 1:
-            ws = default
-            ws.title = title
-        else:
-            ws = wb.create_sheet(title)
-        meta = write_week_sheet(
-            ws, db, mon, employees,
-            title_suffix=f"Q{quarter} Wk{idx}",
-        )
-        week_metas.append((ws.title, mon, meta))
-
-    disc = wb.create_sheet("Discrepancy Tracker")
-    write_discrepancy_sheet(
-        disc,
-        week_metas,
-        title="Hours Discrepancies",
+    ws.merge_cells("A1:F1")
+    ws["A1"] = "EADGE-T FOLLOW ON SERVICE CONTRACT - QUARTERLY TOTALS"
+    ws["A1"].font = Font(bold=True, size=14, color="1F4E79")
+    ws.merge_cells("A2:F2")
+    ws["A2"] = (
+        f"Q{quarter} {year}  ({q_start.strftime('%d %b %Y')} – {q_end.strftime('%d %b %Y')})"
+        "    CONTRACT NO.: DP3/4/N/1/2021/7"
     )
+    ws["A2"].font = Font(size=10, color="1F4E79")
 
-    q_start, q_end = quarter_bounds(year, quarter)
-    _add_notes_sheet(wb, [
-        "",
-        f"Quarterly package: {year} Q{quarter} ({q_start.isoformat()} → {q_end.isoformat()}).",
-        f"Sheets: {len(mondays)} weekly attendance tabs + Discrepancy Tracker.",
-        "Discrepancy Tracker uses INDEX/MATCH into each Time Keeping Sheet (WkN), col M.",
-        "Hours to Reduce = only shortfalls where base hours < TEMPO.",
-        "Import TEMPO weekly hours on Reports before export for complete analysis.",
-        "",
-        "Generated by SDC Time Tracker.",
-    ])
-    wb.move_sheet("Export Notes", offset=-len(wb.sheetnames) + 1)
-    try:
-        wb.move_sheet("Discrepancy Tracker", offset=-len(wb.sheetnames) + 2)
-    except Exception:
-        pass
+    headers = ["Name", "Role", "FOSC Hours", "BEOD Hours", "PTO Hours", "Total"]
+    for col, label in enumerate(headers, 1):
+        cell = ws.cell(4, col, label)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = thin
+
+    role_name = {
+        Role.employee: "Employee",
+        Role.supervisor: "Supervisor",
+        Role.manager: "Manager",
+    }
+    row = 5
+    first = row
+    for emp in employees:
+        fosc = beod = pto = 0.0
+        day = q_start
+        while day <= q_end:
+            if day.weekday() < 5:
+                data = _day_data(db, emp.id, day)
+                fosc += float(data["fosc"] or 0)
+                beod += float(data["beod"] or 0)
+                pto += float(data["vacation"] or 0) + float(data["sick"] or 0)
+                pto += float(data["covid"] or 0) + float(data["holiday"] or 0)
+            day += timedelta(days=1)
+        ws.cell(row, 1, emp.name).font = name_font
+        ws.cell(row, 2, role_name.get(emp.role, "")).alignment = center
+        for col, value, fill in (
+            (3, round(fosc, 2), orange),
+            (4, round(beod, 2), None),
+            (5, round(pto, 2), pto_fill),
+        ):
+            cell = ws.cell(row, col, value)
+            cell.number_format = "0.0"
+            cell.alignment = center
+            cell.border = thin
+            if fill is not None:
+                cell.fill = fill
+        total = ws.cell(row, 6, f"=C{row}+D{row}+E{row}")
+        total.number_format = "0.0"
+        total.font = Font(bold=True)
+        total.fill = peach
+        total.alignment = center
+        total.border = thin
+        ws.cell(row, 1).border = thin
+        ws.cell(row, 2).border = thin
+        row += 1
+
+    last = row - 1
+    ws.cell(row, 1, "Total").font = Font(bold=True, color="FFFFFF", size=12)
+    ws.cell(row, 1).fill = header_fill
+    ws.cell(row, 2, "").fill = header_fill
+    for col, letter in ((3, "C"), (4, "D"), (5, "E"), (6, "F")):
+        cell = ws.cell(row, col, f"=SUM({letter}{first}:{letter}{last})" if last >= first else 0)
+        cell.number_format = "0.0"
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = center
+        cell.border = thin
+
+    ws.column_dimensions["A"].width = 28
+    ws.column_dimensions["B"].width = 16
+    for letter in "CDEF":
+        ws.column_dimensions[letter].width = 16
+    ws.freeze_panes = "A5"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
 
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf
-
 
 def template_path() -> Path:
     return BASE_DIR / TEMPLATE_FILENAME
