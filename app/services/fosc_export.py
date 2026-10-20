@@ -75,10 +75,20 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
         .order_by(TimeEntry.declared_time)
         .all()
     )
-    cis = [e for e in entries if e.entry_type == EntryType.check_in]
-    cos = [e for e in entries if e.entry_type == EntryType.check_out]
-    first_in = min((e.declared_time for e in cis), default=None)
-    last_out = max((e.declared_time for e in cos), default=None)
+    sessions = []
+    open_in = None
+    for entry in entries:
+        if entry.entry_type == EntryType.check_in:
+            if open_in is not None:
+                sessions.append((open_in, None))
+            open_in = entry.declared_time
+        elif entry.entry_type == EntryType.check_out:
+            sessions.append((open_in, entry.declared_time))
+            open_in = None
+    if open_in is not None:
+        sessions.append((open_in, None))
+    first_in = sessions[0][0] if sessions else None
+    last_out = sessions[-1][1] if sessions else None
 
     phones = (
         db.query(PhoneSupportEntry)
@@ -111,15 +121,19 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
         beod = 0.0
         work = 0.0
     if summary:
-        clock = float(summary.clock_hours or 0) + float(summary.offsite_hours or 0) + float(summary.phone_hours or 0)
+        clock = float(summary.clock_hours or 0)
+        phone_s = float(summary.phone_hours or 0)
+        off_s = float(summary.offsite_hours or 0)
         claimed = 0.0
         if summary.lunch_end_of_day or summary.beod_hours:
             claimed = float(summary.beod_hours or summary.beod_requested_hours or 1.0)
         if clock == 0 and summary.total_hours:
-            clock = max(0.0, float(summary.total_hours) - float(summary.beod_hours or 0))
+            clock = max(0.0, float(summary.total_hours) - float(summary.beod_hours or 0) - phone_s - off_s)
         if d.weekday() < 5:
             work = round(clock, 2)
             beod = round(claimed, 2)
+            phone_h = round(phone_s, 2) or None
+            off_h = round(off_s, 2) or None
 
     lt = None
     val = 0.0
@@ -158,6 +172,7 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
     return {
         "in": first_in,
         "out": last_out,
+        "sessions": sessions,
         "phone": phone_h,
         "offsite": off_h,
         "fosc": work,
@@ -261,136 +276,162 @@ def write_week_sheet(
         elif i >= 5:
             cell.fill = PatternFill("solid", fgColor="7F7F7F")
 
-    rows = [
-        ("In", "in", "time"),
-        ("Out", "out", "time"),
-        ("BEOD", "beod", "num"),
-        ("Normal Time - FOSC", "fosc", "num"),
-        ("Vacation", "vacation", "num"),
-        ("Sick Hours", "sick", "num"),
-        ("COVID Sick Hours", "covid", "num"),
-        ("UAE National Holiday", "holiday", "num"),
-    ]
     row = 6
     meta: list[dict] = []
-    team = {key: [0.0] * 5 for _, key, kind in rows if kind == "num"}
+    team = {key: [0.0] * 5 for key in (
+        "fosc", "beod", "phone", "offsite", "vacation", "sick", "covid", "holiday",
+    )}
+    weekdays = days[:5]
+
+    def _paint(label, values, kind, tone=None):
+        nonlocal row
+        bold = tone in ("fosc", "beod", "pto", "overall")
+        ws.cell(row, 2, label).font = Font(bold=bold, size=10) if bold else cat_font
+        week_sum = 0.0
+        for i in range(7):
+            cell = ws.cell(row, 3 + i)
+            cell.border = thin
+            cell.alignment = center
+            if i >= 5:
+                cell.value = "—"
+                cell.fill = gray
+                continue
+            value = values[i]
+            if kind == "time":
+                cell.value = _excel_time(value)
+                if cell.value is not None:
+                    cell.number_format = "HH:MM"
+            else:
+                amount = round(float(value or 0), 2)
+                week_sum += amount
+                cell.value = amount
+                cell.number_format = "0.0"
+                if tone == "fosc":
+                    cell.fill = green if i == 4 else orange
+                elif tone == "beod" and amount:
+                    cell.fill = beod_fill
+                elif tone == "holiday" and amount:
+                    cell.fill = orange
+                elif tone == "pto":
+                    cell.fill = pto_fill
+                elif tone == "overall":
+                    cell.fill = peach
+                    cell.font = Font(bold=True)
+        total = ws.cell(row, 10, None if kind == "time" else round(week_sum, 2))
+        total.border = thin
+        total.alignment = center
+        if kind != "time":
+            total.number_format = "0.0"
+            total.font = Font(bold=True, color="FFFFFF" if tone == "overall" else "000000")
+            if tone == "pto":
+                total.fill = pto_fill
+            elif tone == "overall":
+                total.fill = header_fill
+        row += 1
+
     for emp in employees:
         by_day = {d: _day_data(db, emp.id, d) for d in days}
-        ws.merge_cells(start_row=row, start_column=1, end_row=row + len(rows) + 1, end_column=1)
-        name_cell = ws.cell(row, 1, emp.name)
+
+        def _vals(key):
+            return [by_day[d][key] for d in weekdays]
+
+        def _any(key):
+            return any(float(by_day[d][key] or 0) > 0 for d in weekdays)
+
+        pairs = 1
+        for d in weekdays:
+            pairs = max(pairs, len(by_day[d]["sessions"]))
+        planned = []
+        for n in range(pairs):
+            ins, outs = [], []
+            for d in weekdays:
+                sessions = by_day[d]["sessions"]
+                inn, out = sessions[n] if n < len(sessions) else (None, None)
+                ins.append(inn)
+                outs.append(out)
+            suffix = "" if n == 0 else f" ({n + 1})"
+            planned.append((f"In{suffix}", ins, "time", None))
+            planned.append((f"Out{suffix}", outs, "time", None))
+        if _any("phone"):
+            planned.append(("Phone Call", _vals("phone"), "num", None))
+        if _any("offsite"):
+            planned.append(("Remote Site", _vals("offsite"), "num", None))
+        planned.append(("BEOD", _vals("beod"), "num", "beod"))
+        planned.append(("Normal Time - FOSC", _vals("fosc"), "num", "fosc"))
+        leave_keys = []
+        for label, key in (
+            ("Vacation", "vacation"),
+            ("Sick Hours", "sick"),
+            ("COVID Sick Hours", "covid"),
+            ("UAE National Holiday", "holiday"),
+        ):
+            if _any(key):
+                planned.append((label, _vals(key), "num", "holiday" if key == "holiday" else None))
+                leave_keys.append(key)
+        pto_days = [
+            round(sum(float(by_day[d][key] or 0) for key in leave_keys), 2)
+            for d in weekdays
+        ]
+        if leave_keys:
+            planned.append(("PTO Total", pto_days, "num", "pto"))
+        overall = []
+        for i, d in enumerate(weekdays):
+            amount = float(by_day[d]["fosc"] or 0) + float(by_day[d]["beod"] or 0)
+            amount += float(by_day[d]["phone"] or 0) + float(by_day[d]["offsite"] or 0)
+            amount += pto_days[i]
+            overall.append(round(amount, 2))
+        planned.append(("Overall Total", overall, "num", "overall"))
+
+        block = row
+        ws.merge_cells(start_row=block, start_column=1, end_row=block + len(planned) - 1, end_column=1)
+        name_cell = ws.cell(block, 1, emp.name)
         name_cell.font = name_font
         name_cell.fill = name_fill
         name_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-        fosc_row = beod_row = None
-        leave_first = leave_last = None
-        for label, key, kind in rows:
-            ws.cell(row, 2, label).font = Font(bold=True, size=10) if key in ("fosc", "beod") else cat_font
-            if key == "fosc":
-                fosc_row = row
-            if key == "beod":
-                beod_row = row
-            if key == "vacation":
-                leave_first = row
-            if key == "holiday":
-                leave_last = row
-            for i, d in enumerate(days):
-                cell = ws.cell(row, 3 + i)
-                cell.border = thin
-                cell.alignment = center
-                weekend = i >= 5
-                if weekend:
-                    cell.value = "—"
-                    cell.fill = gray
-                    continue
-                value = by_day[d][key]
-                if kind == "time":
-                    cell.value = _excel_time(value)
-                    if cell.value is not None:
-                        cell.number_format = "HH:MM"
-                else:
-                    cell.value = 0 if value is None and key in ("beod", "fosc") else value
-                    if cell.value is not None:
-                        cell.number_format = "0.0"
-                if key == "fosc":
-                    cell.fill = green if i == 4 else orange
-                elif key == "beod" and value:
-                    cell.fill = beod_fill
-                elif key == "holiday" and value:
-                    cell.fill = orange
-            if kind == "num":
-                week_sum = round(sum(float(by_day[days[i]][key] or 0) for i in range(5)), 2)
-                for i in range(5):
-                    team[key][i] += float(by_day[days[i]][key] or 0)
-                total = ws.cell(row, 10, week_sum)
-            else:
-                total = ws.cell(row, 10, None)
-            if kind == "num":
-                total.number_format = "0.0"
-                total.font = Font(bold=True)
-            total.border = thin
-            total.alignment = center
-            row += 1
-
-        def _num(key, index):
-            return float(by_day[days[index]][key] or 0)
-
-        ws.cell(row, 2, "PTO Total").font = Font(bold=True, size=10)
-        pto_days = []
-        for i in range(7):
-            cell = ws.cell(row, 3 + i)
-            cell.font = Font(bold=True)
-            cell.border = thin
-            cell.alignment = center
-            if i >= 5:
-                cell.value = "—"
-                cell.fill = gray
-            else:
-                amount = round(_num("vacation", i) + _num("sick", i) + _num("covid", i) + _num("holiday", i), 2)
-                pto_days.append(amount)
-                cell.value = amount
-                cell.number_format = "0.0"
-                cell.fill = pto_fill
-        pto_total = ws.cell(row, 10, round(sum(pto_days), 2))
-        pto_total.number_format = "0.0"
-        pto_total.font = Font(bold=True)
-        pto_total.fill = pto_fill
-        pto_total.border = thin
-        pto_total.alignment = center
-        row += 1
-
-        ws.cell(row, 2, "Overall Total").font = Font(bold=True, size=10)
-        overall_days = []
-        for i in range(7):
-            cell = ws.cell(row, 3 + i)
-            cell.font = Font(bold=True)
-            cell.border = thin
-            cell.alignment = center
-            if i >= 5:
-                cell.value = "—"
-                cell.fill = gray
-            else:
-                amount = round(_num("fosc", i) + _num("beod", i) + pto_days[i], 2)
-                overall_days.append(amount)
-                cell.value = amount
-                cell.number_format = "0.0"
-                cell.fill = peach
-        overall = ws.cell(row, 10, round(sum(overall_days), 2))
-        overall.number_format = "0.0"
-        overall.font = Font(bold=True, color="FFFFFF")
-        overall.fill = header_fill
-        overall.border = thin
-        overall.alignment = center
+        for label, values, kind, tone in planned:
+            if kind == "num" and tone != "pto" and tone != "overall":
+                key = {
+                    "Phone Call": "phone",
+                    "Remote Site": "offsite",
+                    "BEOD": "beod",
+                    "Normal Time - FOSC": "fosc",
+                    "Vacation": "vacation",
+                    "Sick Hours": "sick",
+                    "COVID Sick Hours": "covid",
+                    "UAE National Holiday": "holiday",
+                }.get(label)
+                if key:
+                    for i in range(5):
+                        team[key][i] += float(values[i] or 0)
+            _paint(label, values, kind, tone)
         meta.append({
             "employee_id": emp.id,
             "name": emp.name,
             "role": emp.role,
             "week_start": week_start,
         })
-        row += 2
+        row += 1
 
+    def _team_has(keys):
+        return any(team[key][i] for key in keys for i in range(5))
+
+    team_lines = [("BEOD", ["beod"], beod_fill, "000000")]
+    if _team_has(["phone"]):
+        team_lines.append(("Phone Call", ["phone"], beod_fill, "000000"))
+    if _team_has(["offsite"]):
+        team_lines.append(("Remote Site", ["offsite"], beod_fill, "000000"))
+    team_lines.append(("Normal Time - FOSC", ["fosc"], orange, "000000"))
+    if _team_has(["vacation", "sick", "covid", "holiday"]):
+        team_lines.append(("PTO Total", ["vacation", "sick", "covid", "holiday"], pto_fill, "000000"))
+    team_lines.append((
+        "Overall Total",
+        ["fosc", "beod", "phone", "offsite", "vacation", "sick", "covid", "holiday"],
+        header_fill,
+        "FFFFFF",
+    ))
     row += 1
-    ws.merge_cells(start_row=row, start_column=1, end_row=row + 3, end_column=1)
+    ws.merge_cells(start_row=row, start_column=1, end_row=row + len(team_lines) - 1, end_column=1)
     team_name = ws.cell(row, 1, "Team total")
     team_name.font = Font(bold=True, color="FFFFFF", size=12)
     team_name.fill = header_fill
@@ -422,15 +463,8 @@ def write_week_sheet(
         total.alignment = center
         row += 1
 
-    _team_line("BEOD", ["beod"], beod_fill)
-    _team_line("Normal Time - FOSC", ["fosc"], orange)
-    _team_line("PTO Total", ["vacation", "sick", "covid", "holiday"], pto_fill)
-    _team_line(
-        "Overall Total",
-        ["fosc", "beod", "vacation", "sick", "covid", "holiday"],
-        header_fill,
-        "FFFFFF",
-    )
+    for label, keys, fill, font_color in team_lines:
+        _team_line(label, keys, fill, font_color)
 
     ws.column_dimensions["A"].width = 24
     ws.column_dimensions["B"].width = 26
@@ -698,7 +732,7 @@ def build_fosc_quarterly_workbook(db: Session, year: int, quarter: int) -> Bytes
         while day <= q_end:
             if day.weekday() < 5:
                 data = _day_data(db, emp.id, day)
-                fosc += float(data["fosc"] or 0)
+                fosc += float(data["fosc"] or 0) + float(data["phone"] or 0) + float(data["offsite"] or 0)
                 beod += float(data["beod"] or 0)
                 pto += float(data["vacation"] or 0) + float(data["sick"] or 0)
                 pto += float(data["covid"] or 0) + float(data["holiday"] or 0)
