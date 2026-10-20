@@ -36,6 +36,26 @@ _CODE_RE = re.compile(r"(?im)^\s*CODE:\s*([A-Fa-f0-9]{8})\s*$")
 _TIME_RE = re.compile(r"(?im)^\s*DECLARED\s*TIME:\s*(\d{1,2}):(\d{2})\s*$")
 _BEOD_RE = re.compile(r"(?im)^\s*BEOD:\s*(yes|no)\s*$")
 _BEOD_LEN_RE = re.compile(r"(?im)^\s*BEOD\s*LENGTH:\s*(\S+)\s*$")
+_TOP_TIME_RE = re.compile(r"(?<!\d)(\d{1,2})[:.](\d{2})(?!\d)")
+
+
+def _fresh_reply(body: str) -> str:
+    """The text the employee typed, before the quoted checkout mail."""
+    kept = []
+    for line in body.splitlines():
+        raw = line.strip()
+        if raw.startswith(">"):
+            break
+        if re.match(r"^_{5,}$", raw):
+            break
+        if re.match(r"^-{2,}", raw) and "original" in raw.lower():
+            break
+        if re.match(r"^on .+ wrote:?$", raw, re.I):
+            break
+        if re.match(r"^from:\s", raw, re.I):
+            break
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def issue_checkout_token(db: Session, employee: Employee, checkin: TimeEntry, expected: datetime) -> CheckoutToken | None:
@@ -73,24 +93,29 @@ def parse_checkout_reply(body: str) -> dict | None:
     """Pull the reply fields. None when this message is not a checkout reply."""
     if not body or "CODE:" not in body.upper():
         return None
+    fresh = _fresh_reply(body)
     lines = []
     for line in body.splitlines():
         stripped = line.lstrip()
         if stripped.startswith(">"):
             stripped = stripped[1:].lstrip()
         lines.append(stripped)
-    body = "\n".join(lines)
-    code = _CODE_RE.search(body) or re.search(r"CODE:\s*([A-Fa-f0-9]{8})", body, re.I)
-    clock = _TIME_RE.search(body) or re.search(
-        r"DECLARED\s*TIME:\s*(\d{1,2}):(\d{2})", body, re.I,
-    )
-    if not code or not clock:
+    full = "\n".join(lines)
+    code = _CODE_RE.search(full) or re.search(r"CODE:\s*([A-Fa-f0-9]{8})", full, re.I)
+    if not code:
         return None
-    hour, minute = int(clock.group(1)), int(clock.group(2))
+    top = _TOP_TIME_RE.search(fresh)
+    clock = None if top else (
+        _TIME_RE.search(full) or re.search(r"DECLARED\s*TIME:\s*(\d{1,2}):(\d{2})", full, re.I)
+    )
+    picked = top or clock
+    if not picked:
+        return None
+    hour, minute = int(picked.group(1)), int(picked.group(2))
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         return {"code": code.group(1).upper(), "bad_time": True}
-    beod_match = _BEOD_RE.search(body)
-    length_match = _BEOD_LEN_RE.search(body)
+    beod_match = _BEOD_RE.search(full)
+    length_match = _BEOD_LEN_RE.search(full)
     return {
         "code": code.group(1).upper(),
         "hour": hour,
@@ -134,12 +159,13 @@ def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, 
     state_err = can_check_out(db, employee.id, token.work_date, declared_time=declared)
     if state_err:
         return state_err
-    shift = abs((declared - token.expected_time).total_seconds()) / 60
+    shift = (token.expected_time - declared).total_seconds() / 60
     if shift > 15:
         return (
-            "This reply only checks out within 15 minutes of "
+            "This reply cannot move the checkout more than 15 minutes earlier than "
             f"{token.expected_time.strftime('%H:%M')}. "
-            "Use the kiosk for a larger change."
+            "A later time is fine: type it at the top of the reply, such as 17:30. "
+            "Use the kiosk to leave much earlier."
         )
 
     claim_beod = bool(parsed.get("beod")) and beod_offered_on(token.work_date)
@@ -254,7 +280,7 @@ def process_checkout_replies(db: Session) -> int:
             _notify(
                 employee,
                 "Check-out reply was not recorded",
-                fail + "\n\nReply again with the same CODE. DECLARED TIME must stay within 15 minutes of the projected checkout.",
+                fail + "\n\nReply again with the same CODE. A time at the top of the reply, such as 17:30, is used. It can be later than the projection. It cannot be more than 15 minutes earlier.",
                 reply_message_id=message.message_id or "",
                 reply_subject=message.subject or "",
             )
