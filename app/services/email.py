@@ -514,7 +514,11 @@ def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_f
         greeting,
         f"""
         <p style="margin:8px 0 16px;">Projected checkout is <strong style="color:#fbbf24;">{co_str}</strong>, about 15 minutes from now.</p>
-        <p style="margin:0 0 16px;">Reply to this email to check out. Leave the code unchanged. DECLARED TIME is already the projected checkout. You may move it up to 15 minutes earlier. To leave later, type that time at the top of the reply, such as 17:30. The confirmation email can take up to 5 minutes.</p>
+        <p style="margin:0 0 12px;">Reply to this email to check out. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.</p>
+        <p style="margin:0 0 8px;"><strong style="color:#f8fafc;">What is allowed</strong></p>
+        <p style="margin:0 0 8px;">The declared time must be within 15 minutes of when you send the reply. Do not reply at 15:00 and put 16:00. Send the reply when you leave.</p>
+        <p style="margin:0 0 8px;">The time can be up to 15 minutes earlier than the projected checkout. A later time is allowed only when it is still within 15 minutes of when you send the reply.</p>
+        <p style="margin:0 0 16px;">If a reply is rejected, the return email says which rule it broke. The confirmation can take up to 5 minutes.</p>
         <pre style="margin:0;text-align:left;background:#020617;color:#f8fafc;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);font-size:14px;font-family:'JetBrains Mono',Consolas,monospace;">{fields}</pre>
         """,
         kicker="Checkout",
@@ -525,11 +529,16 @@ def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_f
 
 Projected checkout is {co_str}, about 15 minutes from now.
 
-Reply to this email to check out. Leave the code unchanged.
-DECLARED TIME is already the projected checkout.
-You may move it up to 15 minutes earlier.
-To leave later, type that time at the top of the reply, such as 17:30.
-The confirmation email can take up to 5 minutes.
+Reply to this email to check out. Leave the CODE line unchanged.
+A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.
+
+What is allowed
+The declared time must be within 15 minutes of when you send the reply.
+Do not reply at 15:00 and put 16:00. Send the reply when you leave.
+The time can be up to 15 minutes earlier than the projected checkout.
+A later time is allowed only when it is still within 15 minutes of when you send the reply.
+If a reply is rejected, the return email says which rule it broke.
+The confirmation can take up to 5 minutes.
 
 {fields}
 

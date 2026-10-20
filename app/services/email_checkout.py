@@ -153,19 +153,32 @@ def _notify(employee: Employee, subject: str, text: str, reply_message_id: str =
     return ok
 
 
-def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, now: datetime) -> str | None:
+def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, now: datetime, reply_at: datetime) -> str | None:
     """Record the checkout. Return an error string, or None on success."""
     declared = datetime.combine(token.work_date, time(parsed["hour"], parsed["minute"]))
     state_err = can_check_out(db, employee.id, token.work_date, declared_time=declared)
     if state_err:
-        return state_err
-    shift = (token.expected_time - declared).total_seconds() / 60
-    if shift > 15:
+        return f"Rejected because {state_err}"
+    reply_gap = abs((declared - reply_at).total_seconds()) / 60
+    if reply_gap > 15:
+        earliest = (reply_at - timedelta(minutes=15)).strftime("%H:%M")
+        latest = (reply_at + timedelta(minutes=15)).strftime("%H:%M")
         return (
-            "This reply cannot move the checkout more than 15 minutes earlier than "
-            f"{token.expected_time.strftime('%H:%M')}. "
-            "A later time is fine: type it at the top of the reply, such as 17:30. "
-            "Use the kiosk to leave much earlier."
+            f"Rejected because {declared.strftime('%H:%M')} is more than 15 minutes from "
+            f"when you sent this reply ({reply_at.strftime('%H:%M')}). "
+            "The declared time has to be within 15 minutes of the time you send the email. "
+            f"A reply sent at {reply_at.strftime('%H:%M')} can use {earliest} to {latest}. "
+            "It cannot be sent at 15:00 with a declared time of 16:00. "
+            "Reply again with the same CODE and a time in that window."
+        )
+    early = (token.expected_time - declared).total_seconds() / 60
+    if early > 15:
+        return (
+            f"Rejected because {declared.strftime('%H:%M')} is more than 15 minutes earlier than "
+            f"the projected checkout ({token.expected_time.strftime('%H:%M')}). "
+            "The reply can move the checkout up to 15 minutes earlier than the projection. "
+            "A later time is allowed only if you send the reply within 15 minutes of that time. "
+            "Use the kiosk to leave earlier than that. Reply again with the same CODE if the time was a mistake."
         )
 
     claim_beod = bool(parsed.get("beod")) and beod_offered_on(token.work_date)
@@ -254,7 +267,8 @@ def process_checkout_replies(db: Session) -> int:
             fail = f"Code {token.code} has expired. Check out on the kiosk."
         else:
             try:
-                result = _apply(db, token, employee, parsed, datetime.now())
+                reply_at = message.received_at or datetime.now()
+                result = _apply(db, token, employee, parsed, datetime.now(), reply_at)
             except Exception as exc:
                 db.rollback()
                 logger.exception("Email checkout failed")
@@ -280,7 +294,7 @@ def process_checkout_replies(db: Session) -> int:
             _notify(
                 employee,
                 "Check-out reply was not recorded",
-                fail + "\n\nReply again with the same CODE. A time at the top of the reply, such as 17:30, is used. It can be later than the projection. It cannot be more than 15 minutes earlier.",
+                fail + "\n\nThe CODE stays the same if you reply again.",
                 reply_message_id=message.message_id or "",
                 reply_subject=message.subject or "",
             )
