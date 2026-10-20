@@ -74,7 +74,8 @@
                 <h2 class="text-base font-semibold text-white">Email weeks to managers</h2>
                 <p class="text-xs text-gray-500 mt-1 max-w-xl">
                     Emails the previous week, or several weeks, as the customer attendance sheet.
-                    One sheet per week: declared in and out, BEOD, FOSC, PTO, and the overall total.
+                    One sheet per week. Phone, remote site, and BEOD appear only when someone has them.
+                    All four PTO rows are included unless you clear the box.
                 </p>
             </div>
             <form method="POST" action="/reports/email-weeks" class="flex flex-wrap items-end gap-3">
@@ -91,6 +92,10 @@
                         {% endfor %}
                     </select>
                 </div>
+                <label class="flex items-center gap-2 text-sm text-gray-300 mb-2">
+                    <input type="checkbox" name="show_all_pto" value="1" checked class="rounded border-white/20">
+                    Show all PTO rows
+                </label>
                 <button type="submit" class="btn-primary px-6 whitespace-nowrap">Email managers</button>
             </form>
         </div>
@@ -143,9 +148,8 @@
             <div>
                 <h2 class="text-base font-semibold text-white">Weekly attendance sheet</h2>
                 <p class="text-xs text-gray-500 mt-1 max-w-xl">
-                    One sheet. Declared in and out, with another pair only if someone came back.
-                    Phone, remote site, and each leave type appear only when that person has some.
-                    BEOD, FOSC, and the overall total are always there.
+                    Phone, remote site, BEOD, and a second in/out appear only when that person has them.
+                    FOSC is always shown. Clear the box to hide empty PTO rows.
                 </p>
             </div>
             <form method="GET" action="/reports/export/fosc-weekly" class="flex flex-wrap items-end gap-3">
@@ -154,6 +158,11 @@
                     <input type="date" name="week" value="{{ fosc_week_start or '' }}"
                         class="form-input font-mono text-sm">
                 </div>
+                <input type="hidden" name="pto_set" value="1">
+                <label class="flex items-center gap-2 text-sm text-gray-300 mb-2">
+                    <input type="checkbox" name="show_all_pto" value="1" checked class="rounded border-white/20">
+                    Show all PTO rows
+                </label>
                 <button type="submit" class="btn-secondary px-6 whitespace-nowrap" id="btn-export-fosc">
                     Download week
                 </button>

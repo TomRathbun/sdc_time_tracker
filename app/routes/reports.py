@@ -56,6 +56,7 @@ async def email_weeks_to_managers(
     request: Request,
     week: str = Form(""),
     weeks: int = Form(1),
+    show_all_pto: str = Form(""),
     db: Session = Depends(get_db),
 ):
     """Email one or more finished weeks to every manager."""
@@ -69,7 +70,7 @@ async def email_weeks_to_managers(
         through = _monday(date.today()) - timedelta(days=7)
 
     from app.services.summary_email import send_reconciliation
-    ok, note = send_reconciliation(db, through, weeks)
+    ok, note = send_reconciliation(db, through, weeks, show_all_pto=bool(show_all_pto))
     log_action(
         db, action="email_reconciliation", entity_type="Report",
         entity_id=None, employee_id=employee.id,
@@ -110,6 +111,8 @@ async def email_quarter_to_managers(
 async def export_fosc_weekly(
     request: Request,
     week: str = Query(None),
+    show_all_pto: str = Query(""),
+    pto_set: str = Query(""),
     db: Session = Depends(get_db),
 ):
     """Export one week of FOSC attendance (all active employees)."""
@@ -127,7 +130,8 @@ async def export_fosc_weekly(
 
     from app.services.fosc_export import build_fosc_weekly_workbook
 
-    buf = build_fosc_weekly_workbook(db, week_start)
+    all_pto = True if not pto_set else bool(show_all_pto)
+    buf = build_fosc_weekly_workbook(db, week_start, show_all_pto=all_pto)
     filename = f"FOSC_Weekly_Attendance_{week_start.isoformat()}.xlsx"
     return StreamingResponse(
         buf,

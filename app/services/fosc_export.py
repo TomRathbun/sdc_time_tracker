@@ -232,6 +232,7 @@ def write_week_sheet(
     employees: list[Employee],
     *,
     title_suffix: str = "",
+    show_all_pto: bool = True,
 ) -> list[dict]:
     """One customer attendance sheet for a week. No TEMPO, signature, or remarks."""
     week_start = _monday(week_start)
@@ -356,23 +357,23 @@ def write_week_sheet(
             planned.append(("Phone Call", _vals("phone"), "num", None))
         if _any("offsite"):
             planned.append(("Remote Site", _vals("offsite"), "num", None))
-        planned.append(("BEOD", _vals("beod"), "num", "beod"))
+        if _any("beod"):
+            planned.append(("BEOD", _vals("beod"), "num", "beod"))
         planned.append(("Normal Time - FOSC", _vals("fosc"), "num", "fosc"))
-        leave_keys = []
-        for label, key in (
+        leave_defs = (
             ("Vacation", "vacation"),
             ("Sick Hours", "sick"),
             ("COVID Sick Hours", "covid"),
             ("UAE National Holiday", "holiday"),
-        ):
-            if _any(key):
+        )
+        for label, key in leave_defs:
+            if show_all_pto or _any(key):
                 planned.append((label, _vals(key), "num", "holiday" if key == "holiday" else None))
-                leave_keys.append(key)
         pto_days = [
-            round(sum(float(by_day[d][key] or 0) for key in leave_keys), 2)
+            round(sum(float(by_day[d][key] or 0) for _, key in leave_defs), 2)
             for d in weekdays
         ]
-        if leave_keys:
+        if show_all_pto or any(pto_days):
             planned.append(("PTO Total", pto_days, "num", "pto"))
         overall = []
         for i, d in enumerate(weekdays):
@@ -389,21 +390,10 @@ def write_week_sheet(
         name_cell.fill = name_fill
         name_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
+        for i, d in enumerate(weekdays):
+            for key in team:
+                team[key][i] += float(by_day[d][key] or 0)
         for label, values, kind, tone in planned:
-            if kind == "num" and tone != "pto" and tone != "overall":
-                key = {
-                    "Phone Call": "phone",
-                    "Remote Site": "offsite",
-                    "BEOD": "beod",
-                    "Normal Time - FOSC": "fosc",
-                    "Vacation": "vacation",
-                    "Sick Hours": "sick",
-                    "COVID Sick Hours": "covid",
-                    "UAE National Holiday": "holiday",
-                }.get(label)
-                if key:
-                    for i in range(5):
-                        team[key][i] += float(values[i] or 0)
             _paint(label, values, kind, tone)
         meta.append({
             "employee_id": emp.id,
@@ -413,23 +403,23 @@ def write_week_sheet(
         })
         row += 1
 
-    def _team_has(keys):
-        return any(team[key][i] for key in keys for i in range(5))
-
-    team_lines = [("BEOD", ["beod"], beod_fill, "000000")]
-    if _team_has(["phone"]):
-        team_lines.append(("Phone Call", ["phone"], beod_fill, "000000"))
-    if _team_has(["offsite"]):
-        team_lines.append(("Remote Site", ["offsite"], beod_fill, "000000"))
-    team_lines.append(("Normal Time - FOSC", ["fosc"], orange, "000000"))
-    if _team_has(["vacation", "sick", "covid", "holiday"]):
-        team_lines.append(("PTO Total", ["vacation", "sick", "covid", "holiday"], pto_fill, "000000"))
-    team_lines.append((
-        "Overall Total",
-        ["fosc", "beod", "phone", "offsite", "vacation", "sick", "covid", "holiday"],
-        header_fill,
-        "FFFFFF",
-    ))
+    team_lines = [
+        ("Phone Call", ["phone"], beod_fill, "000000"),
+        ("Remote Site", ["offsite"], beod_fill, "000000"),
+        ("BEOD", ["beod"], beod_fill, "000000"),
+        ("Normal Time - FOSC", ["fosc"], orange, "000000"),
+        ("Vacation", ["vacation"], pto_fill, "000000"),
+        ("Sick Hours", ["sick"], pto_fill, "000000"),
+        ("COVID Sick Hours", ["covid"], pto_fill, "000000"),
+        ("UAE National Holiday", ["holiday"], pto_fill, "000000"),
+        ("PTO Total", ["vacation", "sick", "covid", "holiday"], pto_fill, "000000"),
+        (
+            "Overall Total",
+            ["fosc", "beod", "phone", "offsite", "vacation", "sick", "covid", "holiday"],
+            header_fill,
+            "FFFFFF",
+        ),
+    ]
     row += 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row + len(team_lines) - 1, end_column=1)
     team_name = ws.cell(row, 1, "Team total")
@@ -656,21 +646,21 @@ def _week_sheet_title(week_index: int) -> str:
     return f"Time Keeping Sheet (Wk{week_index})"[:31]
 
 
-def build_fosc_weekly_workbook(db: Session, week_start: date) -> BytesIO:
+def build_fosc_weekly_workbook(db: Session, week_start: date, *, show_all_pto: bool = True) -> BytesIO:
     """Single-week customer attendance sheet."""
     week_start = _monday(week_start)
     employees = _active_employees(db)
     wb = Workbook()
     ws = wb.active
     ws.title = f"Week {week_start.strftime('%d %b')}"[:31]
-    write_week_sheet(ws, db, week_start, employees)
+    write_week_sheet(ws, db, week_start, employees, show_all_pto=show_all_pto)
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
     return buf
 
 
-def build_fosc_weeks_workbook(db: Session, mondays: list[date]) -> BytesIO:
+def build_fosc_weeks_workbook(db: Session, mondays: list[date], *, show_all_pto: bool = True) -> BytesIO:
     """One attendance sheet per week, in the customer format."""
     mondays = [_monday(day) for day in mondays]
     employees = _active_employees(db)
@@ -680,7 +670,7 @@ def build_fosc_weeks_workbook(db: Session, mondays: list[date]) -> BytesIO:
         title = f"Week {mon.strftime('%d %b')}"[:31]
         ws = default if idx == 1 else wb.create_sheet(title)
         ws.title = title
-        write_week_sheet(ws, db, mon, employees)
+        write_week_sheet(ws, db, mon, employees, show_all_pto=show_all_pto)
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)

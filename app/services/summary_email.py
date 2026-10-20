@@ -406,7 +406,7 @@ def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
     return _deliver(db, subject, html, text)
 
 
-def send_reconciliation(db: Session, through: date, weeks: int) -> tuple[bool, str]:
+def send_reconciliation(db: Session, through: date, weeks: int, *, show_all_pto: bool = True) -> tuple[bool, str]:
     """Email managers the quarterly spreadsheet, for one week or several."""
     from app.services.fosc_export import build_fosc_weeks_workbook
 
@@ -423,7 +423,7 @@ def send_reconciliation(db: Session, through: date, weeks: int) -> tuple[bool, s
         for person in _people(db):
             trim_week_leave(db, person.id, week_start)
 
-    book = build_fosc_weeks_workbook(db, starts)
+    book = build_fosc_weeks_workbook(db, starts, show_all_pto=show_all_pto)
     filename = f"FOSC_Weekly_{starts[0].isoformat()}_{(end + timedelta(days=4)).isoformat()}.xlsx"
     span = f"{starts[0].strftime('%d %b')} – {(end + timedelta(days=4)).strftime('%d %b %Y')}"
     html = render_email(
