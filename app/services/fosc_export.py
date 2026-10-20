@@ -680,7 +680,7 @@ def build_fosc_weeks_workbook(db: Session, mondays: list[date]) -> BytesIO:
         title = f"Week {mon.strftime('%d %b')}"[:31]
         ws = default if idx == 1 else wb.create_sheet(title)
         ws.title = title
-        write_week_sheet(ws, db, mon, employees, title_suffix=f"Wk{idx}")
+        write_week_sheet(ws, db, mon, employees)
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
