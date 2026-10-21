@@ -13,6 +13,10 @@ FEATURE_DEFAULTS = {
         "value": "true",
         "description": "Send confirmation email when an employee checks in",
     },
+    "checkin_reminder_enabled": {
+        "value": "true",
+        "description": "Email the employee 15 minutes before their usual check-in. A reply with the one-time code checks them in. The declared time cannot be more than 15 minutes earlier than when they send the reply. The code expires at noon.",
+    },
     "checkout_reminder_enabled": {
         "value": "true",
         "description": "Email the employee 15 minutes before the projected checkout. A reply with the one-time code checks them out. The declared time can move up to 15 minutes. No reason is asked.",

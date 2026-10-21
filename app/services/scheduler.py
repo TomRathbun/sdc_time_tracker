@@ -116,6 +116,63 @@ def _check_for_upcoming_checkouts():
         db.close()
 
 
+def _check_for_morning_checkins():
+    """Email a one-time check-in code 15 minutes before the usual start."""
+    from app.database import SessionLocal
+    from app.models import Employee, Role
+    from app.services.email import send_checkin_reminder
+    from app.services.email_checkin import (
+        cancel_checkin_token, issue_checkin_token, usual_checkin_time, _on_leave,
+    )
+    from app.services.time_state import STATUS_NOT_STARTED, current_status
+    from app.config import EMAIL_ENABLED
+    from app.services.settings import get_bool_setting
+
+    if not EMAIL_ENABLED:
+        return
+
+    db = SessionLocal()
+    try:
+        if not get_bool_setting(db, "checkin_reminder_enabled"):
+            return
+        today = date.today()
+        if today.weekday() >= 5:
+            return
+        now = datetime.now()
+        employees = db.query(Employee).filter(
+            Employee.is_active == True,
+            Employee.role != Role.customer,
+            Employee.email != None,
+            Employee.email != "",
+        ).all()
+        for emp in employees:
+            if current_status(db, emp.id, today) != STATUS_NOT_STARTED:
+                continue
+            if _on_leave(db, emp.id, today):
+                continue
+            expected = usual_checkin_time(db, emp.id, today)
+            if expected is None:
+                continue
+            minutes_until = (expected - now).total_seconds() / 60
+            if not (-30 < minutes_until <= 15):
+                continue
+            token = issue_checkin_token(db, emp, expected)
+            if token is None:
+                continue
+            fields = f"CODE: {token.code}\nDECLARED TIME: {expected.strftime('%H:%M')}"
+            logger.info(
+                "Sending check-in reply mail to %s (usual %s)",
+                emp.name, expected.strftime("%H:%M"),
+            )
+            if not send_checkin_reminder(emp, expected, token.code, fields):
+                cancel_checkin_token(db, token)
+                logger.error("Check-in reminder failed for %s; code withdrawn", emp.name)
+    except Exception as e:
+        logger.error(f"Morning check-in scheduler error: {e}")
+    finally:
+        db.close()
+
+
 def _scheduler_loop():
     """Reminders every 60s. Inbox every 60s so a checkout reply is picked up quickly."""
     logger.info("Background scheduler started (checkout reminder and inbox every 60s)")
@@ -124,6 +181,10 @@ def _scheduler_loop():
             _check_for_upcoming_checkouts()
         except Exception as e:
             logger.error(f"Scheduler loop error: {e}")
+        try:
+            _check_for_morning_checkins()
+        except Exception as e:
+            logger.error(f"Morning check-in scheduler error: {e}")
         try:
             from app.database import SessionLocal
             from app.services.inbox import poll_inbox

@@ -495,6 +495,61 @@ def queue_checkin_email(name: str, email: str, checkin_time: datetime,
     threading.Thread(target=_run, daemon=True, name="checkin-email").start()
 
 
+def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fields: str):
+    """Remind the employee and give them a one-time reply that checks them in."""
+    address = (getattr(employee, "email", None) or "").strip()
+    name = getattr(employee, "name", None) or "there"
+    if not address or not code:
+        return False
+
+    greeting = _get_greeting(name, checkin_time.hour)
+    ci_str = checkin_time.strftime("%H:%M")
+    fields = reply_fields.strip()
+
+    images = [
+        ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
+    ]
+
+    html = render_email(
+        greeting,
+        f"""
+        <p style="margin:8px 0 16px;">Your usual check-in is <strong style="color:#4ade80;">{ci_str}</strong>, about 15 minutes from now.</p>
+        <p style="margin:0 0 12px;">Reply to this email to check in. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.</p>
+        <p style="margin:0 0 8px;"><strong style="color:#f8fafc;">What is allowed</strong></p>
+        <p style="margin:0 0 8px;">The declared time can be later than when you send the reply. It cannot be more than 15 minutes earlier. A reply sent at 06:40 can use 06:25, not 06:00.</p>
+        <p style="margin:0 0 16px;">This code expires at noon. If the reply is rejected, the return email says why. The confirmation can take up to 5 minutes.</p>
+        <pre style="margin:0;text-align:left;background:#020617;color:#f8fafc;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);font-size:14px;font-family:'JetBrains Mono',Consolas,monospace;">{fields}</pre>
+        """,
+        kicker="Check in",
+        show_logo=True,
+    )
+    text = f"""{greeting}
+
+Your usual check-in is {ci_str}, about 15 minutes from now.
+
+Reply to this email to check in. Leave the CODE line unchanged.
+A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.
+
+What is allowed
+The declared time can be later than when you send the reply.
+It cannot be more than 15 minutes earlier.
+A reply sent at 06:40 can use 06:25, not 06:00.
+This code expires at noon.
+If the reply is rejected, the return email says why.
+The confirmation can take up to 5 minutes.
+
+{fields}
+
+{APP_NAME}"""
+    return _send_email(
+        address,
+        f"Check in at {ci_str} — reply to check in",
+        html,
+        text,
+        images,
+    )
+
+
 def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_fields: str):
     """Remind the employee and give them a one-time reply that checks them out."""
     address = (getattr(employee, "email", None) or "").strip()

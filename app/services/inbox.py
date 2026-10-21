@@ -148,8 +148,12 @@ def poll_inbox(db: Session) -> tuple[int, str]:
         except Exception:
             pass
     try:
+        from app.services.email_checkin import process_checkin_replies
         from app.services.email_checkout import process_checkout_replies
         from app.services.missed_entry import process_missed_replies
+        checked_in = process_checkin_replies(db)
+        if checked_in:
+            note += f" Checked in {checked_in} from email."
         checked_out = process_checkout_replies(db)
         if checked_out:
             note += f" Checked out {checked_out} from email."

@@ -162,6 +162,17 @@ FEATURE_CATALOG = (
             "and the hours already logged Monday through Friday."
         ),
     },
+    {
+        "slug": "morning-checkin-email",
+        "title": "Morning check-in by email",
+        "added_on": date(2026, 10, 21),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "Fifteen minutes before your usual check-in, the tracker emails a one-time code. "
+            "Reply with the time. It can be later than when you send the reply, but not more than "
+            "15 minutes earlier. The code expires at noon. You get a confirmation or a rejection that says why."
+        ),
+    },
 )
 
 
