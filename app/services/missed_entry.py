@@ -159,14 +159,15 @@ def _send_digest(employee: Employee, items: list[dict], days: int) -> bool:
         f"Hello {employee.name},",
         "",
         intro,
-        "Reply once for each day. Keep that day's CODE block and delete the others.",
+        "The DATE line shows which day that code belongs to. Leave CODE and DATE unchanged.",
+        "Fill in only the day you are fixing, and delete the other blocks.",
         "The confirmation can take up to 5 minutes.",
         "A partial day, a second punch, or anything else is fixed by signing in on the tracker.",
         "",
     ]
     html_bits = [
         f'<p style="margin:8px 0 12px;">{escape(intro)}</p>',
-        '<p style="margin:0 0 12px;">Reply once for each day. Keep that day\'s CODE block and delete the others. The confirmation can take up to 5 minutes.</p>',
+        '<p style="margin:0 0 12px;">The DATE line shows which day that code belongs to. Leave CODE and DATE unchanged. Fill in only the day you are fixing, and delete the other blocks. The confirmation can take up to 5 minutes.</p>',
         '<p style="margin:0 0 16px;">A partial day, a second punch, or anything else is fixed by signing in on the tracker.</p>',
     ]
     for item in items:
@@ -174,12 +175,12 @@ def _send_digest(employee: Employee, items: list[dict], days: int) -> bool:
         if item["kind"] == "absent":
             detail = f"{when}: no check-in and no check-out."
             how = "If you were out the whole day, set DAY to Vacation, Sick, COVID, or National Holiday."
-            fields = f"CODE: {item['code']}\nDAY: Vacation"
+            fields = f"CODE: {item['code']}\nDATE: {when}\nDAY: "
         else:
             at = item["checkin"].strftime("%H:%M")
             detail = f"{when}: checked in at {at}, and there is no check-out."
             how = "Set CHECK OUT to the time you left, and add a short REASON."
-            fields = f"CODE: {item['code']}\nCHECK OUT: {at}\nREASON: "
+            fields = f"CODE: {item['code']}\nDATE: {when}\nCHECK OUT: {at}\nREASON: "
         text_lines.extend([detail, how, fields, ""])
         html_bits.append(
             f'<p style="margin:16px 0 4px;"><strong style="color:#f8fafc;">{escape(detail)}</strong></p>'
@@ -364,6 +365,9 @@ def process_missed_replies(db: Session) -> int:
         blocks = _reply_blocks(message.body_text or "")
         if not blocks:
             continue
+        before = done
+        blank = 0
+        blank_employee = None
         for code, body in blocks:
             token = db.query(MissedEntryToken).filter(MissedEntryToken.code == code).first()
             if token is None or token.notified_uid == message.imap_uid:
@@ -377,6 +381,21 @@ def process_missed_replies(db: Session) -> int:
                 token.notified_uid = message.imap_uid
                 db.commit()
                 continue
+
+            if token.kind == "absent" and not (_DAY_RE.search(body) and _DAY_RE.search(body).group(1).strip()):
+                blank += 1
+                blank_employee = employee
+                token.notified_uid = message.imap_uid
+                db.commit()
+                continue
+            if token.kind != "absent":
+                reason_match = _REASON_RE.search(body)
+                if not (reason_match and reason_match.group(1).strip()):
+                    blank += 1
+                    blank_employee = employee
+                    token.notified_uid = message.imap_uid
+                    db.commit()
+                    continue
 
             fail = None
             if token.used_at is not None:
@@ -444,4 +463,13 @@ def process_missed_replies(db: Session) -> int:
                 )
                 token.notified_uid = message.imap_uid
                 db.commit()
+        if blank and done == before and blank_employee is not None:
+            _notify(
+                blank_employee,
+                "No day was changed",
+                "Nothing was filled in. On the day you mean, set DAY or REASON. "
+                "The DATE line shows which day that code is for. Delete the other blocks.",
+                reply_message_id=message.message_id or "",
+                reply_subject=message.subject or "",
+            )
     return done
