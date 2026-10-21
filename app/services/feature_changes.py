@@ -173,6 +173,16 @@ FEATURE_CATALOG = (
             "15 minutes earlier. The code expires at noon. You get a confirmation or a rejection that says why."
         ),
     },
+    {
+        "slug": "missed-entry-digest",
+        "title": "Daily list of missed punches",
+        "added_on": date(2026, 10, 21),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "The missed-entry email now goes out every day and lists every open punch from the last two weeks. "
+            "Each day says what is missing and how to reply. The number of days is set on the admin page."
+        ),
+    },
 )
 
 

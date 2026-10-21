@@ -990,6 +990,10 @@ async def save_config(request: Request, db: Session = Depends(get_db)):
             ):
                 from app.services.settings import format_hhmm_setting
                 value = format_hhmm_setting(str(value or ""))
+            elif key == "missed_entry_days":
+                digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+                number = int(digits) if digits else 14
+                value = str(min(60, max(1, number)))
             elif key == "summary_weekly_day":
                 day = str(value or "").strip().lower()
                 value = day if day in (

@@ -23,11 +23,15 @@ FEATURE_DEFAULTS = {
     },
     "missed_entry_enabled": {
         "value": "true",
-        "description": "At the end of the day, email anyone who never punched in, or who is still checked in. A reply can record leave or a checkout. Anything else is fixed on the dashboard.",
+        "description": "Each day, email anyone who still has a missed punch in the look-back window. The mail lists every open day and how a reply can fix the simple ones.",
     },
     "missed_entry_time": {
         "value": "1730",
         "description": "Time of day to send the missed-entry reminder (kiosk clock). Sent once, if the tracker is on within 3 hours after this time.",
+    },
+    "missed_entry_days": {
+        "value": "14",
+        "description": "How many days back the missed-entry email looks, including today. 14 is two weeks.",
     },
     "onscreen_numpad_enabled": {
         "value": "false",

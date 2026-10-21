@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 from app.config import APP_NAME, EMAIL_ENABLED
 from app.models import (
     DailySummary, Employee, EntryType, InboundEmail, LeaveRequest, LeaveStatus,
-    LeaveType, LocationType, MissedEntryToken, OffsiteEntry, PhoneSupportEntry,
-    Role, TimeEntry,
+    LeaveType, LocationType, MissedDigestLog, MissedEntryToken, OffsiteEntry,
+    PhoneSupportEntry, Role, TimeEntry,
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
@@ -84,7 +84,38 @@ def _notify(employee: Employee, title: str, text: str, reply_message_id: str = "
         logger.error("Missed-entry confirmation was not sent to %s", address)
 
 
-def _issue(db: Session, employee: Employee, work_date: date, kind: str, checkin_id: int | None) -> MissedEntryToken | None:
+def _lookback_days(db: Session) -> int:
+    raw = get_setting(db, "missed_entry_days") or "14"
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    number = int(digits) if digits else 14
+    return min(60, max(1, number))
+
+
+def _has_leave(db: Session, employee_id: int, work_date: date) -> bool:
+    summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.employee_id == employee_id, DailySummary.date == work_date)
+        .first()
+    )
+    if summary and summary.leave_hours and float(summary.leave_hours) > 0:
+        return True
+    return (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.employee_id == employee_id,
+            LeaveRequest.status.in_([LeaveStatus.pending, LeaveStatus.approved]),
+            LeaveRequest.start_date <= work_date,
+            LeaveRequest.end_date >= work_date,
+        )
+        .first()
+        is not None
+    )
+
+
+def _ensure_token(
+    db: Session, employee: Employee, work_date: date, kind: str,
+    checkin_id: int | None, expires: datetime,
+) -> MissedEntryToken | None:
     existing = (
         db.query(MissedEntryToken)
         .filter(
@@ -94,14 +125,21 @@ def _issue(db: Session, employee: Employee, work_date: date, kind: str, checkin_
         .first()
     )
     if existing:
-        return None
+        if existing.used_at is not None:
+            return None
+        existing.kind = kind
+        existing.checkin_entry_id = checkin_id
+        existing.expires_at = expires
+        db.commit()
+        db.refresh(existing)
+        return existing
     token = MissedEntryToken(
         employee_id=employee.id,
         work_date=work_date,
         kind=kind,
         code=secrets.token_hex(4).upper(),
         checkin_entry_id=checkin_id,
-        expires_at=datetime.combine(work_date + timedelta(days=1), time(12, 0)),
+        expires_at=expires,
     )
     db.add(token)
     db.commit()
@@ -109,77 +147,64 @@ def _issue(db: Session, employee: Employee, work_date: date, kind: str, checkin_
     return token
 
 
-def _send_absent(employee: Employee, work_date: date, code: str) -> bool:
-    when = work_date.strftime("%A %d %b")
-    fields = f"CODE: {code}\nDAY: Vacation"
-    text = (
-        f"Hello {employee.name},\n\n"
-        f"We don't have a check-in or a check-out for you on {when}. "
-        "If you were out, reply to this email. Leave the code unchanged and set DAY to one of:\n"
-        "Vacation, Sick, COVID, or National Holiday.\n\n"
-        "The confirmation can take up to 5 minutes.\n"
-        "If the day was more complicated than a full day out, sign in on the tracker and fix it there.\n\n"
-        f"{fields}\n"
+def _send_digest(employee: Employee, items: list[dict], days: int) -> bool:
+    count = len(items)
+    noun = "day" if count == 1 else "days"
+    intro = (
+        f"These {count} {noun} in the last {days} days still need a time entry."
+        if count != 1
+        else f"This day in the last {days} days still needs a time entry."
     )
-    html = render_email(
-        "Did you miss today?",
-        f"""
-        <p style="margin:8px 0 12px;">We don't have a check-in or a check-out for you on <strong style="color:#f8fafc;">{escape(when)}</strong>.</p>
-        <p style="margin:0 0 12px;">If you were out, reply to this email. Leave the code unchanged and set DAY to one of: Vacation, Sick, COVID, or National Holiday.</p>
-        <p style="margin:0 0 12px;">The confirmation can take up to 5 minutes. If the day was more complicated than a full day out, sign in on the tracker and fix it there.</p>
-        <pre style="margin:0;background:#020617;color:#f8fafc;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);font-family:'JetBrains Mono',Consolas,monospace;">{escape(fields)}</pre>
-        """,
-        kicker="Missed time entry",
-    )
-    return _send_email(
-        employee.email.strip(),
-        f"Missed time entry — {when}",
-        html,
-        text,
-    )
-
-
-def _send_checkout(employee: Employee, checkin: datetime, code: str) -> bool:
-    fields = f"CODE: {code}\nCHECK OUT: {checkin.strftime('%H:%M')}\nREASON: "
-    text = (
-        f"Hello {employee.name},\n\n"
-        f"You checked in at {checkin.strftime('%H:%M')} and there is no check-out yet. "
-        "Reply to this email. Leave the code unchanged, set CHECK OUT to the time you left, and add a short reason.\n\n"
-        "The confirmation can take up to 5 minutes.\n"
-        "If the day needs more than a checkout time, sign in on the tracker and fix it there.\n\n"
-        f"{fields}\n"
-    )
-    html = render_email(
-        "Still checked in",
-        f"""
-        <p style="margin:8px 0 12px;">You checked in at <strong style="color:#f8fafc;">{checkin.strftime('%H:%M')}</strong> and there is no check-out yet.</p>
-        <p style="margin:0 0 12px;">Reply to this email. Leave the code unchanged, set CHECK OUT to the time you left, and add a short reason.</p>
-        <p style="margin:0 0 12px;">The confirmation can take up to 5 minutes. If the day needs more than a checkout time, sign in on the tracker and fix it there.</p>
-        <pre style="margin:0;background:#020617;color:#f8fafc;padding:16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);font-family:'JetBrains Mono',Consolas,monospace;">{escape(fields)}</pre>
-        """,
-        kicker="Missed check-out",
-    )
-    return _send_email(
-        employee.email.strip(),
-        f"Missed check-out — {checkin.strftime('%H:%M')}",
-        html,
-        text,
-    )
+    text_lines = [
+        f"Hello {employee.name},",
+        "",
+        intro,
+        "Reply once for each day. Keep that day's CODE block and delete the others.",
+        "The confirmation can take up to 5 minutes.",
+        "A partial day, a second punch, or anything else is fixed by signing in on the tracker.",
+        "",
+    ]
+    html_bits = [
+        f'<p style="margin:8px 0 12px;">{escape(intro)}</p>',
+        '<p style="margin:0 0 12px;">Reply once for each day. Keep that day\'s CODE block and delete the others. The confirmation can take up to 5 minutes.</p>',
+        '<p style="margin:0 0 16px;">A partial day, a second punch, or anything else is fixed by signing in on the tracker.</p>',
+    ]
+    for item in items:
+        when = item["date"].strftime("%A %d %b")
+        if item["kind"] == "absent":
+            detail = f"{when}: no check-in and no check-out."
+            how = "If you were out the whole day, set DAY to Vacation, Sick, COVID, or National Holiday."
+            fields = f"CODE: {item['code']}\nDAY: Vacation"
+        else:
+            at = item["checkin"].strftime("%H:%M")
+            detail = f"{when}: checked in at {at}, and there is no check-out."
+            how = "Set CHECK OUT to the time you left, and add a short REASON."
+            fields = f"CODE: {item['code']}\nCHECK OUT: {at}\nREASON: "
+        text_lines.extend([detail, how, fields, ""])
+        html_bits.append(
+            f'<p style="margin:16px 0 4px;"><strong style="color:#f8fafc;">{escape(detail)}</strong></p>'
+            f'<p style="margin:0 0 8px;">{escape(how)}</p>'
+            f'<pre style="margin:0 0 8px;background:#020617;color:#f8fafc;padding:16px;border-radius:12px;'
+            f'border:1px solid rgba(255,255,255,0.08);font-family:\'JetBrains Mono\',Consolas,monospace;">{escape(fields)}</pre>'
+        )
+    subject = f"Missed time entries — {count} {noun}"
+    html = render_email("Missed time entries", "".join(html_bits), kicker="Missed time entry")
+    return _send_email(employee.email.strip(), subject, html, "\n".join(text_lines))
 
 
 def remind_missed_entries(db: Session, now: datetime | None = None) -> int:
-    """Email the simple misses once, inside the configured end-of-day window."""
+    """Email every open miss in the look-back window, once per person per day."""
     if not EMAIL_ENABLED or not get_bool_setting(db, "missed_entry_enabled"):
         return 0
     now = now or datetime.now()
     today = now.date()
-    if get_target_hours(today) <= 0:
-        return 0
     start = parse_hhmm_setting(get_setting(db, "missed_entry_time"), "1730")
     now_min = now.hour * 60 + now.minute
     if not (start <= now_min <= start + _WINDOW_MINUTES):
         return 0
 
+    days = _lookback_days(db)
+    expires = datetime.combine(today, time(23, 59)) + timedelta(days=days)
     sent = 0
     people = (
         db.query(Employee)
@@ -192,58 +217,62 @@ def remind_missed_entries(db: Session, now: datetime | None = None) -> int:
         .all()
     )
     for person in people:
-        if (
-            db.query(MissedEntryToken)
-            .filter(MissedEntryToken.employee_id == person.id, MissedEntryToken.work_date == today)
-            .first()
-        ):
-            continue
-        summary = (
-            db.query(DailySummary)
-            .filter(DailySummary.employee_id == person.id, DailySummary.date == today)
+        already = (
+            db.query(MissedDigestLog)
+            .filter(MissedDigestLog.employee_id == person.id, MissedDigestLog.sent_on == today)
             .first()
         )
-        if summary and summary.leave_approved and summary.leave_hours:
+        if already:
             continue
-        status = current_status(db, person.id, today)
-        if status == STATUS_NOT_STARTED:
-            if friday_required_hours(db, person.id, today) <= 0:
+        items = []
+        for offset in range(days - 1, -1, -1):
+            day = today - timedelta(days=offset)
+            if get_target_hours(day) <= 0 or _has_leave(db, person.id, day):
                 continue
-            has_other = (
-                db.query(OffsiteEntry).filter(
-                    OffsiteEntry.employee_id == person.id, OffsiteEntry.date == today,
-                ).first()
-                or db.query(PhoneSupportEntry).filter(
-                    PhoneSupportEntry.employee_id == person.id, PhoneSupportEntry.date == today,
-                ).first()
-            )
-            if has_other:
-                continue
-            token = _issue(db, person, today, "absent", None)
-            if token and _send_absent(person, today, token.code):
-                sent += 1
-            elif token:
-                db.delete(token)
-                db.commit()
-        elif status == STATUS_CHECKED_IN:
-            checkin = (
-                db.query(TimeEntry)
-                .filter(
-                    TimeEntry.employee_id == person.id,
-                    TimeEntry.date == today,
-                    TimeEntry.entry_type == EntryType.check_in,
+            status = current_status(db, person.id, day)
+            if status == STATUS_NOT_STARTED:
+                if friday_required_hours(db, person.id, day) <= 0:
+                    continue
+                has_other = (
+                    db.query(OffsiteEntry).filter(
+                        OffsiteEntry.employee_id == person.id, OffsiteEntry.date == day,
+                    ).first()
+                    or db.query(PhoneSupportEntry).filter(
+                        PhoneSupportEntry.employee_id == person.id, PhoneSupportEntry.date == day,
+                    ).first()
                 )
-                .order_by(TimeEntry.declared_time.desc())
-                .first()
-            )
-            if checkin is None:
-                continue
-            token = _issue(db, person, today, "checkout", checkin.id)
-            if token and _send_checkout(person, checkin.declared_time, token.code):
-                sent += 1
-            elif token:
-                db.delete(token)
-                db.commit()
+                if has_other:
+                    continue
+                token = _ensure_token(db, person, day, "absent", None, expires)
+                if token:
+                    items.append({"date": day, "kind": "absent", "code": token.code, "checkin": None})
+            elif status == STATUS_CHECKED_IN:
+                checkin = (
+                    db.query(TimeEntry)
+                    .filter(
+                        TimeEntry.employee_id == person.id,
+                        TimeEntry.date == day,
+                        TimeEntry.entry_type == EntryType.check_in,
+                    )
+                    .order_by(TimeEntry.declared_time.desc())
+                    .first()
+                )
+                if checkin is None:
+                    continue
+                token = _ensure_token(db, person, day, "checkout", checkin.id, expires)
+                if token:
+                    items.append({
+                        "date": day, "kind": "checkout", "code": token.code,
+                        "checkin": checkin.declared_time,
+                    })
+        if not items:
+            continue
+        if not _send_digest(person, items, days):
+            logger.error("Missed-entry digest failed for %s", person.name)
+            continue
+        db.add(MissedDigestLog(employee_id=person.id, sent_on=today))
+        db.commit()
+        sent += 1
     return sent
 
 
@@ -302,6 +331,24 @@ def _apply_checkout(db: Session, token: MissedEntryToken, employee: Employee, de
     return None
 
 
+def _reply_blocks(body: str) -> list[tuple[str, str]]:
+    """Each CODE section, so one reply can fix more than one day."""
+    text = _normalize_reply(body)
+    parts = re.split(r"(?im)(?=^\s*CODE:)", text)
+    found = []
+    seen = set()
+    for part in parts:
+        match = _CODE_RE.search(part) or re.search(r"CODE:\s*([A-Fa-f0-9]{8})", part, re.I)
+        if not match:
+            continue
+        code = match.group(1).upper()
+        if code in seen:
+            continue
+        seen.add(code)
+        found.append((code, part))
+    return found
+
+
 def process_missed_replies(db: Session) -> int:
     """Apply replies to the missed-entry mail. Returns how many were recorded."""
     since = datetime.utcnow() - timedelta(days=2)
@@ -314,72 +361,43 @@ def process_missed_replies(db: Session) -> int:
     )
     done = 0
     for message in messages:
-        body = _normalize_reply(message.body_text or "")
-        code_match = _CODE_RE.search(body) or re.search(r"CODE:\s*([A-Fa-f0-9]{8})", body, re.I)
-        if not code_match:
+        blocks = _reply_blocks(message.body_text or "")
+        if not blocks:
             continue
-        code = code_match.group(1).upper()
-        token = db.query(MissedEntryToken).filter(MissedEntryToken.code == code).first()
-        if token is None or token.notified_uid == message.imap_uid:
-            continue
-        employee = db.query(Employee).filter(Employee.id == token.employee_id).first()
-        if employee is None:
-            continue
-        sender = (message.from_addr or "").strip().lower()
-        owner = (employee.email or "").strip().lower()
-        if not owner or sender != owner:
-            token.notified_uid = message.imap_uid
-            db.commit()
-            continue
+        for code, body in blocks:
+            token = db.query(MissedEntryToken).filter(MissedEntryToken.code == code).first()
+            if token is None or token.notified_uid == message.imap_uid:
+                continue
+            employee = db.query(Employee).filter(Employee.id == token.employee_id).first()
+            if employee is None:
+                continue
+            sender = (message.from_addr or "").strip().lower()
+            owner = (employee.email or "").strip().lower()
+            if not owner or sender != owner:
+                token.notified_uid = message.imap_uid
+                db.commit()
+                continue
 
-        fail = None
-        if token.used_at is not None:
-            fail = f"Code {token.code} was already used."
-        elif datetime.now() > token.expires_at:
-            fail = f"Code {token.code} has expired. Sign in on the tracker to fix this day."
-        elif token.kind == "absent":
-            day_match = _DAY_RE.search(body)
-            chosen = (day_match.group(1).strip().lower() if day_match else "")
-            leave_type = _LEAVE_WORDS.get(chosen)
-            if leave_type is None:
-                fail = "Set DAY to Vacation, Sick, COVID, or National Holiday."
-            else:
-                fail = _apply_leave(db, token, employee, leave_type)
-                if fail is None:
-                    label = _LEAVE_LABEL[leave_type]
-                    hours = get_target_hours(token.work_date)
-                    _notify(
-                        employee,
-                        f"{label} recorded",
-                        f"Accepted. {token.work_date.strftime('%A %d %b')} is {label} ({hours:g} hours).",
-                        reply_message_id=message.message_id or "",
-                        reply_subject=message.subject or "",
-                    )
-                    token.used_at = datetime.utcnow()
-                    token.notified_uid = message.imap_uid
-                    db.commit()
-                    done += 1
-                    continue
-        else:
-            clock = _OUT_RE.search(body)
-            reason_match = _REASON_RE.search(body)
-            reason = (reason_match.group(1).strip() if reason_match else "")
-            if not clock:
-                fail = "Set CHECK OUT to a time like 16:30, and add a REASON."
-            elif len(reason) < 3:
-                fail = "Add a short REASON. The code stays the same."
-            else:
-                hour, minute = int(clock.group(1)), int(clock.group(2))
-                if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                    fail = "CHECK OUT must look like 16:30."
+            fail = None
+            if token.used_at is not None:
+                fail = f"Code {token.code} was already used."
+            elif datetime.now() > token.expires_at:
+                fail = f"Code {token.code} has expired. Sign in on the tracker to fix this day."
+            elif token.kind == "absent":
+                day_match = _DAY_RE.search(body)
+                chosen = (day_match.group(1).strip().lower() if day_match else "")
+                leave_type = _LEAVE_WORDS.get(chosen)
+                if leave_type is None:
+                    fail = "Set DAY to Vacation, Sick, COVID, or National Holiday."
                 else:
-                    declared = datetime.combine(token.work_date, time(hour, minute))
-                    fail = _apply_checkout(db, token, employee, declared, reason)
+                    fail = _apply_leave(db, token, employee, leave_type)
                     if fail is None:
+                        label = _LEAVE_LABEL[leave_type]
+                        hours = get_target_hours(token.work_date)
                         _notify(
                             employee,
-                            f"Checked out at {declared.strftime('%H:%M')}",
-                            f"Accepted. You are checked out at {declared.strftime('%H:%M')}.\nReason: {reason}",
+                            f"{label} recorded",
+                            f"Accepted. {token.work_date.strftime('%A %d %b')} is {label} ({hours:g} hours).",
                             reply_message_id=message.message_id or "",
                             reply_subject=message.subject or "",
                         )
@@ -388,14 +406,42 @@ def process_missed_replies(db: Session) -> int:
                         db.commit()
                         done += 1
                         continue
-        if fail:
-            _notify(
-                employee,
-                "That reply was not recorded",
-                fail + "\n\nYou can reply again with the same code, or sign in on the tracker.",
-                reply_message_id=message.message_id or "",
-                reply_subject=message.subject or "",
-            )
-            token.notified_uid = message.imap_uid
-            db.commit()
+            else:
+                clock = _OUT_RE.search(body)
+                reason_match = _REASON_RE.search(body)
+                reason = (reason_match.group(1).strip() if reason_match else "")
+                if not clock:
+                    fail = "Set CHECK OUT to a time like 16:30, and add a REASON."
+                elif len(reason) < 3:
+                    fail = "Add a short REASON. The code stays the same."
+                else:
+                    hour, minute = int(clock.group(1)), int(clock.group(2))
+                    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                        fail = "CHECK OUT must look like 16:30."
+                    else:
+                        declared = datetime.combine(token.work_date, time(hour, minute))
+                        fail = _apply_checkout(db, token, employee, declared, reason)
+                        if fail is None:
+                            _notify(
+                                employee,
+                                f"Checked out at {declared.strftime('%H:%M')}",
+                                f"Accepted. You are checked out at {declared.strftime('%H:%M')}.\nReason: {reason}",
+                                reply_message_id=message.message_id or "",
+                                reply_subject=message.subject or "",
+                            )
+                            token.used_at = datetime.utcnow()
+                            token.notified_uid = message.imap_uid
+                            db.commit()
+                            done += 1
+                            continue
+            if fail:
+                _notify(
+                    employee,
+                    "That reply was not recorded",
+                    fail + "\n\nYou can reply again with the same code, or sign in on the tracker.",
+                    reply_message_id=message.message_id or "",
+                    reply_subject=message.subject or "",
+                )
+                token.notified_uid = message.imap_uid
+                db.commit()
     return done

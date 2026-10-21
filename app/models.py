@@ -363,6 +363,18 @@ class MissedEntryToken(Base):
     employee = relationship("Employee")
 
 
+class MissedDigestLog(Base):
+    """One missed-entry digest per employee per day, so the window does not resend."""
+    __tablename__ = "missed_digest_log"
+    __table_args__ = (UniqueConstraint("employee_id", "sent_on", name="uq_missed_digest_day"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    sent_on = Column(Date, nullable=False, index=True)
+
+    employee = relationship("Employee")
+
+
 class FeatureChange(Base):
     """A user-facing change a manager can email to the team."""
     __tablename__ = "feature_changes"
