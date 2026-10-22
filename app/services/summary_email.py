@@ -379,7 +379,7 @@ def _deliver(db: Session, subject: str, html: str, text: str, attachments: list 
 
 def send_daily_summary(db: Session, work_date: date | None = None) -> bool:
     work_date = work_date or date.today()
-    rows = [_day_facts(db, person, work_date) for person in _people(db)]
+    rows = [_day_facts(db, person, work_date) for person in _people(db) if person.role != Role.supervisor]
     html, text = _daily_bodies(rows, work_date)
     subject = f"SDC daily summary — {work_date.strftime('%a %d %b')}"
     return _deliver(db, subject, html, text)

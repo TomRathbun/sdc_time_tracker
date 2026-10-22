@@ -244,6 +244,7 @@ def build_vacation_schedule(
         .filter(
             Employee.is_active.is_(True),
             Employee.role != Role.customer,
+            Employee.role != Role.supervisor,
         )
         .order_by(Employee.name)
         .all()

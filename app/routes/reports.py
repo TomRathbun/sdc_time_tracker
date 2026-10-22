@@ -23,6 +23,20 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _tracked(db: Session):
+    """People who appear on reports. Supervisors are omitted."""
+    return (
+        db.query(Employee)
+        .filter(
+            Employee.is_active == True,  # noqa: E712
+            Employee.role != Role.customer,
+            Employee.role != Role.supervisor,
+        )
+        .order_by(Employee.name)
+        .all()
+    )
+
+
 def _monday(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
@@ -34,7 +48,7 @@ async def reports_page(request: Request, db: Session = Depends(get_db)):
     if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
-    employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    employees = _tracked(db)
     week_start = _monday(date.today())
     today = date.today()
     current_quarter = (today.month - 1) // 3 + 1
@@ -309,7 +323,7 @@ async def tempo_import_page(
     if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
-    employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    employees = _tracked(db)
     if week:
         try:
             week_start = _monday(date.fromisoformat(week))
@@ -495,7 +509,7 @@ async def compliance_report(
     if not employee or employee.role not in (Role.manager, Role.supervisor):
         return RedirectResponse(url="/login", status_code=303)
 
-    employees = db.query(Employee).filter(Employee.is_active == True).order_by(Employee.name).all()
+    employees = _tracked(db)
 
     report_data = None
     if employee_id and employee_id.isdigit():

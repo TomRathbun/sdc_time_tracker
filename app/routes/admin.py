@@ -340,6 +340,7 @@ async def team_timesheet(
     employees = db.query(Employee).filter(
         Employee.is_active == True,  # noqa: E712
         Employee.role != Role.customer,
+        Employee.role != Role.supervisor,
     ).order_by(Employee.name).all()
     viewer_is_customer = employee.role == Role.customer
 

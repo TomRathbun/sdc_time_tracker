@@ -190,6 +190,7 @@ def _active_employees(db: Session) -> list[Employee]:
         .filter(
             Employee.is_active == True,  # noqa: E712
             Employee.role != Role.customer,
+            Employee.role != Role.supervisor,
         )
         .all()
     )
