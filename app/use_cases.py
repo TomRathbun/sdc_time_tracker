@@ -96,7 +96,7 @@ USE_CASE_GROUPS: list[UseCaseGroup] = [
                 "id": "beod-out",
                 "scenario": "Leave early with BEOD",
                 "who": "Employee",
-                "summary": "Check Out and check Use BEOD (Mon–Thu, ≥6h worked).",
+                "summary": "Check Out and check Use BEOD (Mon–Thu, ≥5h worked).",
                 "featured": True,
                 "actions": [
                     {"text": "Quick Check Out, or Dashboard → Check Out", "href": "/time/checkout", "screen": "Check Out"},

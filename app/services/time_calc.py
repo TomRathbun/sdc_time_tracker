@@ -61,7 +61,7 @@ def hours_to_meet_target(work_date: date, *, beod: bool = False) -> float:
     """Clock hours needed to meet FOSC target.
 
     Mon–Thu: 9h, or 8h when taking BEOD (+1h lunch credit).
-    Friday: 4h. BEOD is not used — 4h is below the 6h BEOD floor.
+    Friday: 4h. BEOD is not used — 4h is below the 5h BEOD floor.
     """
     target = get_target_hours(work_date)
     if target <= 0:
@@ -76,7 +76,7 @@ def hours_to_meet_target(work_date: date, *, beod: bool = False) -> float:
 def beod_offered_on(work_date: date) -> bool:
     """BEOD checkbox is only offered when it can shorten the required clock day.
 
-    True Mon–Thu (9h → 8h). False Friday (4h, below the 6h BEOD floor) and weekends.
+    True Mon–Thu (9h → 8h). False Friday (4h, below the 5h BEOD floor) and weekends.
     """
     return hours_to_meet_target(work_date, beod=True) < hours_to_meet_target(work_date)
 
@@ -323,7 +323,7 @@ def update_daily_summary(
     clock_hours = calculate_clock_hours(time_entries)
     offsite_hours = calculate_offsite_hours(offsite_entries)
     phone_hours = calculate_phone_hours(phone_entries)
-    # Work hours that count toward the BEOD 6h floor (not leave)
+    # Work hours that count toward the BEOD 5h floor (not leave)
     work_hours = round(clock_hours + offsite_hours + phone_hours, 2)
     target_hours = get_target_hours(work_date)
 

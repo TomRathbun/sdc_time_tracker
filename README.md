@@ -15,7 +15,7 @@ Electronic Time and Attendance System (ETAS) for SDC staff on the FOSC (Follow-O
 
 ### FOSC rules
 - **Paid lunch** inside the scheduled work window
-- **BEOD** (end-of-day credit) — optional blanket or per-request, with minimum raw hours (default ≥6h)
+- **BEOD** (end-of-day credit) — optional blanket or per-request, with minimum raw hours (default ≥5h)
 - **FOSC day total** = clock + phone + offsite + BEOD credit
 - **Leave types** — vacation, sick, COVID sick, UAE national holiday  
   Full leave day = target hours for that weekday (9h or 4h Friday)

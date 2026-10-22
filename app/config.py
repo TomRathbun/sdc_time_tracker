@@ -39,8 +39,8 @@ DEFAULT_VACATION_DAYS_PER_YEAR = 22.0
 DEFAULT_SICK_DAYS_PER_YEAR = 15.0
 LEAVE_HOURS_PER_WORK_DAY = 8.0
 
-# BEOD (Break at End of Day): minimum real work hours before +1h paid lunch credit
-BEOD_MINIMUM_HOURS = 6.0
+# BEOD (Break at End of Day): minimum real work hours before the paid lunch credit
+BEOD_MINIMUM_HOURS = 5.0
 
 # Application info
 APP_NAME = "SDC Time Tracker"

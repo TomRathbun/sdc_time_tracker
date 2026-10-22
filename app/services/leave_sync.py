@@ -188,3 +188,45 @@ def trim_historical_leave(db: Session) -> float:
 
     set_setting(db, "leave_trim_retro", "done")
     return removed
+
+
+def recalc_beod_floor(db: Session) -> int:
+    """Apply the 5-hour BEOD floor to every claimed day. Runs once."""
+    from datetime import timedelta
+
+    from app.services.settings import get_setting, set_setting
+
+    if get_setting(db, "beod_floor_5h") == "done":
+        return 0
+
+    rows = (
+        db.query(DailySummary)
+        .filter(DailySummary.lunch_end_of_day == True)  # noqa: E712
+        .all()
+    )
+    claimed = [(row.employee_id, row.date, float(row.beod_hours or 0)) for row in rows]
+    gained = 0
+    weeks = set()
+    for employee_id, work_date, before in claimed:
+        update_daily_summary(db, employee_id, work_date)
+        after = (
+            db.query(DailySummary)
+            .filter(DailySummary.employee_id == employee_id, DailySummary.date == work_date)
+            .first()
+        )
+        if after and float(after.beod_hours or 0) > before + 0.001:
+            gained += 1
+        if work_date.weekday() < 5:
+            monday = work_date - timedelta(days=work_date.weekday())
+            weeks.add((employee_id, monday))
+
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    this_friday = this_monday + timedelta(days=4)
+    last_monday = this_monday if this_friday < today else this_monday - timedelta(days=7)
+    for employee_id, monday in weeks:
+        if monday <= last_monday:
+            trim_week_leave(db, employee_id, monday)
+
+    set_setting(db, "beod_floor_5h", "done")
+    return gained

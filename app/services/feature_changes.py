@@ -149,7 +149,7 @@ FEATURE_CATALOG = (
         "audience": "manager,supervisor",
         "summary": (
             "On the timesheet, a Monday–Thursday day that has time but no BEOD shows + BEOD. "
-            "That puts the employee's usual length back and counts it, as long as the day has at least 6 hours of work."
+            "That puts the employee's usual length back and counts it, as long as the day has at least 5 hours of work."
         ),
     },
     {
@@ -181,6 +181,16 @@ FEATURE_CATALOG = (
         "summary": (
             "The missed-entry email now goes out every day and lists every open punch from the last two weeks. "
             "Each day says what is missing and how to reply. The number of days is set on the admin page."
+        ),
+    },
+    {
+        "slug": "beod-five-hours",
+        "title": "BEOD qualifies after 5 hours",
+        "added_on": date(2026, 10, 22),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "BEOD now counts after 5 hours of work, down from 6. Days already claimed are recalculated, "
+            "including earlier weeks. A day under 5 hours still keeps the claim but does not get the credit."
         ),
     },
 )

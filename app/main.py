@@ -108,10 +108,13 @@ async def startup():
     db = SessionLocal()
     try:
         seed_settings(db)
-        from app.services.leave_sync import trim_historical_leave
+        from app.services.leave_sync import recalc_beod_floor, trim_historical_leave
         trimmed = trim_historical_leave(db)
         if trimmed:
             print(f"Reduced {trimmed}h of leave on earlier weeks where work ran over 40.")
+        gained = recalc_beod_floor(db)
+        if gained:
+            print(f"BEOD floor is 5h. Credit added on {gained} earlier day(s).")
     finally:
         db.close()
 

@@ -495,7 +495,7 @@ def _beod_status_note(claim_beod: bool, requested, summary, db: Session) -> str:
     if not get_bool_setting(db, "beod_blanket_approval"):
         asked = format_beod_length(requested or 1)
         return f" (BEOD {asked} requested — pending approval)"
-    return " (BEOD claimed but under 6h worked — no credit)"
+    return f" (BEOD claimed but under {BEOD_MINIMUM_HOURS:g}h worked — no credit)"
 
 
 def _record_recheckout(
