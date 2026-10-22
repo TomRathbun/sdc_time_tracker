@@ -190,6 +190,11 @@ async def edit_employee(
     target.vacation_days_per_year = max(0.0, float(vacation_days))
     target.sick_days_per_year = max(0.0, float(sick_days))
 
+    from app.services.email_prefs import save_prefs
+    form = await request.form()
+    if form.getlist("mail_shown"):
+        save_prefs(target, form.getlist("mail_shown"), set(form.getlist("mail_on")))
+
     # Optionally reset PIN
     if reset_pin.strip():
         target.pin_hash = hash_pin(reset_pin.strip())
@@ -771,8 +776,8 @@ async def approve_lunch(
     # Notify managers of administrative modification
     import threading
     from app.services.email import send_past_day_modification_email
-    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-    mgr_emails = [m.email for m in managers if m.email]
+    from app.services.email_prefs import recipient_emails
+    mgr_emails = recipient_emails(db, "admin_notice")
     
     target_employee = db.query(Employee).filter(Employee.id == summary.employee_id).first()
     emp_name = target_employee.name if target_employee else "Unknown Employee"
@@ -1047,8 +1052,8 @@ async def approve_pto(
     # Notify managers of administrative modification
     import threading
     from app.services.email import send_past_day_modification_email
-    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-    mgr_emails = [m.email for m in managers if m.email]
+    from app.services.email_prefs import recipient_emails
+    mgr_emails = recipient_emails(db, "admin_notice")
     
     target_employee = db.query(Employee).filter(Employee.id == summary.employee_id).first()
     emp_name = target_employee.name if target_employee else "Unknown Employee"

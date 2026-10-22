@@ -203,6 +203,17 @@ FEATURE_CATALOG = (
             "It is approved immediately. Full day uses that day's hours. Enter 0 to clear the day."
         ),
     },
+    {
+        "slug": "email-preferences",
+        "title": "Choose which emails you get",
+        "added_on": date(2026, 10, 22),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "Email in the menu turns each kind on or off for you: check-in, morning check-in, checkout, "
+            "missed punches, policy notices, and feature notes. Managers can also turn off the team summaries and reports. "
+            "A reply you already send still gets a confirmation. A manager can change the same switches on Edit employee."
+        ),
+    },
 )
 
 
@@ -286,6 +297,9 @@ def send_feature_mail(
         address = (person.email or "").strip()
         if not address:
             missing += 1
+            continue
+        from app.services.email_prefs import wants_email
+        if not wants_email(person, "features"):
             continue
         if _send_email(address, subject, html, text):
             sent += 1

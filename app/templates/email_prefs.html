@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Email — SDC Time Tracker{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <h1 class="text-2xl font-bold text-white">Email</h1>
+    <p class="text-sm text-gray-400 mt-1 mb-6">Choose which notes you get. A reply you send still gets a confirmation. Turning a kind off does not turn it off for anyone else.</p>
+    {% if saved %}
+    <p class="mb-4 text-sm text-success-300">Saved.</p>
+    {% endif %}
+    <form method="POST" action="/me/email" class="glass-card p-6 space-y-3">
+        {% for kind in kinds %}
+        <label class="flex items-start gap-3 p-3 rounded-xl bg-surface-900/40 border border-white/5">
+            <input type="hidden" name="mail_shown" value="{{ kind.key }}">
+            <input type="checkbox" name="mail_on" value="{{ kind.key }}" class="mt-1 rounded border-white/20" {% if kind.on %}checked{% endif %}>
+            <span>
+                <span class="block text-sm text-white">{{ kind.label }}</span>
+                <span class="block text-xs text-gray-500 mt-0.5">{{ kind.detail }}</span>
+            </span>
+        </label>
+        {% endfor %}
+        <button type="submit" class="btn-primary px-6 py-2.5 text-sm">Save</button>
+    </form>
+</div>
+{% endblock %}

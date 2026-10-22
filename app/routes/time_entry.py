@@ -237,18 +237,20 @@ async def checkin_submit(
     if needs_offset_approval(db, declared_time, now) and get_setting(db, "manager_policy_alert_enabled") == "true":
         import threading
         from app.services.email import send_policy_violation_email
-        managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-        mgr_emails = [m.email for m in managers if m.email]
+        from app.services.email_prefs import recipient_emails, wants_email
+        mgr_emails = recipient_emails(db, "policy")
+        own_email = employee.email if wants_email(employee, "policy") else ""
         threading.Thread(
             target=send_policy_violation_email,
-            args=(employee.name, employee.email, mgr_emails, "check_in", declared_time, now, threshold, comment_text),
+            args=(employee.name, own_email, mgr_emails, "check_in", declared_time, now, threshold, comment_text),
             daemon=True,
         ).start()
 
     # Send check-in confirmation email (non-blocking, if enabled)
     from app.services.settings import get_bool_setting
+    from app.services.email_prefs import wants_email
     mail_to = (employee.email or "").strip()
-    if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning:
+    if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning and wants_email(employee, "checkin"):
         from app.services.email import queue_checkin_email
         from app.services.time_calc import checkin_notice
         from app.models import LeaveRequest, LeaveStatus
@@ -549,11 +551,12 @@ async def checkout_submit(
     if needs_offset_approval(db, declared_time, now) and get_setting(db, "manager_policy_alert_enabled") == "true":
         import threading
         from app.services.email import send_policy_violation_email
-        managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-        mgr_emails = [m.email for m in managers if m.email]
+        from app.services.email_prefs import recipient_emails, wants_email
+        mgr_emails = recipient_emails(db, "policy")
+        own_email = employee.email if wants_email(employee, "policy") else ""
         threading.Thread(
             target=send_policy_violation_email,
-            args=(employee.name, employee.email, mgr_emails, "check_out", declared_time, now, threshold, comment_text),
+            args=(employee.name, own_email, mgr_emails, "check_out", declared_time, now, threshold, comment_text),
             daemon=True,
         ).start()
 
@@ -1170,8 +1173,8 @@ async def past_day_submit(
     # Notify managers of past day modification
     import threading
     from app.services.email import send_past_day_modification_email
-    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-    mgr_emails = [m.email for m in managers if m.email]
+    from app.services.email_prefs import recipient_emails
+    mgr_emails = recipient_emails(db, "admin_notice")
     
     threading.Thread(
         target=send_past_day_modification_email,
@@ -1306,8 +1309,8 @@ async def past_day_extra_session(
 
     import threading
     from app.services.email import send_past_day_modification_email
-    managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-    mgr_emails = [m.email for m in managers if m.email]
+    from app.services.email_prefs import recipient_emails
+    mgr_emails = recipient_emails(db, "admin_notice")
     threading.Thread(
         target=send_past_day_modification_email,
         args=(
@@ -1474,8 +1477,8 @@ async def partial_leave_submit(
     if selected_date < date.today():
         import threading
         from app.services.email import send_past_day_modification_email
-        managers = db.query(Employee).filter(Employee.role == Role.manager).all()
-        mgr_emails = [m.email for m in managers if m.email]
+        from app.services.email_prefs import recipient_emails
+        mgr_emails = recipient_emails(db, "admin_notice")
         
         threading.Thread(
             target=send_past_day_modification_email,

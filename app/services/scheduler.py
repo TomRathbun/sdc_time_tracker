@@ -91,6 +91,9 @@ def _check_for_upcoming_checkouts():
                 continue
             if current_status(db, emp.id, today) != STATUS_CHECKED_IN:
                 continue
+            from app.services.email_prefs import wants_email
+            if not wants_email(emp, "checkout_reminder"):
+                continue
 
             token = issue_checkout_token(db, emp, open_checkin, expected)
             if token is None:
@@ -155,6 +158,9 @@ def _check_for_morning_checkins():
                 continue
             minutes_until = (expected - now).total_seconds() / 60
             if not (-30 < minutes_until <= 15):
+                continue
+            from app.services.email_prefs import wants_email
+            if not wants_email(emp, "checkin_reminder"):
                 continue
             token = issue_checkin_token(db, emp, expected)
             if token is None:

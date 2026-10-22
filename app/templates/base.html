@@ -132,6 +132,13 @@
                             </svg>
                             Suggestions
                         </a>
+                        <a href="/me/email" class="nav-link" id="nav-email" title="Which emails you get">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            Email
+                        </a>
                         {% if employee.role.value in ['manager', 'supervisor'] %}
                         <a href="/reports" class="nav-link" id="nav-reports">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,6 +240,7 @@
                     <a href="/use-cases" class="mobile-nav-link">Use Cases</a>
                     <a href="/systems-engineering" class="mobile-nav-link">Systems Engineering</a>
                     <a href="/suggestions" class="mobile-nav-link">Suggestions</a>
+                    <a href="/me/email" class="mobile-nav-link">Email</a>
                     {% if employee.role.value in ['manager', 'supervisor'] %}
                     <a href="/reports" class="mobile-nav-link">Reports</a>
                     <a href="/audit" class="mobile-nav-link">Audit Trail</a>

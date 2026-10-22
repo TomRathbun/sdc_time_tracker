@@ -209,7 +209,8 @@
                             <div class="flex items-center gap-1 justify-end">
                                 <!-- Edit -->
                                 <button
-                                    onclick="openEditModal({{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 22 }}, {{ emp.sick_days_per_year or 15 }})"
+                                    data-prefs='{{ emp.email_prefs or "{}" }}'
+                                    onclick="openEditModal(this, {{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 22 }}, {{ emp.sick_days_per_year or 15 }})"
                                     class="p-1.5 rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 transition-colors"
                                     title="Edit" id="btn-edit-{{ emp.id }}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,7 +267,7 @@
 <!-- Edit Employee Modal -->
 <div id="edit-modal" class="fixed inset-0 z-50 items-center justify-center bg-black/60 backdrop-blur-sm"
     style="display:none;">
-    <div class="bg-surface-800 border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-auto mt-[15vh]">
+    <div class="bg-surface-800 border border-white/10 rounded-2xl shadow-2xl p-6 w-full max-w-md mx-auto mt-[8vh] max-h-[84vh] overflow-y-auto">
         <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -319,6 +320,10 @@
                         maxlength="4" pattern="[0-9]{4}"
                         autocomplete="one-time-code" data-lpignore="true" data-1p-ignore="true" data-bwignore="true">
                 </div>
+                <div>
+                    <p class="text-xs text-gray-500 mb-2">Email this person gets. Unchecked means off.</p>
+                    <div id="edit-email-prefs" class="space-y-2"></div>
+                </div>
             </div>
             <div class="flex gap-3 mt-6">
                 <button type="button" onclick="closeEditModal()"
@@ -337,7 +342,38 @@
 <script>
     var editEmployeeId = null;
 
-    function openEditModal(id, name, email, role, vacationDays, sickDays) {
+    var EMAIL_KINDS = [
+        ["checkin", "Check-in confirmation", "all"],
+        ["checkin_reminder", "Morning check-in", "all"],
+        ["checkout_reminder", "Checkout reminder", "all"],
+        ["missed_entry", "Missed punches", "all"],
+        ["policy", "Policy notice", "all"],
+        ["features", "Feature announcements", "all"],
+        ["daily_summary", "Daily team summary", "lead"],
+        ["weekly_summary", "Weekly team summary", "lead"],
+        ["reports", "Customer reports", "lead"],
+        ["admin_notice", "Timesheet changes", "lead"]
+    ];
+
+    function renderEmailPrefs(raw, role) {
+        var prefs = {};
+        try { prefs = raw ? JSON.parse(raw) : {}; } catch (e) { prefs = {}; }
+        var lead = role === "manager" || role === "supervisor";
+        var box = document.getElementById("edit-email-prefs");
+        box.innerHTML = "";
+        EMAIL_KINDS.forEach(function (item) {
+            if (item[2] === "lead" && !lead) return;
+            var on = !(item[0] in prefs) || !!prefs[item[0]];
+            var label = document.createElement("label");
+            label.className = "flex items-center gap-2 text-xs text-gray-300";
+            label.innerHTML = '<input type="hidden" name="mail_shown" value="' + item[0] + '">'
+                + '<input type="checkbox" name="mail_on" value="' + item[0] + '"' + (on ? " checked" : "") + ' class="rounded border-white/20">'
+                + '<span>' + item[1] + '</span>';
+            box.appendChild(label);
+        });
+    }
+
+    function openEditModal(button, id, name, email, role, vacationDays, sickDays) {
         editEmployeeId = id;
         document.getElementById('edit-form').action = '/admin/employee/' + id + '/edit';
         document.getElementById('edit-name').value = name;
@@ -345,6 +381,10 @@
         document.getElementById('edit-sick').value = sickDays != null ? sickDays : 15;
         document.getElementById('edit-email').value = email;
         document.getElementById('edit-role').value = role;
+        renderEmailPrefs(button.getAttribute("data-prefs") || "{}", role);
+        document.getElementById('edit-role').onchange = function () {
+            renderEmailPrefs(button.getAttribute("data-prefs") || "{}", this.value);
+        };
         document.getElementById('edit-pin').value = '';
         var status = document.getElementById('edit-email-status');
         status.textContent = '';

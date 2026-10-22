@@ -2,7 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Request, Depends, Query
+from fastapi import APIRouter, Request, Depends, Query, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -365,3 +365,40 @@ async def my_time_report(
     })
     response.headers["Cache-Control"] = "no-store"
     return response
+
+
+@router.get("/me/email", response_class=HTMLResponse)
+async def email_prefs_page(request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+    if employee.role == Role.customer:
+        return RedirectResponse(url="/admin/timesheet", status_code=303)
+    from app.services.email_prefs import kinds_for
+    return templates.TemplateResponse("email_prefs.html", {
+        "request": request,
+        "employee": employee,
+        "kinds": kinds_for(employee),
+        "saved": request.query_params.get("saved"),
+    })
+
+
+@router.post("/me/email")
+async def email_prefs_save(request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+    if employee.role == Role.customer:
+        return RedirectResponse(url="/admin/timesheet", status_code=303)
+    from app.services.email_prefs import save_prefs
+    from app.services.audit import log_action
+    form = await request.form()
+    save_prefs(employee, form.getlist("mail_shown"), set(form.getlist("mail_on")))
+    db.commit()
+    log_action(
+        db, action="email_prefs", entity_type="Employee",
+        entity_id=employee.id, employee_id=employee.id,
+        new_values={"email_prefs": employee.email_prefs},
+        ip_address=request.client.host if request.client else "",
+    )
+    return RedirectResponse(url="/me/email?saved=1", status_code=303)

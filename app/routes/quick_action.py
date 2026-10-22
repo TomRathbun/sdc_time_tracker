@@ -299,8 +299,9 @@ async def quick_checkin(
     # Morning check-in email only on the first punch of the day.
     # Copy the address first. The mail thread must not use the database row.
     from app.services.settings import get_bool_setting
+    from app.services.email_prefs import wants_email
     mail_to = (emp.email or "").strip()
-    if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning:
+    if mail_to and get_bool_setting(db, "checkin_email_enabled") and not returning and wants_email(emp, "checkin"):
         from app.services.email import queue_checkin_email
         from app.services.time_calc import checkin_notice
         from app.models import LeaveRequest, LeaveStatus

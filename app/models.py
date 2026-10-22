@@ -70,6 +70,8 @@ class Employee(Base):
     # FOSC leave entitlements (work days per calendar year; balances are tracked in hours)
     vacation_days_per_year = Column(Float, default=22.0, nullable=False)
     sick_days_per_year = Column(Float, default=15.0, nullable=False)
+    # JSON map of email kind -> false when the person opted out. Missing means on.
+    email_prefs = Column(Text, default="", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

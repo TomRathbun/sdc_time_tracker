@@ -88,6 +88,11 @@ def _run_migrations():
         cursor.execute(
             "ALTER TABLE employees ADD COLUMN beod_pref_hours FLOAT DEFAULT 1"
         )
+    if "email_prefs" not in emp_cols:
+        cursor.execute(
+            "ALTER TABLE employees ADD COLUMN email_prefs TEXT DEFAULT ''"
+        )
+        print("✅ Migration: Added email_prefs to employees")
 
     # Old contract defaults were 30 vacation / 10 sick days. Current policy is
     # 22 vacation / 15 sick work days (tracked in hours). Only rows still on

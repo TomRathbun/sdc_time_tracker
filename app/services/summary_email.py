@@ -360,8 +360,9 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
     return html, "\n".join(text_lines)
 
 
-def _deliver(db: Session, subject: str, html: str, text: str, attachments: list | None = None) -> bool:
-    managers = _managers(db)
+def _deliver(db: Session, subject: str, html: str, text: str, attachments: list | None = None, kind: str = "daily_summary") -> bool:
+    from app.services.email_prefs import wants_email
+    managers = [person for person in _managers(db) if wants_email(person, kind)]
     if not managers:
         logger.warning("Summary not sent (%s): no manager has an email address", subject)
         return True
@@ -403,7 +404,7 @@ def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
         f"SDC weekly summary — {week_start.strftime('%d %b')} to "
         f"{(week_start + timedelta(days=4)).strftime('%d %b')}"
     )
-    return _deliver(db, subject, html, text)
+    return _deliver(db, subject, html, text, kind="weekly_summary")
 
 
 def send_reconciliation(db: Session, through: date, weeks: int, *, show_all_pto: bool = True) -> tuple[bool, str]:
@@ -444,7 +445,7 @@ def send_reconciliation(db: Session, through: date, weeks: int, *, show_all_pto:
         return False, "No manager has an email address."
     if not EMAIL_ENABLED:
         return False, "SMTP is not configured."
-    if not _deliver(db, subject, html, text, [(filename, book.getvalue())]):
+    if not _deliver(db, subject, html, text, [(filename, book.getvalue())], kind="reports"):
         return False, "The email was not sent. A manager needs an email address, and SMTP has to be on."
     return True, f"Sent the Excel workbook for {count} week(s), {span}, to the managers."
 
@@ -471,7 +472,7 @@ def send_quarter_report(db: Session, year: int, quarter: int) -> tuple[bool, str
         return False, "No manager has an email address."
     if not EMAIL_ENABLED:
         return False, "SMTP is not configured."
-    if not _deliver(db, subject, html, text, [(filename, book.getvalue())]):
+    if not _deliver(db, subject, html, text, [(filename, book.getvalue())], kind="reports"):
         return False, "The email was not sent. A manager needs an email address, and SMTP has to be on."
     return True, f"Sent the Q{quarter} {year} totals to the managers."
 
