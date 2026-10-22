@@ -193,6 +193,16 @@ FEATURE_CATALOG = (
             "including earlier weeks. A day under 5 hours still keeps the claim but does not get the credit."
         ),
     },
+    {
+        "slug": "manager-enter-pto",
+        "title": "Managers can enter PTO",
+        "added_on": date(2026, 10, 22),
+        "audience": "manager,supervisor",
+        "summary": (
+            "On the team timesheet, + PTO on a day records vacation, sick, COVID, or a holiday for that employee. "
+            "It is approved immediately. Full day uses that day's hours. Enter 0 to clear the day."
+        ),
+    },
 )
 
 

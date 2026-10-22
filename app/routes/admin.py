@@ -11,7 +11,7 @@ from app.database import get_db
 from app.auth import get_current_employee, hash_pin
 from app.models import (
     Employee, Role, RemoteAuthorization, AuthorizationStatus,
-    DailySummary, TimeEntry, EntryType, LeaveRequest, LeaveStatus,
+    DailySummary, TimeEntry, EntryType, LeaveRequest, LeaveStatus, LeaveType,
     OffsiteEntry, PhoneSupportEntry, AuditLog,
 )
 from app.services.audit import log_action
@@ -24,7 +24,7 @@ from app.services.time_calc import (
     update_daily_summary,
 )
 from app.services.time_offset import reject_time_offset
-from app.services.leave_sync import apply_leave_approval
+from app.services.leave_sync import apply_leave_approval, clear_full_day_leave_for_request
 from app.services.time_state import squash_continuous_sessions
 
 router = APIRouter()
@@ -562,6 +562,7 @@ async def team_timesheet(
                 "leave_hours": leave_hrs,
                 "display_leave_hours": leave_hrs if pto_pending or pto_approved else 0.0,
                 "leave_type_label": leave_type_label,
+                "leave_type_value": leave_type_val,
                 "pto_pending": pto_pending,
                 "pto_approved": pto_approved,
                 "effective": round(effective, 2),
@@ -629,6 +630,7 @@ async def team_timesheet(
         "week_pending_beod": week_pending_beod,
         "week_pending_leave": week_pending_leave,
         "viewer_is_customer": viewer_is_customer,
+        "pto_err": request.query_params.get("pto_err"),
     })
 
 
@@ -835,6 +837,165 @@ async def set_beod(
             "target_employee": person.id,
             "date": str(day),
             "beod_hours": updated.beod_hours,
+        },
+        ip_address=request.client.host if request.client else "",
+    )
+    return RedirectResponse(url=back, status_code=303)
+
+
+def _pto_bucket(value: str | None) -> str | None:
+    if value in ("sick", "covid_sick"):
+        return "sick"
+    if value == "vacation":
+        return "vacation"
+    return None
+
+
+@router.post("/admin/set-pto", response_class=HTMLResponse)
+async def set_pto(
+    request: Request,
+    employee_id: int = Form(...),
+    work_date: str = Form(...),
+    leave_type: str = Form(...),
+    leave_hours: str = Form(""),
+    full_day: str = Form(""),
+    week: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Manager records approved PTO on one workday. Zero hours clears that day."""
+    from urllib.parse import quote
+
+    from app.services.leave_balance import can_request_leave, get_leave_balance, partial_pto_error
+
+    actor = get_current_employee(request, db)
+    if not actor or actor.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    back = f"/admin/timesheet?week={week}" if week else "/admin/timesheet"
+
+    def fail(message: str):
+        joiner = "&" if "?" in back else "?"
+        return RedirectResponse(url=f"{back}{joiner}pto_err={quote(message)}", status_code=303)
+
+    try:
+        day = date.fromisoformat(work_date)
+    except ValueError:
+        return fail("That date is not valid.")
+    target = get_target_hours(day)
+    if target <= 0:
+        return fail("That date is not a workday.")
+    try:
+        kind = LeaveType(leave_type)
+    except ValueError:
+        return fail("Pick a PTO type.")
+
+    person = db.query(Employee).filter(Employee.id == employee_id, Employee.is_active == True).first()
+    if not person or person.role == Role.customer:
+        return fail("That person does not take PTO.")
+
+    if full_day == "1":
+        hours = float(target)
+    else:
+        try:
+            hours = round(float(leave_hours), 2)
+        except (TypeError, ValueError):
+            return fail("Enter the hours, or choose Full day.")
+    if hours < 0 or hours > target + 0.001:
+        return fail(f"Hours must be from 0 to {target:g}.")
+
+    covering = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.employee_id == person.id,
+            LeaveRequest.status.in_([LeaveStatus.pending, LeaveStatus.approved]),
+            LeaveRequest.start_date <= day,
+            LeaveRequest.end_date >= day,
+        )
+        .all()
+    )
+    exact = [row for row in covering if row.start_date == day and row.end_date == day]
+    if any(row not in exact for row in covering):
+        span = next(row for row in covering if row not in exact)
+        return fail(
+            f"That day is inside leave from {span.start_date.isoformat()} "
+            f"to {span.end_date.isoformat()}. Change it on Leave approvals."
+        )
+
+    summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.employee_id == person.id, DailySummary.date == day)
+        .first()
+    )
+    old_hours = float(summary.leave_hours or 0) if summary else 0.0
+    old_type = summary.leave_type.value if summary and summary.leave_type else None
+    new_bucket = _pto_bucket(kind.value)
+    old_bucket = _pto_bucket(old_type)
+    credit_back = 0.0
+    if exact and new_bucket:
+        for row in exact:
+            if _pto_bucket(row.leave_type.value) == new_bucket:
+                credit_back += float(target)
+    elif not exact and old_bucket == new_bucket:
+        credit_back = old_hours
+
+    err = None
+    if hours > 0 and hours + 0.001 >= target:
+        err = can_request_leave(
+            db, person, kind, day, day,
+            exclude_request_id=exact[0].id if exact else None,
+        )
+        if err and new_bucket and "Not enough" in err and credit_back:
+            balance = get_leave_balance(db, person, year=day.year)
+            if hours <= balance[new_bucket]["remaining"] + credit_back + 0.01:
+                err = None
+        elif err and exact and "Overlaps" in err:
+            err = None
+    elif hours > 0 and new_bucket:
+        check_old = old_bucket if old_bucket == new_bucket else None
+        err = partial_pto_error(
+            db, person, new_bucket, day, hours, credit_back, check_old,
+        )
+    if err:
+        return fail(err)
+
+    for row in exact:
+        clear_full_day_leave_for_request(db, row)
+        row.status = LeaveStatus.rejected
+        row.comments = ((row.comments or "").strip() + " Replaced from the timesheet.").strip()
+        db.commit()
+
+    if hours <= 0:
+        update_daily_summary(db, person.id, day, leave_hours=0, leave_type=None, pto_approved=False)
+    elif hours + 0.001 >= target:
+        leave = LeaveRequest(
+            employee_id=person.id,
+            leave_type=kind,
+            start_date=day,
+            end_date=day,
+            status=LeaveStatus.approved,
+            approved_by=actor.id,
+            comments=f"Entered by {actor.name} on the timesheet.",
+        )
+        db.add(leave)
+        db.commit()
+        db.refresh(leave)
+        apply_leave_approval(db, leave)
+    else:
+        update_daily_summary(
+            db, person.id, day,
+            leave_hours=hours,
+            leave_type=kind.value,
+            pto_approved=True,
+        )
+
+    log_action(
+        db, action="set_pto", entity_type="DailySummary",
+        entity_id=person.id, employee_id=actor.id,
+        new_values={
+            "target_employee": person.id,
+            "date": day.isoformat(),
+            "leave_type": kind.value,
+            "leave_hours": hours,
         },
         ip_address=request.client.host if request.client else "",
     )
