@@ -955,7 +955,7 @@
             if (ceil && candidate.getTime() >= ceil.getTime()) return false;
             return true;
         }
-        if (Math.abs(candidate.getTime() - now.getTime()) / 60000 > QUICK_THRESHOLD + 0.001) return false;
+        if (Math.abs(candidate.getTime() - liveDefaultTime().getTime()) / 60000 > QUICK_THRESHOLD + 0.001) return false;
         var floor = minBoundTime();
         if (!floor) return true;
         if (currentAction === 'checkin') return candidate.getTime() >= floor.getTime();
@@ -983,11 +983,11 @@
                 help.className = 'text-[11px] text-gray-500 text-center mt-2';
             } else if (_adjustDirty && !stepAllowed(shown)) {
                 help.textContent = 'That time is more than ' + QUICK_THRESHOLD
-                    + ' min from now. Move it closer, or sign in for a larger change.';
+                    + ' min from the recorded time. Move it closer, or sign in for a larger change.';
                 help.className = 'text-[11px] text-warning-400 text-center mt-2';
             } else {
                 help.textContent = 'Adjust up to ' + QUICK_THRESHOLD
-                    + ' min from now. No reason needed.';
+                    + ' min from the recorded time. No reason needed.';
                 help.className = 'text-[11px] text-gray-500 text-center mt-2';
             }
         }
@@ -1058,7 +1058,7 @@
         if (currentAction !== 'offsite' && currentAction !== 'phone' && _adjustDirty && _adjustTime && !stepAllowed(_adjustTime)) {
             showEl(errorEl);
             errorText.textContent = 'That time is more than ' + QUICK_THRESHOLD
-                + ' minutes from now. Move it closer, or sign in to record a larger change.';
+                + ' minutes from the recorded time. Move it closer, or sign in to record a larger change.';
             return;
         }
 

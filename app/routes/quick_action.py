@@ -77,13 +77,14 @@ def _parse_hhmm(value: str):
     return hour, minute
 
 
-def resolve_quick_declared(db: Session, now: datetime, declared_hhmm: str):
+def resolve_quick_declared(db: Session, now: datetime, declared_hhmm: str, anchor: datetime | None = None):
     """Turn an optional quick-screen time into a declared datetime.
 
     Returns (datetime, None) or (None, error).
     Blank means "use the automatic rounding" — caller keeps its default.
     A supplied time must be today, on a 5-minute mark, and within
-    comment_threshold_minutes of the actual submission time (no reason).
+    comment_threshold_minutes of the time that would have been recorded
+    (rounded down on check-in, rounded up on check-out).
     """
     parsed = _parse_hhmm(declared_hhmm)
     if parsed is None:
@@ -96,11 +97,12 @@ def resolve_quick_declared(db: Session, now: datetime, declared_hhmm: str):
     declared = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
     if declared.date() != now.date():
         return None, "Quick check can only record a time today."
+    base = anchor or now
     threshold = get_comment_threshold_minutes(db)
-    if offset_minutes(declared, now) > threshold:
+    if offset_minutes(declared, base) > threshold:
         return None, (
             f"Quick check can only move the time by up to {threshold} minutes "
-            "without a reason. Sign in to record a larger change."
+            f"from {base.strftime('%H:%M')}. Sign in to record a larger change."
         )
     return declared, None
 
@@ -239,7 +241,7 @@ async def quick_checkin(
     if state_err:
         return JSONResponse({"ok": False, "error": state_err}, status_code=400)
 
-    chosen, time_err = resolve_quick_declared(db, now, declared_time)
+    chosen, time_err = resolve_quick_declared(db, now, declared_time, anchor=round_down_5(now))
     if time_err:
         return JSONResponse({"ok": False, "error": time_err}, status_code=400)
     adjusted = chosen is not None
@@ -466,7 +468,7 @@ async def checkout_preview(
     override = None
     if (time or "").strip():
         now = datetime.now()
-        override, time_err = resolve_quick_declared(db, now, time)
+        override, time_err = resolve_quick_declared(db, now, time, anchor=round_up_5(now))
         if time_err:
             return JSONResponse({"ok": False, "error": time_err}, status_code=400)
     return JSONResponse(_checkout_preview_payload(db, emp.id, override))
@@ -600,7 +602,7 @@ async def quick_checkout(
 
     today = date.today()
     now = datetime.now()
-    chosen, time_err = resolve_quick_declared(db, now, declared_time)
+    chosen, time_err = resolve_quick_declared(db, now, declared_time, anchor=round_up_5(now))
     if time_err:
         return JSONResponse({"ok": False, "error": time_err}, status_code=400)
     adjusted = chosen is not None
