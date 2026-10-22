@@ -18,7 +18,9 @@ from app.models import (
     LocationType, TimeEntry,
 )
 from app.services.audit import log_action
-from app.services.email_checkout import _notify, parse_checkout_reply
+from app.services.email_checkout import (
+    _already_answered, _is_new_attempt, _mark_answered, _notify, parse_checkout_reply,
+)
 from app.services.time_calc import get_target_hours, update_daily_summary
 from app.services.time_state import can_check_in
 
@@ -165,17 +167,23 @@ def process_checkin_replies(db: Session) -> int:
         if not parsed:
             continue
         token = db.query(CheckinToken).filter(CheckinToken.code == parsed["code"]).first()
-        if token is None or token.notified_uid == message.imap_uid:
+        if token is None or _already_answered(message):
             continue
         employee = db.query(Employee).filter(Employee.id == token.employee_id).first()
         if employee is None:
             continue
         sender = (message.from_addr or "").strip().lower()
         owner = (employee.email or "").strip().lower()
+        subject = (message.subject or "").lower()
+        if subject.startswith("automatic reply") or "out of office" in subject or subject.startswith("undeliverable"):
+            _mark_answered(db, message)
+            continue
+        if not _is_new_attempt(message.body_text or ""):
+            _mark_answered(db, message)
+            continue
         if not owner or sender != owner:
             logger.warning("Check-in code %s ignored from %s", token.code, sender or "(blank)")
-            token.notified_uid = message.imap_uid
-            db.commit()
+            _mark_answered(db, message)
             continue
 
         fail = None
@@ -206,7 +214,7 @@ def process_checkin_replies(db: Session) -> int:
                     reply_subject=message.subject or "",
                 )
                 token.notified_uid = message.imap_uid
-                db.commit()
+                _mark_answered(db, message)
                 done += 1
                 continue
         if fail:
@@ -218,5 +226,5 @@ def process_checkin_replies(db: Session) -> int:
                 reply_subject=message.subject or "",
             )
             token.notified_uid = message.imap_uid
-            db.commit()
+            _mark_answered(db, message)
     return done

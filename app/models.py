@@ -310,6 +310,7 @@ class InboundEmail(Base):
     body_text = Column(Text, default="")
     received_at = Column(DateTime, nullable=True)
     fetched_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    answered = Column(Boolean, default=False, nullable=False)
 
 
 class CheckoutToken(Base):

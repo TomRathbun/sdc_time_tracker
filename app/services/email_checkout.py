@@ -58,6 +58,27 @@ def _fresh_reply(body: str) -> str:
     return "\n".join(kept)
 
 
+def _is_new_attempt(body: str) -> bool:
+    """True when the employee typed a time or left the CODE in their own text.
+
+    A quoted copy of the original mail is not a new reply. That was sending
+    the same rejection again on every inbox check.
+    """
+    fresh = _fresh_reply(body or "")
+    if _CODE_RE.search(fresh) or re.search(r"CODE:\s*[A-Fa-f0-9]{8}", fresh, re.I):
+        return True
+    return _TOP_TIME_RE.search(fresh) is not None
+
+
+def _already_answered(message) -> bool:
+    return bool(getattr(message, "answered", False))
+
+
+def _mark_answered(db: Session, message) -> None:
+    message.answered = True
+    db.commit()
+
+
 def issue_checkout_token(db: Session, employee: Employee, checkin: TimeEntry, expected: datetime) -> CheckoutToken | None:
     """Create a code for this open check-in. None if one is already unused."""
     existing = (
@@ -245,17 +266,23 @@ def process_checkout_replies(db: Session) -> int:
         if not parsed:
             continue
         token = db.query(CheckoutToken).filter(CheckoutToken.code == parsed["code"]).first()
-        if token is None or token.notified_uid == message.imap_uid:
+        if token is None or _already_answered(message):
             continue
         employee = db.query(Employee).filter(Employee.id == token.employee_id).first()
         if employee is None:
             continue
         sender = (message.from_addr or "").strip().lower()
         owner = (employee.email or "").strip().lower()
+        subject = (message.subject or "").lower()
+        if subject.startswith("automatic reply") or "out of office" in subject or subject.startswith("undeliverable"):
+            _mark_answered(db, message)
+            continue
+        if not _is_new_attempt(message.body_text or ""):
+            _mark_answered(db, message)
+            continue
         if not owner or sender != owner:
             logger.warning("Checkout code %s ignored from %s", token.code, sender or "(blank)")
-            token.notified_uid = message.imap_uid
-            db.commit()
+            _mark_answered(db, message)
             continue
 
         fail = None
@@ -287,7 +314,7 @@ def process_checkout_replies(db: Session) -> int:
                     reply_subject=message.subject or "",
                 )
                 token.notified_uid = message.imap_uid
-                db.commit()
+                _mark_answered(db, message)
                 done += 1
                 continue
         if fail:
@@ -299,5 +326,5 @@ def process_checkout_replies(db: Session) -> int:
                 reply_subject=message.subject or "",
             )
             token.notified_uid = message.imap_uid
-            db.commit()
+            _mark_answered(db, message)
     return done

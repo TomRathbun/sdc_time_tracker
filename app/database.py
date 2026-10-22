@@ -94,6 +94,13 @@ def _run_migrations():
         )
         print("✅ Migration: Added email_prefs to employees")
 
+    inbound_cols = _cols("inbound_emails") if _cols("inbound_emails") else []
+    if inbound_cols and "answered" not in inbound_cols:
+        cursor.execute(
+            "ALTER TABLE inbound_emails ADD COLUMN answered BOOLEAN DEFAULT 0"
+        )
+        print("✅ Migration: Added answered to inbound_emails")
+
     # Old contract defaults were 30 vacation / 10 sick days. Current policy is
     # 22 vacation / 15 sick work days (tracked in hours). Only rows still on
     # the old defaults are moved; a manager-set custom allowance is left alone.

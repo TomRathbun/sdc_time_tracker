@@ -87,6 +87,24 @@ def _received_at(msg) -> datetime | None:
     return when
 
 
+def _silence_old_replies(db: Session) -> None:
+    """Mark mail already on file as answered, once.
+
+    A rejected check-in was matching two copies of the same reply and
+    sending another rejection every inbox check.
+    """
+    from app.services.settings import get_setting, set_setting
+
+    if get_setting(db, "reply_answered_backfill") == "done":
+        return
+    db.query(InboundEmail).filter(InboundEmail.answered == False).update(  # noqa: E712
+        {InboundEmail.answered: True},
+        synchronize_session=False,
+    )
+    set_setting(db, "reply_answered_backfill", "done")
+    db.commit()
+
+
 def poll_inbox(db: Session) -> tuple[int, str]:
     """Fetch new inbox messages. Returns (count stored, status).
 
@@ -148,6 +166,7 @@ def poll_inbox(db: Session) -> tuple[int, str]:
         except Exception:
             pass
     try:
+        _silence_old_replies(db)
         from app.services.email_checkin import process_checkin_replies
         from app.services.email_checkout import process_checkout_replies
         from app.services.missed_entry import process_missed_replies
