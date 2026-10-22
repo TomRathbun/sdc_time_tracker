@@ -13,7 +13,6 @@ EMAIL_KINDS = (
     ("checkin", "Check-in confirmation", "all", "The note after you check in, with the week so far."),
     ("checkin_reminder", "Morning check-in", "all", "Fifteen minutes before your usual start, with a reply code."),
     ("checkout_reminder", "Checkout reminder", "all", "Fifteen minutes before you leave, with a reply code."),
-    ("missed_entry", "Missed punches", "all", "The daily list of open punches and how to reply."),
     ("policy", "Policy notice", "all", "When a punch is outside the allowed time window."),
     ("features", "Feature announcements", "all", "Notes a manager sends about tracker changes."),
     ("daily_summary", "Daily team summary", "lead", "End-of-day check-ins and check-outs for the team."),

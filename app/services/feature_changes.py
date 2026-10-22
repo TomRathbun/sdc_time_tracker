@@ -210,7 +210,8 @@ FEATURE_CATALOG = (
         "audience": "employee,supervisor,manager",
         "summary": (
             "Email in the menu turns each kind on or off for you: check-in, morning check-in, checkout, "
-            "missed punches, policy notices, and feature notes. Managers can also turn off the team summaries and reports. "
+            "policy notices, and feature notes. Missed punches are not optional. They go out while a punch is still open. "
+            "Managers can also turn off the team summaries and reports. "
             "A reply you already send still gets a confirmation. A manager can change the same switches on Edit employee."
         ),
     },

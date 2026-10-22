@@ -225,9 +225,6 @@ def remind_missed_entries(db: Session, now: datetime | None = None) -> int:
         )
         if already:
             continue
-        from app.services.email_prefs import wants_email
-        if not wants_email(person, "missed_entry"):
-            continue
         items = []
         for offset in range(days - 1, -1, -1):
             day = today - timedelta(days=offset)
