@@ -165,6 +165,7 @@ async def edit_employee(
     reset_pin: str = Form(""),
     vacation_days: float = Form(22.0),
     sick_days: float = Form(15.0),
+    work_week: str = Form("expat"),
     db: Session = Depends(get_db),
 ):
     """Edit an employee's details."""
@@ -182,6 +183,7 @@ async def edit_employee(
         "role": target.role.value,
         "vacation_days": target.vacation_days_per_year,
         "sick_days": target.sick_days_per_year,
+        "work_week": target.work_week,
     }
 
     target.name = name.strip()
@@ -189,6 +191,7 @@ async def edit_employee(
     target.role = Role(role)
     target.vacation_days_per_year = max(0.0, float(vacation_days))
     target.sick_days_per_year = max(0.0, float(sick_days))
+    target.work_week = "emirati" if (work_week or "").strip().lower() == "emirati" else "expat"
 
     from app.services.email_prefs import save_prefs
     form = await request.form()
@@ -212,6 +215,7 @@ async def edit_employee(
             "role": target.role.value,
             "vacation_days": target.vacation_days_per_year,
             "sick_days": target.sick_days_per_year,
+            "work_week": target.work_week,
         },
         ip_address=request.client.host if request.client else "",
     )
@@ -317,16 +321,16 @@ async def team_timesheet(
     else:
         week_start = _monday_of_week(today)
 
-    week_end = week_start + timedelta(days=4)  # Friday
+    week_end = week_start + timedelta(days=6)  # Sunday
     prev_week = week_start - timedelta(days=7)
     next_week = week_start + timedelta(days=7)
     is_current_week = week_start == _monday_of_week(today)
     # Future weeks allowed (e.g. advance vacation approvals)
     is_future = week_start > _monday_of_week(today)
 
-    # Build day headers (Mon-Fri)
+    # Monday through Sunday. Weekend target is 0, so a quiet day is not "missing".
     days = []
-    for i in range(5):
+    for i in range(7):
         d = week_start + timedelta(days=i)
         days.append({
             "date": d,
@@ -528,6 +532,8 @@ async def team_timesheet(
                 status = "leave"
             elif d > today and not check_ins and not check_outs and leave_hrs <= 0:
                 status = "future"
+            elif target <= 0 and worked <= 0 and leave_hrs <= 0 and not check_ins and not check_outs:
+                status = "off"
             elif worked <= 0 and leave_hrs <= 0 and d < today:
                 status = "missing"
             elif compliant:

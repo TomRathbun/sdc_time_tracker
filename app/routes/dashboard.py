@@ -17,7 +17,7 @@ from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
     projected_checkout_from_entries, format_beod_length,
-    friday_required_hours,
+    friday_required_hours, week_start_for, work_week_of,
 )
 from app.services.leave_balance import get_leave_balance
 
@@ -213,16 +213,17 @@ async def my_time_report(
                 subject = picked
 
     today = date.today()
-    current_monday = _monday_of(today)
-    week_start = current_monday
+    span = work_week_of(subject)
+    current_start = week_start_for(today, span)
+    week_start = current_start
     if week:
         try:
-            week_start = _monday_of(date.fromisoformat(week))
+            week_start = week_start_for(date.fromisoformat(week), span)
         except ValueError:
-            week_start = current_monday
-    if week_start > current_monday:
-        week_start = current_monday
-    week_end = week_start + timedelta(days=4)
+            week_start = current_start
+    if week_start > current_start:
+        week_start = current_start
+    week_end = week_start + timedelta(days=6)
     prev_week = week_start - timedelta(days=7)
     next_week = week_start + timedelta(days=7)
 
@@ -281,7 +282,7 @@ async def my_time_report(
         "clock": 0.0, "offsite": 0.0, "phone": 0.0, "beod": 0.0,
         "fosc": 0.0, "leave": 0.0, "effective": 0.0, "target": 0.0,
     }
-    for i in range(5):
+    for i in range(7):
         d = week_start + timedelta(days=i)
         day_entries = by_entry.get(d, [])
         day_off = by_off.get(d, [])
@@ -358,7 +359,8 @@ async def my_time_report(
         "totals": totals,
         "week_start": week_start,
         "week_end": week_end,
-        "is_current_week": week_start == current_monday,
+        "is_current_week": week_start == current_start,
+        "work_week": span,
         "prev_url": _href(prev_week, subject.id),
         "next_url": _href(next_week, subject.id),
         "week_compliant": totals["effective"] + 0.01 >= totals["target"],

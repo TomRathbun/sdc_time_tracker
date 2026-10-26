@@ -93,6 +93,11 @@ def _run_migrations():
             "ALTER TABLE employees ADD COLUMN email_prefs TEXT DEFAULT ''"
         )
         print("✅ Migration: Added email_prefs to employees")
+    if "work_week" not in emp_cols:
+        cursor.execute(
+            "ALTER TABLE employees ADD COLUMN work_week VARCHAR(20) DEFAULT 'expat'"
+        )
+        print("✅ Migration: Added work_week to employees")
 
     inbound_cols = _cols("inbound_emails") if _cols("inbound_emails") else []
     if inbound_cols and "answered" not in inbound_cols:

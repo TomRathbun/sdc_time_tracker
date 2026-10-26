@@ -72,6 +72,8 @@ class Employee(Base):
     sick_days_per_year = Column(Float, default=15.0, nullable=False)
     # JSON map of email kind -> false when the person opted out. Missing means on.
     email_prefs = Column(Text, default="", nullable=False)
+    # expat = Monday–Sunday. emirati = Sunday–Saturday.
+    work_week = Column(String(20), default="expat", nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

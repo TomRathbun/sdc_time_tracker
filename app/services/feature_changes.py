@@ -20,6 +20,18 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "weekend-on-timeline",
+        "title": "Weekend days on the timeline",
+        "added_on": date(2026, 10, 26),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "My Time and the team timeline now include Saturday and Sunday, so a weekend support call is visible. "
+            "Expats run Monday through Sunday. Emiratis run Sunday through Saturday. "
+            "An Emirati Sunday call reduces the hours required on Friday. "
+            "A manager sets the work week on Edit employee. Everyone starts as Expat."
+        ),
+    },
+    {
         "slug": "phone-call-date",
         "title": "Phone call date",
         "added_on": date(2026, 10, 12),

@@ -9,13 +9,26 @@ from sqlalchemy.orm import Session
 
 from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS
 from app.models import (
-    TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, EntryType, LeaveType,
+    TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, Employee, EntryType, LeaveType,
 )
 
 
 def get_target_hours(work_date: date) -> float:
-    """Get the FOSC target hours for a given weekday (9 Mon–Thu, 4 Fri)."""
+    """Get the FOSC target hours for a given weekday (9 Mon–Thu, 4 Fri, 0 weekend)."""
     return float(WEEKDAY_HOURS.get(work_date.weekday(), 0))
+
+
+def work_week_of(employee) -> str:
+    """expat is Monday–Sunday. emirati is Sunday–Saturday."""
+    raw = (getattr(employee, "work_week", None) or "expat").strip().lower()
+    return "emirati" if raw == "emirati" else "expat"
+
+
+def week_start_for(anchor: date, work_week: str = "expat") -> date:
+    """First day of the work week that contains anchor."""
+    if work_week == "emirati":
+        return anchor - timedelta(days=(anchor.weekday() + 1) % 7)
+    return anchor - timedelta(days=anchor.weekday())
 
 
 BEOD_CREDIT_HOURS = 1.0
@@ -36,7 +49,8 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
 
     This does not change the recorded target. Monday–Thursday stay at 9.
     Friday starts at 4 and drops by hours worked above the Monday–Thursday
-    target of 36. Approved leave is not extra time. Never below 0.
+    target of 36. An Emirati Sunday call is part of that week, so those
+    hours reduce Friday too. Approved leave is not extra time. Never below 0.
     """
     base = get_target_hours(work_date)
     if work_date.weekday() != 4 or base <= 0:
@@ -54,6 +68,15 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
         if summary and summary.total_hours:
             worked += float(summary.total_hours)
     surplus = max(0.0, round(worked - target, 2))
+    person = db.query(Employee).filter(Employee.id == employee_id).first()
+    if person and work_week_of(person) == "emirati":
+        sunday = monday - timedelta(days=1)
+        sunday_row = db.query(DailySummary).filter(
+            DailySummary.employee_id == employee_id,
+            DailySummary.date == sunday,
+        ).first()
+        if sunday_row and sunday_row.total_hours:
+            surplus = round(surplus + float(sunday_row.total_hours), 2)
     return round(max(0.0, base - surplus), 2)
 
 

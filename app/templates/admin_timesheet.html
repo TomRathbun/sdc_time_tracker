@@ -118,7 +118,7 @@
                             <div class="text-[11px] font-normal mt-0.5 {% if day.is_today %}text-primary-400{% else %}text-gray-600{% endif %}">
                                 {{ day.date.strftime("%d %b") }}
                             </div>
-                            <div class="text-[10px] text-gray-600">{{ day.target | int }}h</div>
+                            <div class="text-[10px] text-gray-600">{% if day.target %}{{ day.target | int }}h{% else %}—{% endif %}</div>
                         </th>
                         {% endfor %}
                         <th class="text-center py-3 px-3 text-gray-400 font-medium min-w-[80px]">
@@ -136,7 +136,7 @@
                                 </div>
                                 <div class="min-w-0">
                                     <p class="font-medium text-white text-sm truncate">{{ row.employee.name }}</p>
-                                    <p class="text-[10px] text-gray-500 capitalize">{{ row.employee.role.value }}</p>
+                                    <p class="text-[10px] text-gray-500 capitalize">{{ row.employee.role.value }}{% if row.employee.work_week == 'emirati' %} · Sun–Sat{% else %} · Mon–Sun{% endif %}</p>
                                 </div>
                             </div>
                         </td>
@@ -163,7 +163,7 @@
                                 {% endif %}">
 
                                 {# Hours header #}
-                                {% if cell.status not in ['future', 'missing'] or cell.ci_punches or cell.leave_hours > 0 or cell.pto_pending %}
+                                {% if cell.status not in ['future', 'missing', 'off'] or cell.ci_punches or cell.leave_hours > 0 or cell.pto_pending %}
                                 <div class="text-center mb-1">
                                     <span class="text-sm font-mono font-semibold
                                         {% if cell.status == 'compliant' %}text-success-300
@@ -244,8 +244,10 @@
                                 <div class="text-[9px] text-success-400 text-center">BEOD +{{ cell.beod_label }} ✓</div>
                                 {% endif %}
 
-                                {% if cell.status == 'future' and not cell.ci_punches and not cell.pto_pending and not cell.is_leave %}
+                                {% if cell.status == 'future' or cell.status == 'off' %}
+                                {% if not cell.ci_punches and not cell.pto_pending and not cell.is_leave %}
                                 <div class="text-center text-xs text-gray-600 py-2">—</div>
+                                {% endif %}
                                 {% elif cell.status == 'missing' %}
                                 <div class="text-center text-xs font-medium text-danger-400 py-1">Missing</div>
                                 {% endif %}

@@ -185,6 +185,7 @@
                                 {% else %}bg-gray-500/10 text-gray-400{% endif %}">
                                 {{ emp.role.value.title() }}
                             </span>
+                            <p class="text-[10px] text-gray-500 mt-1">{% if emp.work_week == 'emirati' %}Emirati · Sun–Sat{% else %}Expat · Mon–Sun{% endif %}</p>
                         </td>
                         <td class="py-3 px-3">
                             <div class="flex flex-col gap-1">
@@ -210,7 +211,7 @@
                                 <!-- Edit -->
                                 <button
                                     data-prefs='{{ emp.email_prefs or "{}" }}'
-                                    onclick="openEditModal(this, {{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 22 }}, {{ emp.sick_days_per_year or 15 }})"
+                                    onclick="openEditModal(this, {{ emp.id }}, '{{ emp.name }}', '{{ emp.email or '' }}', '{{ emp.role.value }}', {{ emp.vacation_days_per_year or 22 }}, {{ emp.sick_days_per_year or 15 }}, '{{ emp.work_week or 'expat' }}')"
                                     class="p-1.5 rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 transition-colors"
                                     title="Edit" id="btn-edit-{{ emp.id }}">
                                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -302,6 +303,14 @@
                         <option value="customer">Customer</option>
                     </select>
                 </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Work week</label>
+                    <select name="work_week" id="edit-work-week" class="form-select">
+                        <option value="expat">Expat · Monday through Sunday</option>
+                        <option value="emirati">Emirati · Sunday through Saturday</option>
+                    </select>
+                    <p class="text-[11px] text-gray-500 mt-1">An Emirati Sunday support call counts toward leaving early on Friday.</p>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs text-gray-500 mb-1">Vacation work days / year</label>
@@ -372,7 +381,7 @@
         });
     }
 
-    function openEditModal(button, id, name, email, role, vacationDays, sickDays) {
+    function openEditModal(button, id, name, email, role, vacationDays, sickDays, workWeek) {
         editEmployeeId = id;
         document.getElementById('edit-form').action = '/admin/employee/' + id + '/edit';
         document.getElementById('edit-name').value = name;
@@ -380,6 +389,7 @@
         document.getElementById('edit-sick').value = sickDays != null ? sickDays : 15;
         document.getElementById('edit-email').value = email;
         document.getElementById('edit-role').value = role;
+        document.getElementById('edit-work-week').value = workWeek === 'emirati' ? 'emirati' : 'expat';
         renderEmailPrefs(button.getAttribute("data-prefs") || "{}", role);
         document.getElementById('edit-role').onchange = function () {
             renderEmailPrefs(button.getAttribute("data-prefs") || "{}", this.value);
