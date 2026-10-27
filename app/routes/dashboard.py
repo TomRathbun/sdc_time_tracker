@@ -41,7 +41,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     now = datetime.now()
     today = now.date()
-    week_start = _monday_of_week(today)
+    week_start = week_start_for(today, work_week_of(employee))
 
     todays_entries = db.query(TimeEntry).filter(
         TimeEntry.employee_id == employee.id,

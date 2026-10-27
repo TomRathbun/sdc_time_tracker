@@ -436,12 +436,12 @@ def get_weekly_summary(
     employee_id: int,
     week_start: date,
 ) -> dict:
-    """Weekly summary (Mon–Fri). Effective hours include approved leave."""
+    """One work week, seven days. Expat starts Monday. Emirati starts Sunday."""
     days = []
     total_worked = 0.0
     total_target = 0.0
 
-    for i in range(5):
+    for i in range(7):
         day = week_start + timedelta(days=i)
         summary = db.query(DailySummary).filter(
             DailySummary.employee_id == employee_id,
@@ -497,8 +497,8 @@ def checkin_notice(db: Session, employee, checkin_time: datetime) -> dict:
     if credit > 0 and required - credit >= BEOD_MINIMUM_HOURS:
         beod_at = checkin_time + timedelta(hours=round(required - credit, 2))
     leave_at = beod_at if usual and beod_at else standard
-    monday = today - timedelta(days=today.weekday())
-    week = get_weekly_summary(db, employee.id, monday)
+    start = week_start_for(today, work_week_of(employee))
+    week = get_weekly_summary(db, employee.id, start)
     days = []
     done = 0.0
     for row in week["days"]:

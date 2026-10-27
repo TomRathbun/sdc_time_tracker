@@ -299,15 +299,16 @@
                 <div class="flex items-center gap-3">
                     <span class="text-xs text-gray-500 w-8 flex-shrink-0 {% if day.date == today %}text-primary-300 font-semibold{% endif %}">{{ day.day_name[:3] }}</span>
                     <div class="flex-1 bg-surface-900/50 rounded-full h-2.5 overflow-hidden">
-                        {% set day_pct = ((day.effective / day.target) * 100) if day.target > 0 else 0 %}
+                        {% set day_pct = ((day.effective / day.target) * 100) if day.target > 0 else (100 if day.effective > 0 else 0) %}
                         <div class="h-full rounded-full transition-all duration-500
                             {% if day.date == today %}bg-gradient-to-r from-primary-500 to-accent-400
+                            {% elif day.target == 0 and day.effective > 0 %}bg-accent-400/80
                             {% elif day.compliant %}bg-success-500/70
                             {% elif day.effective > 0 %}bg-warning-500/70
                             {% else %}bg-transparent{% endif %}"
                             style="width: {{ [day_pct, 100] | min }}%"></div>
                     </div>
-                    <span class="text-xs font-mono text-gray-400 w-14 text-right flex-shrink-0">{{ day.effective }}/{{ day.target | int }}h</span>
+                    <span class="text-xs font-mono text-gray-400 w-16 text-right flex-shrink-0">{% if day.target > 0 %}{{ day.effective }}/{{ day.target | int }}h{% else %}{{ day.effective }}h{% endif %}</span>
                 </div>
                 {% endfor %}
             </div>
