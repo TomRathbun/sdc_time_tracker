@@ -27,9 +27,10 @@ FEATURE_CATALOG = (
         "summary": (
             "Email the tracker with hello, or a blank message. "
             "If the address matches your account, the reply is a short menu. "
-            "Reply PHONE and a form comes back. Fill in DATE, HOURS, and an optional NOTE, "
-            "then reply. You get a confirmation or the reason it was rejected. "
-            "The same CODE works until the form is accepted or it expires."
+            "Employees can reply PHONE, OFFSITE, or PTO and fill in the form that comes back. "
+            "PTO can be a full day or part of a day, and stays pending until a manager approves it. "
+            "A manager can also reply TIMELINE, EOD, or WEEKLY and get that report back. "
+            "WEEKLY LAST sends the previous week."
         ),
     },
     {
