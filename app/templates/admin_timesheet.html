@@ -86,7 +86,13 @@
                 {% if week_pending_leave %}<span class="text-amber-300">{{ week_pending_leave }} leave/PTO</span>{% endif %}
             </p>
         </div>
-        <a href="/leave/approvals" class="text-xs text-primary-400 hover:text-primary-300">Full leave queue →</a>
+        <div class="flex items-center gap-3">
+            <form method="POST" action="/admin/approve-all" onsubmit="return confirm('Approve every pending time offset, BEOD, and leave request on this week?');">
+                <input type="hidden" name="week" value="{{ week_start.isoformat() }}">
+                <button type="submit" class="px-3 py-2 rounded-xl text-xs font-semibold bg-success-500/15 text-success-300 border border-success-500/30 hover:bg-success-500/25">Approve all</button>
+            </form>
+            <a href="/leave/approvals" class="text-xs text-primary-400 hover:text-primary-300">Full leave queue →</a>
+        </div>
     </div>
     {% endif %}
 

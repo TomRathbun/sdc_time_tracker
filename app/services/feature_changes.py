@@ -20,6 +20,16 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "timeline-approve-all",
+        "title": "Approve all on the timeline",
+        "added_on": date(2026, 10, 27),
+        "audience": "manager,supervisor",
+        "summary": (
+            "When a week has pending time offsets, BEOD, or leave, the timeline shows Approve all. "
+            "One click approves everything still waiting on that week."
+        ),
+    },
+    {
         "slug": "weekend-on-timeline",
         "title": "Weekend days on the timeline",
         "added_on": date(2026, 10, 26),

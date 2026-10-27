@@ -1115,6 +1115,103 @@ async def admin_approve_leave_request(
     return RedirectResponse(url=redirect_url, status_code=303)
 
 
+@router.post("/admin/approve-all")
+async def approve_all_for_week(
+    request: Request,
+    week: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Approve every pending offset, BEOD, and leave request on this timeline week."""
+    actor = get_current_employee(request, db)
+    if not actor or actor.role not in (Role.manager, Role.supervisor):
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        week_start = _monday_of_week(date.fromisoformat(week)) if week else _monday_of_week(date.today())
+    except ValueError:
+        week_start = _monday_of_week(date.today())
+    week_end = week_start + timedelta(days=6)
+
+    people = db.query(Employee).filter(
+        Employee.is_active == True,  # noqa: E712
+        Employee.role != Role.customer,
+        Employee.role != Role.supervisor,
+    ).all()
+    ids = [person.id for person in people]
+
+    offsets = []
+    if ids:
+        offsets = db.query(TimeEntry).filter(
+            TimeEntry.employee_id.in_(ids),
+            TimeEntry.date >= week_start,
+            TimeEntry.date <= week_end,
+            TimeEntry.offset_approved == False,  # noqa: E712
+        ).all()
+    for entry in offsets:
+        entry.offset_approved = True
+
+    leave_ids = []
+    if ids:
+        pending_leave = db.query(LeaveRequest).filter(
+            LeaveRequest.employee_id.in_(ids),
+            LeaveRequest.status == LeaveStatus.pending,
+            LeaveRequest.start_date <= week_end,
+            LeaveRequest.end_date >= week_start,
+        ).all()
+        for leave in pending_leave:
+            leave.status = LeaveStatus.approved
+            leave.approved_by = actor.id
+            leave_ids.append(leave.id)
+        if pending_leave:
+            db.commit()
+            for leave in pending_leave:
+                apply_leave_approval(db, leave)
+
+    beod_rows = []
+    pto_rows = []
+    if ids:
+        summaries = db.query(DailySummary).filter(
+            DailySummary.employee_id.in_(ids),
+            DailySummary.date >= week_start,
+            DailySummary.date <= week_end,
+        ).all()
+        for summary in summaries:
+            if summary.lunch_end_of_day and not summary.lunch_approved:
+                beod_rows.append(summary)
+            if summary.leave_hours and not summary.leave_approved:
+                pto_rows.append(summary)
+    for summary in beod_rows:
+        update_daily_summary(
+            db, summary.employee_id, summary.date,
+            lunch_end_of_day=True, lunch_approved=True,
+        )
+    for summary in pto_rows:
+        db.refresh(summary)
+        if summary.leave_hours and not summary.leave_approved:
+            update_daily_summary(
+                db, summary.employee_id, summary.date,
+                pto_approved=True,
+            )
+
+    if offsets:
+        db.commit()
+
+    log_action(
+        db, action="approve_all", entity_type="Timesheet",
+        entity_id=None, employee_id=actor.id,
+        new_values={
+            "week": week_start.isoformat(),
+            "offsets": len(offsets),
+            "beod": len(beod_rows),
+            "leave_requests": len(leave_ids),
+            "pto_days": len(pto_rows),
+        },
+        ip_address=request.client.host if request.client else "",
+    )
+
+    return RedirectResponse(url=f"/admin/timesheet?week={week_start.isoformat()}", status_code=303)
+
+
 # ── Feature Configuration ─────────────────────────────────────────────
 
 @router.get("/admin/config", response_class=HTMLResponse)
