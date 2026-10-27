@@ -38,6 +38,11 @@ _BEOD_RE = re.compile(r"(?im)^\s*BEOD:\s*(yes|no)\s*$")
 _BEOD_LEN_RE = re.compile(r"(?im)^\s*BEOD\s*LENGTH:\s*(\S+)\s*$")
 _TOP_TIME_RE = re.compile(r"(?<!\d)(\d{1,2})[:.](\d{2})(?!\d)")
 _COMPACT_TIME_RE = re.compile(r"(?<!\d)(\d{3,4})(?!\d)")
+_SIGNATURE_RE = re.compile(
+    r"^(sent from my (iphone|ipad|android)|get outlook for (ios|android|mobile))\.?$",
+    re.I,
+)
+_TIME_ATTEMPT_RE = re.compile(r"\d|\b(?:am|pm|o['’]?clock)\b", re.I)
 
 
 def _split_clock(text: str) -> tuple[int, int] | None:
@@ -105,7 +110,7 @@ def _fresh_reply(body: str) -> str:
 
 
 def _is_new_attempt(body: str) -> bool:
-    """True when the employee typed a time or left the CODE in their own text.
+    """True when the employee typed a time, a code, or a time we could not read.
 
     A quoted copy of the original mail is not a new reply. That was sending
     the same rejection again on every inbox check.
@@ -113,7 +118,27 @@ def _is_new_attempt(body: str) -> bool:
     fresh = _fresh_reply(body or "")
     if _CODE_RE.search(fresh) or re.search(r"CODE:\s*[A-Fa-f0-9]{8}", fresh, re.I):
         return True
-    return _clock_from_text(fresh) is not None
+    if _clock_from_text(fresh) is not None:
+        return True
+    return _unreadable_time(fresh)
+
+
+def _typed_lines(fresh: str) -> list[str]:
+    lines = []
+    for line in (fresh or "").splitlines():
+        raw = line.strip()
+        if not raw or _SIGNATURE_RE.match(raw):
+            continue
+        lines.append(raw)
+    return lines
+
+
+def _unreadable_time(fresh: str) -> bool:
+    """They typed something that looks like a time, and it is not 16:30 or 1630."""
+    lines = _typed_lines(fresh)
+    if not lines or _clock_from_text("\n".join(lines)):
+        return False
+    return _TIME_ATTEMPT_RE.search("\n".join(lines)) is not None
 
 
 def _already_answered(message) -> bool:
@@ -187,6 +212,8 @@ def parse_checkout_reply(body: str) -> dict | None:
     declared = _DECLARED_RE.search(full)
     if top:
         hour, minute = top
+    elif _unreadable_time(fresh):
+        return {"code": code.group(1).upper(), "bad_time": True}
     elif declared:
         parsed = _split_clock(declared.group(1))
         if not parsed:
@@ -384,7 +411,11 @@ def process_checkout_replies(db: Session) -> int:
 
         fail = None
         if parsed.get("bad_time"):
-            fail = "DECLARED TIME must look like 16:30 or 1630."
+            fail = (
+                "That time could not be read. Reply again with the same CODE and a time "
+                "like 16:30 or 1630. A time at the top of the reply is used. "
+                "Otherwise DECLARED TIME is used."
+            )
         elif token.used_at is not None and token.notified_uid is not None:
             fail = f"Code {token.code} was already used."
         elif token.used_at is not None:
