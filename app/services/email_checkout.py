@@ -220,7 +220,7 @@ def parse_checkout_reply(body: str) -> dict | None:
             return {"code": code.group(1).upper(), "bad_time": True}
         hour, minute = parsed
     else:
-        return None
+        return {"code": code.group(1).upper(), "bad_time": True}
     beod_match = _BEOD_RE.search(full)
     length_match = _BEOD_LEN_RE.search(full)
     return {
@@ -402,8 +402,18 @@ def process_checkout_replies(db: Session) -> int:
             _mark_answered(db, message)
             continue
         if not _is_new_attempt(message.body_text or ""):
-            _mark_answered(db, message)
-            continue
+            if parsed.get("hour") is None or parsed.get("bad_time"):
+                sent = _notify(
+                    employee,
+                    "Checkout time is missing",
+                    "That reply had no time. Reply again with the same CODE and a time "
+                    "like 14:25 or 1425. A blank reply uses the DECLARED TIME already in the email.",
+                    reply_message_id=message.message_id or "",
+                    reply_subject=message.subject or "",
+                )
+                if sent:
+                    _mark_answered(db, message)
+                continue
         if not owner or sender != owner:
             logger.warning("Checkout code %s ignored from %s", token.code, sender or "(blank)")
             _mark_answered(db, message)

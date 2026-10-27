@@ -182,8 +182,18 @@ def process_checkin_replies(db: Session) -> int:
             _mark_answered(db, message)
             continue
         if not _is_new_attempt(message.body_text or ""):
-            _mark_answered(db, message)
-            continue
+            if parsed.get("hour") is None or parsed.get("bad_time"):
+                sent = _notify(
+                    employee,
+                    "Check-in time is missing",
+                    "Rejected because that reply had no time. Reply again with the same CODE and a time "
+                    "like 06:30 or 0630. A blank reply uses the DECLARED TIME already in the email.",
+                    reply_message_id=message.message_id or "",
+                    reply_subject=message.subject or "",
+                )
+                if sent:
+                    _mark_answered(db, message)
+                continue
         if not owner or sender != owner:
             logger.warning("Check-in code %s ignored from %s", token.code, sender or "(blank)")
             _mark_answered(db, message)
