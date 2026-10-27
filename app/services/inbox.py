@@ -181,6 +181,10 @@ def poll_inbox(db: Session) -> tuple[int, str]:
         missed = process_missed_replies(db)
         if missed:
             note += f" Recorded {missed} missed-entry reply."
+        from app.services.email_menu import process_email_menu
+        menu = process_email_menu(db)
+        if menu:
+            note += f" Answered {menu} email menu message."
     except Exception as exc:
         logger.error("Checkout reply handling failed: %s", exc)
     return stored, note

@@ -315,6 +315,21 @@ class InboundEmail(Base):
     answered = Column(Boolean, default=False, nullable=False)
 
 
+class EmailForm(Base):
+    """A form mailed after someone picks an action from the email menu."""
+    __tablename__ = "email_forms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
+    kind = Column(String(40), nullable=False)
+    code = Column(String(16), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+
+    employee = relationship("Employee")
+
+
 class CheckoutToken(Base):
     """One-time code mailed 15 minutes before checkout. A reply spends it."""
     __tablename__ = "checkout_tokens"

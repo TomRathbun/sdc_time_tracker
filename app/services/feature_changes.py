@@ -20,6 +20,19 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "email-menu",
+        "title": "Start from email",
+        "added_on": date(2026, 10, 27),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "Email the tracker with hello, or a blank message. "
+            "If the address matches your account, the reply is a short menu. "
+            "Reply PHONE and a form comes back. Fill in DATE, HOURS, and an optional NOTE, "
+            "then reply. You get a confirmation or the reason it was rejected. "
+            "The same CODE works until the form is accepted or it expires."
+        ),
+    },
+    {
         "slug": "timeline-approve-all",
         "title": "Approve all on the timeline",
         "added_on": date(2026, 10, 27),
