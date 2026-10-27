@@ -19,7 +19,7 @@ from app.models import (
 )
 from app.services.audit import log_action
 from app.services.email_checkout import (
-    _already_answered, _is_new_attempt, _mark_answered, _notify, parse_checkout_reply,
+    _already_answered, _finish_notice, _is_new_attempt, _mark_answered, _notify, parse_checkout_reply,
 )
 from app.services.time_calc import get_target_hours, update_daily_summary
 from app.services.time_state import can_check_in
@@ -153,11 +153,14 @@ def _apply(db: Session, token: CheckinToken, employee: Employee, parsed: dict, n
 
 def process_checkin_replies(db: Session) -> int:
     """Apply new inbox replies that carry a check-in code. Returns how many checked in."""
-    since = datetime.utcnow() - timedelta(days=2)
+    since = datetime.utcnow() - timedelta(days=4)
     messages = (
         db.query(InboundEmail)
-        .filter(InboundEmail.fetched_at >= since)
-        .order_by(InboundEmail.id.desc())
+        .filter(
+            InboundEmail.fetched_at >= since,
+            InboundEmail.answered == False,  # noqa: E712
+        )
+        .order_by(InboundEmail.id.asc())
         .limit(40)
         .all()
     )
@@ -189,8 +192,21 @@ def process_checkin_replies(db: Session) -> int:
         fail = None
         if parsed.get("bad_time"):
             fail = "Rejected because DECLARED TIME must look like 06:30."
-        elif token.used_at is not None:
+        elif token.used_at is not None and token.notified_uid is not None:
             fail = f"Rejected because code {token.code} was already used."
+        elif token.used_at is not None:
+            when = f"{parsed['hour']:02d}:{parsed['minute']:02d}"
+            sent = _notify(
+                employee,
+                f"Checked in at {when}",
+                f"Accepted. You are checked in at {when}.",
+                reply_message_id=message.message_id or "",
+                reply_subject=message.subject or "",
+            )
+            _finish_notice(db, token, message, sent)
+            if sent:
+                done += 1
+            continue
         elif datetime.now() > token.expires_at:
             fail = f"Rejected because code {token.code} expired at noon. Check in on the kiosk."
         else:
@@ -206,25 +222,24 @@ def process_checkin_replies(db: Session) -> int:
                 fail = result
             elif result is not None:
                 when = result.strftime("%H:%M")
-                _notify(
+                sent = _notify(
                     employee,
                     f"Checked in at {when}",
                     f"Accepted. You are checked in at {when}.",
                     reply_message_id=message.message_id or "",
                     reply_subject=message.subject or "",
                 )
-                token.notified_uid = message.imap_uid
-                _mark_answered(db, message)
-                done += 1
+                _finish_notice(db, token, message, sent)
+                if sent:
+                    done += 1
                 continue
         if fail:
-            _notify(
+            sent = _notify(
                 employee,
                 "Check-in reply was not recorded",
                 fail + "\n\nThe CODE stays the same if you reply again before noon.",
                 reply_message_id=message.message_id or "",
                 reply_subject=message.subject or "",
             )
-            token.notified_uid = message.imap_uid
-            _mark_answered(db, message)
+            _finish_notice(db, token, message, sent)
     return done

@@ -15,12 +15,12 @@ from html import escape
 from sqlalchemy.orm import Session
 
 from app.models import (
-    CheckoutToken, Employee, EntryType, InboundEmail, LocationType, TimeEntry,
+    CheckinToken, CheckoutToken, Employee, EntryType, InboundEmail, LocationType, TimeEntry,
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
 from app.services.email_layout import render_email
-from app.services.settings import get_bool_setting
+from app.services.settings import get_bool_setting, get_setting, set_setting
 from app.services.time_calc import (
     beod_offered_on,
     format_beod_length,
@@ -77,6 +77,18 @@ def _already_answered(message) -> bool:
 def _mark_answered(db: Session, message) -> None:
     message.answered = True
     db.commit()
+
+
+def _finish_notice(db: Session, token, message, sent: bool) -> None:
+    """Remember a reply only after the response email actually goes out.
+
+    A send that fails during an outage is left open so the next inbox check tries again.
+    """
+    if not sent:
+        logger.error("Reply mail was not sent for code %s; it will be tried again", getattr(token, "code", ""))
+        return
+    token.notified_uid = message.imap_uid
+    _mark_answered(db, message)
 
 
 def issue_checkout_token(db: Session, employee: Employee, checkin: TimeEntry, expected: datetime) -> CheckoutToken | None:
@@ -250,13 +262,51 @@ def _apply(db: Session, token: CheckoutToken, employee: Employee, parsed: dict, 
     return declared, hours
 
 
-def process_checkout_replies(db: Session) -> int:
-    """Apply new inbox replies that carry a checkout code. Returns how many checked out."""
-    since = datetime.utcnow() - timedelta(days=2)
+def reopen_outage_replies(db: Session) -> None:
+    """Give Friday–Monday replies another chance to send a response.
+
+    The tracker was offline, and a checkout reply can be closed out even when
+    the confirmation mail never left. One pass, latest reply per code.
+    """
+    if get_setting(db, "reopen_outage_replies") == "done":
+        return
+    cutoff = datetime(2026, 10, 23)
     messages = (
         db.query(InboundEmail)
-        .filter(InboundEmail.fetched_at >= since)
+        .filter(InboundEmail.received_at >= cutoff)
         .order_by(InboundEmail.id.desc())
+        .all()
+    )
+    seen = set()
+    for message in messages:
+        parsed = parse_checkout_reply(message.body_text or "")
+        if not parsed or not _is_new_attempt(message.body_text or ""):
+            continue
+        code = parsed["code"]
+        if code in seen:
+            continue
+        token = db.query(CheckoutToken).filter(CheckoutToken.code == code).first()
+        if token is None:
+            token = db.query(CheckinToken).filter(CheckinToken.code == code).first()
+        if token is None or token.used_at is not None:
+            continue
+        seen.add(code)
+        message.answered = False
+        token.notified_uid = None
+    set_setting(db, "reopen_outage_replies", "done")
+    db.commit()
+
+
+def process_checkout_replies(db: Session) -> int:
+    """Apply new inbox replies that carry a checkout code. Returns how many checked out."""
+    since = datetime.utcnow() - timedelta(days=4)
+    messages = (
+        db.query(InboundEmail)
+        .filter(
+            InboundEmail.fetched_at >= since,
+            InboundEmail.answered == False,  # noqa: E712
+        )
+        .order_by(InboundEmail.id.asc())
         .limit(40)
         .all()
     )
@@ -288,8 +338,21 @@ def process_checkout_replies(db: Session) -> int:
         fail = None
         if parsed.get("bad_time"):
             fail = "DECLARED TIME must look like 16:30."
-        elif token.used_at is not None:
+        elif token.used_at is not None and token.notified_uid is not None:
             fail = f"Code {token.code} was already used."
+        elif token.used_at is not None:
+            when = f"{parsed['hour']:02d}:{parsed['minute']:02d}"
+            sent = _notify(
+                employee,
+                f"Checked out at {when}",
+                f"Accepted. You are checked out at {when}.",
+                reply_message_id=message.message_id or "",
+                reply_subject=message.subject or "",
+            )
+            _finish_notice(db, token, message, sent)
+            if sent:
+                done += 1
+            continue
         elif datetime.now() > token.expires_at:
             fail = f"Code {token.code} has expired. Check out on the kiosk."
         else:
@@ -306,25 +369,24 @@ def process_checkout_replies(db: Session) -> int:
             elif result is not None:
                 _declared, hours = result
                 when = f"{parsed['hour']:02d}:{parsed['minute']:02d}"
-                _notify(
+                sent = _notify(
                     employee,
                     f"Checked out at {when}",
                     f"Accepted. You are checked out at {when}.\nHours recorded: {hours}.",
                     reply_message_id=message.message_id or "",
                     reply_subject=message.subject or "",
                 )
-                token.notified_uid = message.imap_uid
-                _mark_answered(db, message)
-                done += 1
+                _finish_notice(db, token, message, sent)
+                if sent:
+                    done += 1
                 continue
         if fail:
-            _notify(
+            sent = _notify(
                 employee,
                 "Check-out reply was not recorded",
                 fail + "\n\nThe CODE stays the same if you reply again.",
                 reply_message_id=message.message_id or "",
                 reply_subject=message.subject or "",
             )
-            token.notified_uid = message.imap_uid
-            _mark_answered(db, message)
+            _finish_notice(db, token, message, sent)
     return done

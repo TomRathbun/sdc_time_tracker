@@ -167,6 +167,8 @@ def poll_inbox(db: Session) -> tuple[int, str]:
             pass
     try:
         _silence_old_replies(db)
+        from app.services.email_checkout import reopen_outage_replies
+        reopen_outage_replies(db)
         from app.services.email_checkin import process_checkin_replies
         from app.services.email_checkout import process_checkout_replies
         from app.services.missed_entry import process_missed_replies

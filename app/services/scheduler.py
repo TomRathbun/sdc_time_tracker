@@ -3,7 +3,7 @@
 import logging
 import threading
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +72,6 @@ def _check_for_upcoming_checkouts():
                 required_hours=required,
             )
             expected = projected.standard if projected else None
-            if expected is None:
-                continue
-
-            minutes_until = (expected - now).total_seconds() / 60
-            # The 15 minutes before leave, plus a short catch-up if the
-            # tracker was restarted just after that time.
-            if not (-30 < minutes_until <= 15):
-                continue
 
             open_checkin = None
             for entry in sorted(entries, key=lambda row: (row.declared_time, row.id or 0)):
@@ -91,6 +83,18 @@ def _check_for_upcoming_checkouts():
                 continue
             if current_status(db, emp.id, today) != STATUS_CHECKED_IN:
                 continue
+            if expected is None:
+                if required <= 0:
+                    continue
+                expected = now
+
+            minutes_until = (expected - now).total_seconds() / 60
+            # From 15 minutes before leave until the end of that day.
+            # A box that was offline past the usual time still sends once
+            # if the employee is checked in.
+            if expected.date() != today or minutes_until > 15:
+                continue
+
             from app.services.email_prefs import wants_email
             if not wants_email(emp, "checkout_reminder"):
                 continue
@@ -99,7 +103,12 @@ def _check_for_upcoming_checkouts():
             if token is None:
                 continue
 
-            fields = f"CODE: {token.code}\nDECLARED TIME: {expected.strftime('%H:%M')}"
+            mail_time = expected
+            if minutes_until < -15:
+                mail_time = now.replace(second=0, microsecond=0)
+                if mail_time.minute % 5:
+                    mail_time = mail_time + timedelta(minutes=5 - (mail_time.minute % 5))
+            fields = f"CODE: {token.code}\nDECLARED TIME: {mail_time.strftime('%H:%M')}"
             if beod_offered_on(today):
                 claim = "yes" if emp.beod_pref_known and emp.beod_pref_claim else "no"
                 length = format_beod_length(emp.beod_pref_hours or 1)
@@ -109,7 +118,7 @@ def _check_for_upcoming_checkouts():
                 "Sending checkout reply mail to %s (checkout at %s)",
                 emp.name, expected.strftime("%H:%M"),
             )
-            if not send_checkout_reminder(emp, expected, token.code, fields):
+            if not send_checkout_reminder(emp, mail_time, token.code, fields):
                 cancel_checkout_token(db, token)
                 logger.error("Checkout reminder failed for %s; code withdrawn", emp.name)
 
