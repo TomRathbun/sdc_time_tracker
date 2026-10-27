@@ -191,7 +191,7 @@ def process_checkin_replies(db: Session) -> int:
 
         fail = None
         if parsed.get("bad_time"):
-            fail = "Rejected because DECLARED TIME must look like 06:30."
+            fail = "Rejected because DECLARED TIME must look like 06:30 or 0630."
         elif token.used_at is not None and token.notified_uid is not None:
             fail = f"Rejected because code {token.code} was already used."
         elif token.used_at is not None:

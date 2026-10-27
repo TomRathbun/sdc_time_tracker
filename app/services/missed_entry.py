@@ -20,6 +20,7 @@ from app.services.audit import log_action
 from app.services.email import _send_email
 from app.services.email_layout import render_email
 from app.services.leave_sync import apply_leave_approval
+from app.services.email_checkout import _split_clock
 from app.services.settings import get_bool_setting, get_setting, parse_hhmm_setting
 from app.services.time_calc import friday_required_hours, get_target_hours, update_daily_summary
 from app.services.time_state import STATUS_CHECKED_IN, STATUS_NOT_STARTED, can_check_out, current_status
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 _WINDOW_MINUTES = 180
 _CODE_RE = re.compile(r"(?im)^\s*CODE:\s*([A-Fa-f0-9]{8})\s*$")
 _DAY_RE = re.compile(r"(?im)^\s*DAY:\s*(.+?)\s*$")
-_OUT_RE = re.compile(r"(?im)^\s*CHECK\s*OUT:\s*(\d{1,2}):(\d{2})\s*$")
+_OUT_RE = re.compile(r"(?im)^\s*CHECK\s*OUT:\s*(\S+)\s*$")
 _REASON_RE = re.compile(r"(?im)^\s*REASON:\s*(.+?)\s*$")
 
 _LEAVE_WORDS = {
@@ -430,14 +431,15 @@ def process_missed_replies(db: Session) -> int:
                 reason_match = _REASON_RE.search(body)
                 reason = (reason_match.group(1).strip() if reason_match else "")
                 if not clock:
-                    fail = "Set CHECK OUT to a time like 16:30, and add a REASON."
+                    fail = "Set CHECK OUT to a time like 16:30 or 1630, and add a REASON."
                 elif len(reason) < 3:
                     fail = "Add a short REASON. The code stays the same."
                 else:
-                    hour, minute = int(clock.group(1)), int(clock.group(2))
-                    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                        fail = "CHECK OUT must look like 16:30."
+                    parsed = _split_clock(clock.group(1))
+                    if not parsed:
+                        fail = "CHECK OUT must look like 16:30 or 1630."
                     else:
+                        hour, minute = parsed
                         declared = datetime.combine(token.work_date, time(hour, minute))
                         fail = _apply_checkout(db, token, employee, declared, reason)
                         if fail is None:

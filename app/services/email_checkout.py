@@ -33,10 +33,56 @@ from app.services.time_state import can_check_out
 logger = logging.getLogger(__name__)
 
 _CODE_RE = re.compile(r"(?im)^\s*CODE:\s*([A-Fa-f0-9]{8})\s*$")
-_TIME_RE = re.compile(r"(?im)^\s*DECLARED\s*TIME:\s*(\d{1,2}):(\d{2})\s*$")
+_DECLARED_RE = re.compile(r"(?im)^\s*DECLARED\s*TIME:\s*(\S+)\s*$")
 _BEOD_RE = re.compile(r"(?im)^\s*BEOD:\s*(yes|no)\s*$")
 _BEOD_LEN_RE = re.compile(r"(?im)^\s*BEOD\s*LENGTH:\s*(\S+)\s*$")
 _TOP_TIME_RE = re.compile(r"(?<!\d)(\d{1,2})[:.](\d{2})(?!\d)")
+_COMPACT_TIME_RE = re.compile(r"(?<!\d)(\d{3,4})(?!\d)")
+
+
+def _split_clock(text: str) -> tuple[int, int] | None:
+    """Read 07:20, 07.20, 0720, or 720. None when it is not a 24-hour time."""
+    raw = (text or "").strip()
+    separated = re.fullmatch(r"(\d{1,2})[:.](\d{2})", raw)
+    if separated:
+        hour, minute = int(separated.group(1)), int(separated.group(2))
+    elif re.fullmatch(r"\d{3,4}", raw):
+        if len(raw) == 3:
+            hour, minute = int(raw[0]), int(raw[1:])
+        else:
+            hour, minute = int(raw[:2]), int(raw[2:])
+    else:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour, minute
+
+
+def _clock_from_text(text: str) -> tuple[int, int] | None:
+    """First time the employee typed. 07:20 and 0720 are the same."""
+    for line in (text or "").splitlines():
+        raw = line.strip()
+        if not raw or re.match(r"^CODE\s*:", raw, re.I):
+            continue
+        declared = re.match(r"^DECLARED\s*TIME:\s*(\S+)\s*$", raw, re.I)
+        if declared:
+            parsed = _split_clock(declared.group(1))
+            if parsed:
+                return parsed
+            continue
+        parsed = _split_clock(raw)
+        if parsed:
+            return parsed
+        found = _TOP_TIME_RE.search(raw)
+        if found:
+            parsed = _split_clock(f"{found.group(1)}:{found.group(2)}")
+            if parsed:
+                return parsed
+        for match in _COMPACT_TIME_RE.finditer(raw):
+            parsed = _split_clock(match.group(1))
+            if parsed:
+                return parsed
+    return None
 
 
 def _fresh_reply(body: str) -> str:
@@ -67,7 +113,7 @@ def _is_new_attempt(body: str) -> bool:
     fresh = _fresh_reply(body or "")
     if _CODE_RE.search(fresh) or re.search(r"CODE:\s*[A-Fa-f0-9]{8}", fresh, re.I):
         return True
-    return _TOP_TIME_RE.search(fresh) is not None
+    return _clock_from_text(fresh) is not None
 
 
 def _already_answered(message) -> bool:
@@ -137,16 +183,17 @@ def parse_checkout_reply(body: str) -> dict | None:
     code = _CODE_RE.search(full) or re.search(r"CODE:\s*([A-Fa-f0-9]{8})", full, re.I)
     if not code:
         return None
-    top = _TOP_TIME_RE.search(fresh)
-    clock = None if top else (
-        _TIME_RE.search(full) or re.search(r"DECLARED\s*TIME:\s*(\d{1,2}):(\d{2})", full, re.I)
-    )
-    picked = top or clock
-    if not picked:
+    top = _clock_from_text(fresh)
+    declared = _DECLARED_RE.search(full)
+    if top:
+        hour, minute = top
+    elif declared:
+        parsed = _split_clock(declared.group(1))
+        if not parsed:
+            return {"code": code.group(1).upper(), "bad_time": True}
+        hour, minute = parsed
+    else:
         return None
-    hour, minute = int(picked.group(1)), int(picked.group(2))
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return {"code": code.group(1).upper(), "bad_time": True}
     beod_match = _BEOD_RE.search(full)
     length_match = _BEOD_LEN_RE.search(full)
     return {
@@ -337,7 +384,7 @@ def process_checkout_replies(db: Session) -> int:
 
         fail = None
         if parsed.get("bad_time"):
-            fail = "DECLARED TIME must look like 16:30."
+            fail = "DECLARED TIME must look like 16:30 or 1630."
         elif token.used_at is not None and token.notified_uid is not None:
             fail = f"Code {token.code} was already used."
         elif token.used_at is not None:

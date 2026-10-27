@@ -514,7 +514,7 @@ def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fie
         greeting,
         f"""
         <p style="margin:8px 0 16px;">Your usual check-in is <strong style="color:#4ade80;">{ci_str}</strong>, about 15 minutes from now.</p>
-        <p style="margin:0 0 12px;">Reply to this email to check in. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.</p>
+        <p style="margin:0 0 12px;">Reply to this email to check in. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used. 06:30 and 0630 are both accepted.</p>
         <p style="margin:0 0 8px;"><strong style="color:#f8fafc;">What is allowed</strong></p>
         <p style="margin:0 0 8px;">The declared time can be later than when you send the reply. It cannot be more than 15 minutes earlier. A reply sent at 06:40 can use 06:25, not 06:00.</p>
         <p style="margin:0 0 16px;">This code expires at noon. If the reply is rejected, the return email says why. The confirmation can take up to 5 minutes.</p>
@@ -529,6 +529,7 @@ Your usual check-in is {ci_str}, about 15 minutes from now.
 
 Reply to this email to check in. Leave the CODE line unchanged.
 A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.
+06:30 and 0630 are both accepted.
 
 What is allowed
 The declared time can be later than when you send the reply.
@@ -569,7 +570,7 @@ def send_checkout_reminder(employee, checkout_time: datetime, code: str, reply_f
         greeting,
         f"""
         <p style="margin:8px 0 16px;">Projected checkout is <strong style="color:#fbbf24;">{co_str}</strong>, about 15 minutes from now.</p>
-        <p style="margin:0 0 12px;">Reply to this email to check out. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.</p>
+        <p style="margin:0 0 12px;">Reply to this email to check out. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used. 16:30 and 1630 are both accepted.</p>
         <p style="margin:0 0 8px;"><strong style="color:#f8fafc;">What is allowed</strong></p>
         <p style="margin:0 0 8px;">The declared time must be within 15 minutes of when you send the reply. Do not reply at 15:00 and put 16:00. Send the reply when you leave.</p>
         <p style="margin:0 0 8px;">The time can be up to 15 minutes earlier than the projected checkout. A later time is allowed only when it is still within 15 minutes of when you send the reply.</p>
@@ -586,6 +587,7 @@ Projected checkout is {co_str}, about 15 minutes from now.
 
 Reply to this email to check out. Leave the CODE line unchanged.
 A time typed at the top of the reply is used. Otherwise DECLARED TIME is used.
+16:30 and 1630 are both accepted.
 
 What is allowed
 The declared time must be within 15 minutes of when you send the reply.
