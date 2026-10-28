@@ -326,6 +326,7 @@ class EmailForm(Base):
     expires_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     used_at = Column(DateTime, nullable=True)
+    payload = Column(Text, default="")
 
     employee = relationship("Employee")
 

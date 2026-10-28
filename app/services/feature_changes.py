@@ -20,6 +20,17 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "email-approve",
+        "title": "Approve from email",
+        "added_on": date(2026, 10, 28),
+        "audience": "manager",
+        "summary": (
+            "Reply APPROVE to the tracker. The mail lists pending time changes, BEOD, and leave, each with a number. "
+            "Reply ALL to approve the whole list, or the numbers, such as 1, 3, 5 or 2-4. "
+            "Supervisors are not on the list. Anything not numbered is left pending."
+        ),
+    },
+    {
         "slug": "email-menu",
         "title": "Start from email",
         "added_on": date(2026, 10, 27),
@@ -29,8 +40,9 @@ FEATURE_CATALOG = (
             "If the address matches your account, the reply is a short menu. "
             "Employees can reply PHONE, OFFSITE, or PTO and fill in the form that comes back. "
             "PTO can be a full day or part of a day, and stays pending until a manager approves it. "
-            "A manager can also reply TIMELINE, EOD, or WEEKLY and get that report back. "
-            "WEEKLY LAST sends the previous week."
+            "A manager can also reply TIMELINE, EOD, WEEKLY, or APPROVE. "
+            "WEEKLY LAST sends the previous week. "
+            "APPROVE sends a numbered list. Reply ALL, or numbers such as 1, 3, 5."
         ),
     },
     {

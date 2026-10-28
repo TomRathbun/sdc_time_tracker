@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import secrets
@@ -12,15 +13,16 @@ from sqlalchemy.orm import Session
 
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, SMTP_USER
 from app.models import (
-    CheckinToken, CheckoutToken, EmailForm, Employee, InboundEmail, LeaveRequest,
-    LeaveStatus, LeaveType, MissedEntryToken, OffsiteEntry, PhoneSupportEntry, Role,
-    TimeEntry,
+    CheckinToken, CheckoutToken, DailySummary, EmailForm, Employee, EntryType,
+    InboundEmail, LeaveRequest, LeaveStatus, LeaveType, MissedEntryToken,
+    OffsiteEntry, PhoneSupportEntry, Role, TimeEntry,
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
 from app.services.email_checkout import _fresh_reply, _mark_answered, _notify, _split_clock
 from app.services.email_layout import render_email
 from app.services.leave_balance import can_request_leave, count_workdays, partial_pto_error
+from app.services.leave_sync import apply_leave_approval
 from app.services.time_calc import get_target_hours, update_daily_summary
 from app.services.time_offset import offset_approved_default
 from app.services.time_state import OFFSITE_CHECKOUT_COMMENT, depart_for_offsite, validate_offsite_range
@@ -85,6 +87,8 @@ def _choice(fresh: str, subject: str) -> str:
         return "eod"
     if key in _TIMELINE_WORDS or key.startswith("timeline"):
         return "timeline"
+    if key in ("approve", "approvals", "pending") or key.startswith("approve"):
+        return "approve"
     if key in _PTO_WORDS or key.startswith("pto") or key.startswith("leave"):
         return "pto"
     if key in _OFFSITE_WORDS or key.startswith("offsite") or key.startswith("off site"):
@@ -201,6 +205,9 @@ def _menu_text(employee: Employee, unknown: bool) -> tuple[str, str]:
             "",
             "WEEKLY",
             "This week's team summary. WEEKLY LAST sends the previous week.",
+            "",
+            "APPROVE",
+            "A numbered list of time, BEOD, and leave waiting for approval.",
         ])
     lines.extend(["", "MENU", "Show this list again."])
     return "What do you want to do?", "\n".join(lines)
@@ -303,6 +310,8 @@ def _handle_form(db: Session, message, employee: Employee, form: EmailForm, fiel
         return _finish_offsite(db, message, employee, form, fields)
     if form.kind == "pto":
         return _finish_pto(db, message, employee, form, fields)
+    if form.kind == "approve":
+        return _finish_approve(db, message, employee, form, message.body_text or "")
     return False
 
 
@@ -650,6 +659,300 @@ def _send_report(db, employee, kind: str, message) -> bool:
     return sent
 
 
+def _tracked_names(db: Session) -> dict[int, str]:
+    people = (
+        db.query(Employee)
+        .filter(
+            Employee.is_active == True,  # noqa: E712
+            Employee.role != Role.customer,
+            Employee.role != Role.supervisor,
+        )
+        .all()
+    )
+    return {person.id: person.name for person in people}
+
+
+def _pending_items(db: Session) -> tuple[list[dict], bool]:
+    """Numbered snapshot of what a manager can approve. Second value is 'more remain'."""
+    names = _tracked_names(db)
+    if not names:
+        return [], False
+    ids = list(names)
+    rows = []
+    for entry in db.query(TimeEntry).filter(
+        TimeEntry.employee_id.in_(ids),
+        TimeEntry.offset_approved == False,  # noqa: E712
+    ).all():
+        kind = "check-in" if entry.entry_type == EntryType.check_in else "check-out"
+        punched = entry.submission_time.strftime("%H:%M") if entry.submission_time else "—"
+        rows.append((
+            entry.date.isoformat(),
+            names.get(entry.employee_id, ""),
+            {
+                "kind": "offset",
+                "id": entry.id,
+                "label": (
+                    f"{names.get(entry.employee_id, 'Unknown')}  {entry.date.strftime('%d %b')}  "
+                    f"{kind} {entry.declared_time.strftime('%H:%M')} (punched {punched})"
+                ),
+            },
+        ))
+    for summary in db.query(DailySummary).filter(DailySummary.employee_id.in_(ids)).all():
+        who = names.get(summary.employee_id, "Unknown")
+        when = summary.date.strftime("%d %b")
+        if summary.lunch_end_of_day and not summary.lunch_approved:
+            length = summary.beod_requested_hours or summary.beod_hours or 1
+            rows.append((
+                summary.date.isoformat(), who,
+                {"kind": "beod", "id": summary.id, "label": f"{who}  {when}  BEOD {length:g}h"},
+            ))
+        if summary.leave_hours and not summary.leave_approved:
+            leave = summary.leave_type.value.replace("_", " ") if summary.leave_type else "leave"
+            rows.append((
+                summary.date.isoformat(), who,
+                {
+                    "kind": "pto",
+                    "id": summary.id,
+                    "label": f"{who}  {when}  {leave} {float(summary.leave_hours):g}h",
+                },
+            ))
+    for leave in db.query(LeaveRequest).filter(
+        LeaveRequest.employee_id.in_(ids),
+        LeaveRequest.status == LeaveStatus.pending,
+    ).all():
+        who = names.get(leave.employee_id, "Unknown")
+        start = leave.start_date.strftime("%d %b")
+        end = leave.end_date.strftime("%d %b")
+        span = start if leave.start_date == leave.end_date else f"{start}–{end}"
+        kind = leave.leave_type.value.replace("_", " ") if leave.leave_type else "leave"
+        rows.append((
+            leave.start_date.isoformat(), who,
+            {"kind": "leave", "id": leave.id, "label": f"{who}  {span}  {kind}"},
+        ))
+    rows.sort(key=lambda row: (row[0], row[1], row[2]["label"]))
+    more = len(rows) > 40
+    items = []
+    for number, row in enumerate(rows[:40], start=1):
+        item = row[2]
+        item["n"] = number
+        items.append(item)
+    return items, more
+
+
+def _approval_selection(fresh: str):
+    """'all', a list of numbers, or None when this is not an approval reply."""
+    lines = []
+    for line in (fresh or "").splitlines():
+        raw = line.strip()
+        if not raw or re.match(r"^(sent from my |get outlook for )", raw, re.I):
+            continue
+        if re.match(r"(?i)^CODE\s*:", raw):
+            continue
+        lines.append(raw)
+    blob = " ".join(lines).strip()
+    if not blob:
+        return None
+    if re.fullmatch(r"(?i)(approve\s+)?all", blob):
+        return "all"
+    if not re.fullmatch(r"[\d\s,\-]+", blob):
+        return None
+    numbers = []
+    for match in re.finditer(r"(\d+)\s*-\s*(\d+)|(\d+)", blob):
+        if match.group(3):
+            numbers.append(int(match.group(3)))
+            continue
+        low, high = int(match.group(1)), int(match.group(2))
+        if high < low:
+            low, high = high, low
+        if high - low > 40:
+            return None
+        numbers.extend(range(low, high + 1))
+    seen = []
+    for number in numbers:
+        if number not in seen:
+            seen.append(number)
+    return seen
+
+
+def _approve_item(db: Session, actor: Employee, item: dict) -> str:
+    """Approve one snapshotted row. Returns approved, already, or missing."""
+    kind = item.get("kind")
+    item_id = item.get("id")
+    if kind == "offset":
+        entry = db.query(TimeEntry).filter(TimeEntry.id == item_id).first()
+        if entry is None:
+            return "missing"
+        if entry.offset_approved:
+            return "already"
+        entry.offset_approved = True
+        db.commit()
+        return "approved"
+    if kind == "beod":
+        summary = db.query(DailySummary).filter(DailySummary.id == item_id).first()
+        if summary is None or not summary.lunch_end_of_day:
+            return "missing"
+        if summary.lunch_approved:
+            return "already"
+        update_daily_summary(
+            db, summary.employee_id, summary.date,
+            lunch_end_of_day=True, lunch_approved=True,
+        )
+        return "approved"
+    if kind == "pto":
+        summary = db.query(DailySummary).filter(DailySummary.id == item_id).first()
+        if summary is None or not summary.leave_hours:
+            return "missing"
+        if summary.leave_approved:
+            return "already"
+        update_daily_summary(db, summary.employee_id, summary.date, pto_approved=True)
+        return "approved"
+    if kind == "leave":
+        leave = db.query(LeaveRequest).filter(LeaveRequest.id == item_id).first()
+        if leave is None:
+            return "missing"
+        if leave.status != LeaveStatus.pending:
+            return "already"
+        leave.status = LeaveStatus.approved
+        leave.approved_by = actor.id
+        db.commit()
+        apply_leave_approval(db, leave)
+        return "approved"
+    return "missing"
+
+
+def _finish_approve(db: Session, message, employee: Employee, form: EmailForm, body: str) -> bool:
+    if employee.role != Role.manager:
+        sent = _notify(
+            employee,
+            "Approvals are for a manager",
+            "Reply PHONE, OFFSITE, or PTO.",
+            reply_message_id=message.message_id or "",
+            reply_subject=message.subject or "",
+        )
+        if sent:
+            _mark_answered(db, message)
+        return sent
+    try:
+        items = json.loads(form.payload or "[]")
+    except json.JSONDecodeError:
+        items = []
+    by_number = {int(item["n"]): item for item in items if "n" in item}
+    picked = _approval_selection(_fresh_reply(body))
+    if picked is None:
+        sent = _notify(
+            employee,
+            "Which items should be approved?",
+            "Reply ALL, or the numbers. For example: 1, 3, 5 or 2-4. Leave CODE unchanged.",
+            reply_message_id=message.message_id or "",
+            reply_subject=message.subject or "",
+        )
+        if sent:
+            _mark_answered(db, message)
+        return sent
+    chosen = list(by_number.values()) if picked == "all" else [by_number[n] for n in picked if n in by_number]
+    unknown = [] if picked == "all" else [n for n in picked if n not in by_number]
+    if not chosen:
+        sent = _notify(
+            employee,
+            "Those numbers are not on the list",
+            "Reply ALL, or a number from the list. The list is still open.",
+            reply_message_id=message.message_id or "",
+            reply_subject=message.subject or "",
+        )
+        if sent:
+            _mark_answered(db, message)
+        return sent
+    approved = []
+    already = []
+    missing = []
+    for item in chosen:
+        result = _approve_item(db, employee, item)
+        (approved if result == "approved" else already if result == "already" else missing).append(item["label"])
+    if approved:
+        log_action(
+            db, action="email_approve", entity_type="EmailForm",
+            entity_id=form.id, employee_id=employee.id,
+            new_values={"approved": approved},
+        )
+    lines = []
+    if approved:
+        lines.append(f"Approved {len(approved)}.")
+        lines.extend(f"• {label}" for label in approved)
+    if already:
+        lines.append(f"Already approved: {len(already)}.")
+    if missing:
+        lines.append(f"No longer pending: {len(missing)}.")
+    if unknown:
+        lines.append("Not on the list: " + ", ".join(str(n) for n in unknown) + ".")
+    lines.append("Email APPROVE again for anything still waiting.")
+    form.used_at = datetime.now()
+    db.commit()
+    sent = _notify(
+        employee,
+        "Approvals recorded" if approved else "Nothing new was approved",
+        "\n".join(lines),
+        reply_message_id=message.message_id or "",
+        reply_subject=message.subject or "",
+    )
+    if sent:
+        _mark_answered(db, message)
+    else:
+        form.used_at = None
+        db.commit()
+    return sent
+
+
+def _send_approval_list(db: Session, employee: Employee, message) -> bool:
+    if employee.role != Role.manager:
+        sent = _notify(
+            employee,
+            "Approvals are for a manager",
+            "Reply PHONE, OFFSITE, or PTO. A manager can reply APPROVE.",
+            reply_message_id=message.message_id or "",
+            reply_subject=message.subject or "",
+        )
+        if sent:
+            _mark_answered(db, message)
+        return sent
+    items, more = _pending_items(db)
+    if not items:
+        sent = _notify(
+            employee,
+            "Nothing is waiting",
+            "There are no pending time changes, BEOD claims, or leave requests.",
+            reply_message_id=message.message_id or "",
+            reply_subject=message.subject or "",
+        )
+        if sent:
+            _mark_answered(db, message)
+        return sent
+    form = _issue_form(db, employee, "approve")
+    form.payload = json.dumps(items)
+    db.commit()
+    lines = [f"{item['n']}. {item['label']}" for item in items]
+    if more:
+        lines.append("")
+        lines.append("More are waiting. Email APPROVE again after these.")
+    sent = _send_card(
+        employee,
+        "Pending approvals",
+        "Approve",
+        [
+            "Reply ALL to approve every item below.",
+            "Or reply with the numbers, such as 1, 3, 5 or 2-4.",
+            "Leave CODE unchanged. The confirmation can take up to 5 minutes.",
+        ],
+        f"CODE: {form.code}\n\n" + "\n".join(lines),
+        message,
+    )
+    if sent:
+        _mark_answered(db, message)
+        return True
+    db.delete(form)
+    db.commit()
+    return False
+
+
 def _punch_code(db: Session, code: str) -> bool:
     """Leave check-in, checkout, and missed-punch replies to those handlers."""
     return any((
@@ -713,6 +1016,23 @@ def process_email_menu(db: Session) -> int:
             continue
         if code and _punch_code(db, code):
             continue
+        if employee.role == Role.manager:
+            picked_now = _approval_selection(fresh)
+            if picked_now is not None:
+                open_form = (
+                    db.query(EmailForm)
+                    .filter(
+                        EmailForm.employee_id == employee.id,
+                        EmailForm.kind == "approve",
+                        EmailForm.used_at == None,  # noqa: E711
+                        EmailForm.expires_at >= datetime.now(),
+                    )
+                    .order_by(EmailForm.id.desc())
+                    .first()
+                )
+                if open_form is not None and _handle_form(db, message, employee, open_form, {}):
+                    done += 1
+                    continue
         if employee.role == Role.customer:
             sent = _notify(
                 employee,
@@ -726,6 +1046,10 @@ def process_email_menu(db: Session) -> int:
                 done += 1
             continue
         picked = _choice(fresh, subject)
+        if picked == "approve":
+            if _send_approval_list(db, employee, message):
+                done += 1
+            continue
         if picked in _REPORTS:
             if _send_report(db, employee, picked, message):
                 done += 1

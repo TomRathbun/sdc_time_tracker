@@ -106,6 +106,11 @@ def _run_migrations():
         )
         print("✅ Migration: Added answered to inbound_emails")
 
+    form_cols = _cols("email_forms")
+    if form_cols and "payload" not in form_cols:
+        cursor.execute("ALTER TABLE email_forms ADD COLUMN payload TEXT DEFAULT ''")
+        print("✅ Migration: Added payload to email_forms")
+
     # Old contract defaults were 30 vacation / 10 sick days. Current policy is
     # 22 vacation / 15 sick work days (tracked in hours). Only rows still on
     # the old defaults are moved; a manager-set custom allowance is left alone.
