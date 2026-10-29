@@ -185,7 +185,7 @@
                                 {% else %}bg-gray-500/10 text-gray-400{% endif %}">
                                 {{ emp.role.value.title() }}
                             </span>
-                            <p class="text-[10px] text-gray-500 mt-1">{% if emp.work_week == 'emirati' %}Emirati · Sun–Sat{% else %}Expat · Mon–Sun{% endif %}</p>
+                            <p class="text-[10px] text-gray-500 mt-1">{% if emp.work_week == 'emirati' %}Emirati · Sun–Sat{% else %}Expat · Sat–Fri{% endif %}</p>
                         </td>
                         <td class="py-3 px-3">
                             <div class="flex flex-col gap-1">
@@ -306,10 +306,10 @@
                 <div>
                     <label class="block text-xs text-gray-500 mb-1">Work week</label>
                     <select name="work_week" id="edit-work-week" class="form-select">
-                        <option value="expat">Expat · Monday through Sunday</option>
+                        <option value="expat">Expat · Saturday through Friday</option>
                         <option value="emirati">Emirati · Sunday through Saturday</option>
                     </select>
-                    <p class="text-[11px] text-gray-500 mt-1">An Emirati Sunday support call counts toward leaving early on Friday.</p>
+                    <p class="text-[11px] text-gray-500 mt-1">Weekend support inside the work week counts toward leaving early on Friday. That is Saturday and Sunday for an expat, and Sunday for an Emirati.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>

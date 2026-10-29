@@ -19,7 +19,7 @@ def get_target_hours(work_date: date) -> float:
 
 
 def work_week_of(employee) -> str:
-    """expat is Monday–Sunday. emirati is Sunday–Saturday."""
+    """expat is Saturday–Friday. emirati is Sunday–Saturday."""
     raw = (getattr(employee, "work_week", None) or "expat").strip().lower()
     return "emirati" if raw == "emirati" else "expat"
 
@@ -28,7 +28,7 @@ def week_start_for(anchor: date, work_week: str = "expat") -> date:
     """First day of the work week that contains anchor."""
     if work_week == "emirati":
         return anchor - timedelta(days=(anchor.weekday() + 1) % 7)
-    return anchor - timedelta(days=anchor.weekday())
+    return anchor - timedelta(days=(anchor.weekday() - 5) % 7)
 
 
 BEOD_CREDIT_HOURS = 1.0
@@ -49,8 +49,9 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
 
     This does not change the recorded target. Monday–Thursday stay at 9.
     Friday starts at 4 and drops by hours worked above the Monday–Thursday
-    target of 36. An Emirati Sunday call is part of that week, so those
-    hours reduce Friday too. Approved leave is not extra time. Never below 0.
+    target of 36. Weekend hours inside the work week reduce Friday too:
+    Saturday and Sunday for an expat, Sunday for an Emirati. Approved leave
+    is not extra time. Never below 0.
     """
     base = get_target_hours(work_date)
     if work_date.weekday() != 4 or base <= 0:
@@ -69,14 +70,17 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
             worked += float(summary.total_hours)
     surplus = max(0.0, round(worked - target, 2))
     person = db.query(Employee).filter(Employee.id == employee_id).first()
-    if person and work_week_of(person) == "emirati":
-        sunday = monday - timedelta(days=1)
-        sunday_row = db.query(DailySummary).filter(
+    kind = work_week_of(person) if person else "expat"
+    extra_days = [monday - timedelta(days=1)]
+    if kind != "emirati":
+        extra_days.insert(0, monday - timedelta(days=2))
+    for day in extra_days:
+        row = db.query(DailySummary).filter(
             DailySummary.employee_id == employee_id,
-            DailySummary.date == sunday,
+            DailySummary.date == day,
         ).first()
-        if sunday_row and sunday_row.total_hours:
-            surplus = round(surplus + float(sunday_row.total_hours), 2)
+        if row and row.total_hours:
+            surplus = round(surplus + float(row.total_hours), 2)
     return round(max(0.0, base - surplus), 2)
 
 
@@ -436,7 +440,7 @@ def get_weekly_summary(
     employee_id: int,
     week_start: date,
 ) -> dict:
-    """One work week, seven days. Expat starts Monday. Emirati starts Sunday."""
+    """One work week, seven days. Expat starts Saturday. Emirati starts Sunday."""
     days = []
     total_worked = 0.0
     total_target = 0.0

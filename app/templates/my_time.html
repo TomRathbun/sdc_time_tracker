@@ -11,7 +11,7 @@
             <p class="text-gray-400 mt-1">
                 Week of <span class="font-mono text-white">{{ week_start.strftime("%b %d") }}</span>
                 — <span class="font-mono text-white">{{ week_end.strftime("%b %d, %Y") }}</span>
-                <span class="ml-2 text-xs text-gray-500">{% if work_week == 'emirati' %}Sunday–Saturday{% else %}Monday–Sunday{% endif %}</span>
+                <span class="ml-2 text-xs text-gray-500">{% if work_week == 'emirati' %}Sunday–Saturday{% else %}Saturday–Friday{% endif %}</span>
                 {% if is_current_week %}
                 <span class="ml-2 px-2 py-0.5 rounded-full text-xs bg-primary-500/10 text-primary-400 font-medium">This week</span>
                 {% endif %}

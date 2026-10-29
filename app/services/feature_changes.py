@@ -20,6 +20,19 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "expat-sat-fri",
+        "title": "Expat week is Saturday through Friday",
+        "added_on": date(2026, 10, 29),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "An expat work week runs Saturday through Friday. "
+            "An Emirati work week stays Sunday through Saturday. "
+            "My Time and the dashboard week bars follow that week. "
+            "A Saturday or Sunday support call in the expat week reduces the hours required on Friday. "
+            "The team timeline stays a Monday-through-Sunday grid so everyone is on the same days."
+        ),
+    },
+    {
         "slug": "email-approve",
         "title": "Approve from email",
         "added_on": date(2026, 10, 28),
@@ -62,8 +75,8 @@ FEATURE_CATALOG = (
         "audience": "employee,supervisor,manager",
         "summary": (
             "My Time and the team timeline now include Saturday and Sunday, so a weekend support call is visible. "
-            "Expats run Monday through Sunday. Emiratis run Sunday through Saturday. "
-            "An Emirati Sunday call reduces the hours required on Friday. "
+            "Expats run Saturday through Friday. Emiratis run Sunday through Saturday. "
+            "Weekend support inside that week reduces the hours required on Friday. "
             "A manager sets the work week on Edit employee. Everyone starts as Expat."
         ),
     },
