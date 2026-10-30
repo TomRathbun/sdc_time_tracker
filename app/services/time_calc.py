@@ -45,14 +45,53 @@ class ProjectedCheckout(NamedTuple):
     beod_claimed: bool = False
 
 
+def day_work_hours(db: Session, employee_id: int, day: date) -> float:
+    """Hours that count as work. Office, remote site, or a phone call. Leave is not included."""
+    now = datetime.now()
+    entries = (
+        db.query(TimeEntry)
+        .filter(TimeEntry.employee_id == employee_id, TimeEntry.date == day)
+        .all()
+    )
+    offsites = (
+        db.query(OffsiteEntry)
+        .filter(OffsiteEntry.employee_id == employee_id, OffsiteEntry.date == day)
+        .all()
+    )
+    phones = (
+        db.query(PhoneSupportEntry)
+        .filter(PhoneSupportEntry.employee_id == employee_id, PhoneSupportEntry.date == day)
+        .all()
+    )
+    summary = (
+        db.query(DailySummary)
+        .filter(DailySummary.employee_id == employee_id, DailySummary.date == day)
+        .first()
+    )
+    clock = calculate_clock_hours(entries)
+    if day == now.date() and entries:
+        last = max(entries, key=lambda row: row.declared_time)
+        if last.entry_type == EntryType.check_in:
+            clock = round(clock + max(0.0, (now - last.declared_time).total_seconds() / 3600.0), 2)
+    off_h = calculate_offsite_hours(offsites)
+    phone_h = calculate_phone_hours(phones)
+    beod = float(summary.beod_hours or 0) if summary else 0.0
+    if summary and summary.lunch_end_of_day and not summary.lunch_approved:
+        claimed = float(summary.beod_requested_hours or BEOD_CREDIT_HOURS)
+        if clock + off_h + phone_h >= BEOD_MINIMUM_HOURS:
+            beod = claimed
+    return round(clock + off_h + phone_h + beod, 2)
+
+
 def friday_required_hours(db: Session, employee_id: int, work_date: date) -> float:
     """Hours this person may count toward leaving early on Friday.
 
     This does not change the recorded target. Monday–Thursday stay at 9.
     Friday starts at 4 and drops by hours worked above the Monday–Thursday
-    target of 36. Weekend hours inside the work week reduce Friday too:
-    Saturday and Sunday for an expat, Sunday for an Emirati. Approved leave
-    is not extra time. Never below 0.
+    target of 36. Off-day work inside the work week reduces Friday too:
+    Saturday and Sunday for an expat, Sunday for an Emirati. That work can
+    be in the office, at a remote site, or a phone call. Leave is not extra
+    time. Never below 0.
     """
     base = get_target_hours(work_date)
     if work_date.weekday() != 4 or base <= 0:
@@ -63,12 +102,7 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
     for offset in range(4):
         day = monday + timedelta(days=offset)
         target += get_target_hours(day)
-        summary = db.query(DailySummary).filter(
-            DailySummary.employee_id == employee_id,
-            DailySummary.date == day,
-        ).first()
-        if summary and summary.total_hours:
-            worked += float(summary.total_hours)
+        worked += day_work_hours(db, employee_id, day)
     surplus = max(0.0, round(worked - target, 2))
     person = db.query(Employee).filter(Employee.id == employee_id).first()
     kind = work_week_of(person) if person else "expat"
@@ -76,12 +110,7 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
     if kind != "emirati":
         extra_days.insert(0, monday - timedelta(days=2))
     for day in extra_days:
-        row = db.query(DailySummary).filter(
-            DailySummary.employee_id == employee_id,
-            DailySummary.date == day,
-        ).first()
-        if row and row.total_hours:
-            surplus = round(surplus + float(row.total_hours), 2)
+        surplus = round(surplus + day_work_hours(db, employee_id, day), 2)
     return round(max(0.0, base - surplus), 2)
 
 
@@ -443,7 +472,7 @@ def get_weekly_summary(
 ) -> dict:
     """One work week, seven days. Expat starts Saturday. Emirati starts Sunday.
 
-    Phone calls are counted from the call log, including a Saturday or Sunday.
+    Office time, a remote site, or a phone call all count, including Saturday and Sunday.
     Leave is counted even while it is still pending, so a day off is visible.
     """
     week_end = week_start + timedelta(days=6)

@@ -21,12 +21,13 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 FEATURE_CATALOG = (
     {
         "slug": "week-progress-off-phone",
-        "title": "Week progress includes days off and phone calls",
+        "title": "Week progress includes off-day work",
         "added_on": date(2026, 10, 30),
         "audience": "employee,supervisor,manager",
         "summary": (
             "The week bars and the check-in email show Saturday and Sunday as off, "
-            "and a vacation or sick day as off. A phone call on those days is added to the weekly total."
+            "and a vacation or sick day as off. Work on an off day is added to the weekly total "
+            "and can reduce Friday. That work can be in the office, at a remote site, or a phone call."
         ),
     },
     {
