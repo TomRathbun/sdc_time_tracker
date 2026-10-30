@@ -633,25 +633,27 @@ def _send_report(db, employee, kind: str, message) -> bool:
             html, text,
         )
     else:
-        monday = today - timedelta(days=today.weekday())
+        from app.services.time_calc import week_start_for
+
+        start = week_start_for(today, "expat")
         if kind == "weekly_last":
-            monday -= timedelta(days=7)
+            start -= timedelta(days=7)
         for person in people:
-            trim_week_leave(db, person.id, monday)
+            trim_week_leave(db, person.id, start + timedelta(days=2))
         people_days = []
         for person in people:
             days = []
-            for offset in range(5):
-                day = monday + timedelta(days=offset)
+            for offset in range(7):
+                day = start + timedelta(days=offset)
                 facts = _day_facts(db, person, day)
                 facts["day_name"] = day.strftime("%A")
                 days.append(facts)
             people_days.append((person.name, days))
-        html, text = _weekly_bodies(people_days, monday)
-        end = monday + timedelta(days=4)
+        html, text = _weekly_bodies(people_days, start)
+        end = start + timedelta(days=6)
         sent = _send_email(
             (employee.email or "").strip(),
-            f"SDC weekly summary — {monday.strftime('%d %b')} to {end.strftime('%d %b')}",
+            f"SDC weekly summary — {start.strftime('%d %b')} to {end.strftime('%d %b')}",
             html, text,
         )
     if sent:

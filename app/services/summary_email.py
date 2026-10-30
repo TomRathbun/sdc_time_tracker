@@ -287,9 +287,10 @@ def _daily_bodies(rows: list[dict], work_date: date) -> tuple[str, str]:
 
 
 def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) -> tuple[str, str]:
-    week_end = week_start + timedelta(days=4)
+    sample = people_days[0][1] if people_days and people_days[0][1] else []
+    day_names = [day["day_name"][:3] for day in sample] or ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"]
+    week_end = week_start + timedelta(days=max(len(day_names) - 1, 0))
     title = f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}"
-    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri"]
     head = _th("Name") + "".join(_th(name) for name in day_names) + _th("Total") + _th("Target")
     body_rows = []
     text_lines = [f"SDC weekly summary — {title}", ""]
@@ -308,7 +309,10 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
         body_rows.append(f'<tr style="background:{shade};">{cells}</tr>')
         text_lines.append(f"{name} — {_hours(total)} / {_hours(target)}")
         for day in days:
+            if day["empty"] and day.get("target"):
+                continue
             if day["empty"]:
+                text_lines.append(f"  {day['day_name'][:3]} off")
                 continue
             text_lines.append(
                 f"  {day['day_name'][:3]} {_week_cell(day)}"
@@ -328,7 +332,10 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
     for name, days in people_days:
         lines = []
         for day in days:
+            if day["empty"] and day.get("target"):
+                continue
             if day["empty"]:
+                lines.append(f"{escape(day['day_name'][:3])} off")
                 continue
             lines.append(
                 f"{escape(day['day_name'][:3])} {escape(_week_cell(day))}"
@@ -352,7 +359,8 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
             f'<tr style="background:#1e293b;">{foot}</tr></table>'
             + "".join(punch_html)
             + '<p style="margin:16px 0 0;font-size:12px;color:#64748b;">'
-            "Each day is clock + offsite + phone + approved BEOD + leave. Pending leave is counted and marked pending.</p>"
+            "Each day is office + remote site + phone + approved BEOD + leave. "
+            "Saturday and Sunday are included. Pending leave is counted and marked pending.</p>"
         ),
         kicker=title,
     )
@@ -386,14 +394,16 @@ def send_daily_summary(db: Session, work_date: date | None = None) -> bool:
 
 
 def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
+    from app.services.time_calc import week_start_for
+
     today = date.today()
     if week_start is None:
-        week_start = today - timedelta(days=today.weekday())
+        week_start = week_start_for(today, "expat")
     people_days = []
     for person in _people(db):
-        trim_week_leave(db, person.id, week_start)
+        trim_week_leave(db, person.id, week_start + timedelta(days=2))
         days = []
-        for offset in range(5):
+        for offset in range(7):
             day = week_start + timedelta(days=offset)
             facts = _day_facts(db, person, day)
             facts["day_name"] = day.strftime("%A")
@@ -402,7 +412,7 @@ def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
     html, text = _weekly_bodies(people_days, week_start)
     subject = (
         f"SDC weekly summary — {week_start.strftime('%d %b')} to "
-        f"{(week_start + timedelta(days=4)).strftime('%d %b')}"
+        f"{(week_start + timedelta(days=6)).strftime('%d %b')}"
     )
     return _deliver(db, subject, html, text, kind="weekly_summary")
 
@@ -486,11 +496,13 @@ def _is_due(now: datetime, hhmm: str, last_sent: str) -> bool:
 
 
 def _week_start_for(today: date, weekday_name: str) -> date:
-    monday = today - timedelta(days=today.weekday())
-    # A Monday send is the recap of the week that just finished.
+    from app.services.time_calc import week_start_for
+
+    # Expat week is Saturday–Friday. A Monday send is the week that just finished.
+    start = week_start_for(today, "expat")
     if weekday_name == "monday":
-        return monday - timedelta(days=7)
-    return monday
+        return start - timedelta(days=7)
+    return start
 
 
 def send_scheduled_summaries(db: Session, now: datetime | None = None) -> None:
