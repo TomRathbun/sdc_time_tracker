@@ -151,6 +151,41 @@ def _apply(db: Session, token: CheckinToken, employee: Employee, parsed: dict, n
     return declared
 
 
+def _queue_standard_checkin(db: Session, employee: Employee, declared: datetime) -> None:
+    """Same note a kiosk check-in sends: checkout time, week, and a weapon system."""
+    from app.services.email import queue_checkin_email
+    from app.services.email_prefs import wants_email
+    from app.services.settings import get_bool_setting
+    from app.services.time_calc import checkin_notice, friday_required_hours
+
+    mail_to = (employee.email or "").strip()
+    if not mail_to or not get_bool_setting(db, "checkin_email_enabled") or not wants_email(employee, "checkin"):
+        return
+    today = declared.date()
+    expected = declared + timedelta(hours=friday_required_hours(db, employee.id, today))
+    notice = checkin_notice(db, employee, declared)
+    cutoff = today + timedelta(days=14)
+    leaves = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.employee_id == employee.id,
+            LeaveRequest.start_date <= cutoff,
+            LeaveRequest.end_date >= today,
+            LeaveRequest.status == LeaveStatus.approved,
+        )
+        .all()
+    )
+    upcoming = [
+        {
+            "start_date": leave.start_date.strftime("%b %d"),
+            "end_date": leave.end_date.strftime("%b %d"),
+            "leave_type": leave.leave_type.value,
+        }
+        for leave in leaves
+    ]
+    queue_checkin_email(employee.name, mail_to, declared, expected, upcoming, notice)
+
+
 def process_checkin_replies(db: Session) -> int:
     """Apply new inbox replies that carry a check-in code. Returns how many checked in."""
     since = datetime.utcnow() - timedelta(days=4)
@@ -235,6 +270,7 @@ def process_checkin_replies(db: Session) -> int:
             if isinstance(result, str):
                 fail = result
             elif result is not None:
+                _queue_standard_checkin(db, employee, result)
                 when = result.strftime("%H:%M")
                 sent = _notify(
                     employee,

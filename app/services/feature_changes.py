@@ -20,6 +20,17 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "email-checkin-confirmation",
+        "title": "Email check-in sends the normal confirmation",
+        "added_on": date(2026, 10, 30),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "A check-in made by replying to the morning email now sends the same confirmation as the kiosk. "
+            "That note includes the projected checkout, the week so far, and a Lockheed weapon system. "
+            "The short reply still says the time was accepted."
+        ),
+    },
+    {
         "slug": "expat-sat-fri",
         "title": "Expat week is Saturday through Friday",
         "added_on": date(2026, 10, 29),
