@@ -20,6 +20,16 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "week-progress-off-phone",
+        "title": "Week progress includes days off and phone calls",
+        "added_on": date(2026, 10, 30),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "The week bars and the check-in email show Saturday and Sunday as off, "
+            "and a vacation or sick day as off. A phone call on those days is added to the weekly total."
+        ),
+    },
+    {
         "slug": "email-checkin-confirmation",
         "title": "Email check-in sends the normal confirmation",
         "added_on": date(2026, 10, 30),

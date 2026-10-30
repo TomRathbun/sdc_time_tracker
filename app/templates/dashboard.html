@@ -297,7 +297,9 @@
             <div class="space-y-2.5">
                 {% for day in weekly.days %}
                 <div class="flex items-center gap-3">
-                    <span class="text-xs text-gray-500 w-8 flex-shrink-0 {% if day.date == today %}text-primary-300 font-semibold{% endif %}">{{ day.day_name[:3] }}</span>
+                    <span class="text-xs text-gray-500 w-20 flex-shrink-0 {% if day.date == today %}text-primary-300 font-semibold{% endif %}">
+                        {{ day.day_name[:3] }}{% if day.leave_label %} {{ day.leave_label.split()[0][:3] }}{% elif day.off %} off{% endif %}
+                    </span>
                     <div class="flex-1 bg-surface-900/50 rounded-full h-2.5 overflow-hidden">
                         {% set day_pct = ((day.effective / day.target) * 100) if day.target > 0 else (100 if day.effective > 0 else 0) %}
                         <div class="h-full rounded-full transition-all duration-500

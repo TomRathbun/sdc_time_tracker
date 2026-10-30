@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS
 from app.models import (
-    TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, Employee, EntryType, LeaveType,
+    TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, Employee, EntryType,
+    LeaveRequest, LeaveStatus, LeaveType,
 )
 
 
@@ -440,38 +441,131 @@ def get_weekly_summary(
     employee_id: int,
     week_start: date,
 ) -> dict:
-    """One work week, seven days. Expat starts Saturday. Emirati starts Sunday."""
+    """One work week, seven days. Expat starts Saturday. Emirati starts Sunday.
+
+    Phone calls are counted from the call log, including a Saturday or Sunday.
+    Leave is counted even while it is still pending, so a day off is visible.
+    """
+    week_end = week_start + timedelta(days=6)
+    entries = (
+        db.query(TimeEntry)
+        .filter(
+            TimeEntry.employee_id == employee_id,
+            TimeEntry.date >= week_start,
+            TimeEntry.date <= week_end,
+        )
+        .all()
+    )
+    offsites = (
+        db.query(OffsiteEntry)
+        .filter(
+            OffsiteEntry.employee_id == employee_id,
+            OffsiteEntry.date >= week_start,
+            OffsiteEntry.date <= week_end,
+        )
+        .all()
+    )
+    phones = (
+        db.query(PhoneSupportEntry)
+        .filter(
+            PhoneSupportEntry.employee_id == employee_id,
+            PhoneSupportEntry.date >= week_start,
+            PhoneSupportEntry.date <= week_end,
+        )
+        .all()
+    )
+    summaries = (
+        db.query(DailySummary)
+        .filter(
+            DailySummary.employee_id == employee_id,
+            DailySummary.date >= week_start,
+            DailySummary.date <= week_end,
+        )
+        .all()
+    )
+    leaves = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.employee_id == employee_id,
+            LeaveRequest.status.in_([LeaveStatus.pending, LeaveStatus.approved]),
+            LeaveRequest.start_date <= week_end,
+            LeaveRequest.end_date >= week_start,
+        )
+        .all()
+    )
+    by_entry: dict[date, list] = {}
+    for row in entries:
+        by_entry.setdefault(row.date, []).append(row)
+    by_off: dict[date, list] = {}
+    for row in offsites:
+        by_off.setdefault(row.date, []).append(row)
+    by_phone: dict[date, list] = {}
+    for row in phones:
+        by_phone.setdefault(row.date, []).append(row)
+    by_sum = {row.date: row for row in summaries}
+
     days = []
     total_worked = 0.0
     total_target = 0.0
+    now = datetime.now()
+    today = now.date()
 
     for i in range(7):
         day = week_start + timedelta(days=i)
-        summary = db.query(DailySummary).filter(
-            DailySummary.employee_id == employee_id,
-            DailySummary.date == day,
-        ).first()
-
+        summary = by_sum.get(day)
         target = get_target_hours(day)
-        worked = summary.total_hours if summary else 0.0
-        leave_hrs = 0.0
-        if summary and summary.leave_approved and summary.leave_hours:
-            leave_hrs = summary.leave_hours
+        day_entries = by_entry.get(day, [])
+        clock = calculate_clock_hours(day_entries)
+        if day == today and day_entries and day_entries[-1].entry_type == EntryType.check_in:
+            clock = round(clock + max(0.0, (now - day_entries[-1].declared_time).total_seconds() / 3600.0), 2)
+        off_h = calculate_offsite_hours(by_off.get(day, []))
+        phone_h = calculate_phone_hours(by_phone.get(day, []))
+        beod = float(summary.beod_hours or 0) if summary else 0.0
+        if summary and summary.lunch_end_of_day and not summary.lunch_approved:
+            claimed = float(summary.beod_requested_hours or BEOD_CREDIT_HOURS)
+            if clock + off_h + phone_h >= BEOD_MINIMUM_HOURS:
+                beod = claimed
+        worked = round(clock + off_h + phone_h + beod, 2)
+
+        leave_hrs = float(summary.leave_hours or 0) if summary else 0.0
+        leave_type = summary.leave_type if summary else None
+        leave_pending = bool(summary and leave_hrs and not summary.leave_approved)
+        if leave_hrs <= 0 and target > 0:
+            covering = [
+                row for row in leaves
+                if row.start_date <= day <= row.end_date
+            ]
+            if covering:
+                leave_hrs = target
+                leave_type = covering[0].leave_type
+                leave_pending = covering[0].status != LeaveStatus.approved
         effective = round(worked + leave_hrs, 2)
-        compliant = summary.is_compliant if summary else False
+        label = ""
+        if leave_type and leave_hrs:
+            raw = leave_type.value if isinstance(leave_type, LeaveType) else str(leave_type)
+            label = {
+                "vacation": "Vacation",
+                "sick": "Sick",
+                "covid_sick": "COVID",
+                "uae_holiday": "Holiday",
+            }.get(raw, raw.replace("_", " ").title())
+            if leave_pending:
+                label += " pending"
 
         days.append({
             "date": day,
             "day_name": day.strftime("%A"),
             "worked": worked,
             "leave_hours": leave_hrs,
+            "leave_label": label,
+            "off": target <= 0,
             "effective": effective,
             "target": target,
-            "compliant": compliant,
-            "clock_hours": summary.clock_hours if summary else 0.0,
-            "phone_hours": summary.phone_hours if summary else 0.0,
-            "offsite_hours": summary.offsite_hours if summary else 0.0,
-            "beod_hours": summary.beod_hours if summary else 0.0,
+            "compliant": effective + 0.01 >= target if target else True,
+            "clock_hours": round(clock, 2),
+            "phone_hours": round(phone_h, 2),
+            "offsite_hours": round(off_h, 2),
+            "beod_hours": round(beod, 2),
         })
         total_worked += effective
         total_target += target
@@ -512,6 +606,10 @@ def checkin_notice(db: Session, employee, checkin_time: datetime) -> dict:
             done += float(row["effective"] or 0)
         if future:
             shown = "—"
+        elif row.get("leave_label") and float(row["worked"] or 0) < 0.05:
+            shown = "off"
+        elif row.get("off") and float(row["effective"] or 0) < 0.05:
+            shown = "off"
         elif day == today and float(row["effective"] or 0) < 0.05:
             shown = "in"
         else:
