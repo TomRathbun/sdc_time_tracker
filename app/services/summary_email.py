@@ -212,7 +212,7 @@ def _week_cell(day: dict) -> str:
     elif mark:
         text = f"{_hours(worked)} {mark}"
     elif day.get("empty"):
-        text = "—"
+        text = "off" if not day.get("target") else "—"
     else:
         text = _hours(day["hours"])
     if day.get("time_pending") and text != "—":
