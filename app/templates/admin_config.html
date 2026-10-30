@@ -267,6 +267,18 @@
                                 class="form-input mt-1 py-2 font-mono max-w-[160px]">
                         </div>
                     </div>
+                    <label class="mt-4 flex items-center justify-between cursor-pointer" for="summary_weekly_blank_pto">
+                        <div>
+                            <p class="font-medium text-gray-200 text-sm">Fill a blank week with vacation</p>
+                            <p class="text-xs text-gray-500">{{ settings.summary_weekly_blank_pto.description }}</p>
+                        </div>
+                        <div class="relative flex-shrink-0 ml-3">
+                            <input type="checkbox" id="summary_weekly_blank_pto" name="summary_weekly_blank_pto" value="on"
+                                class="sr-only peer" {% if settings.summary_weekly_blank_pto.enabled %}checked{% endif %}>
+                            <div class="w-11 h-6 bg-surface-900/80 border border-white/10 rounded-full peer-checked:bg-primary-600 peer-checked:border-primary-500/30 transition-all"></div>
+                            <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-gray-500 rounded-full peer-checked:translate-x-5 peer-checked:bg-white transition-all shadow-lg"></div>
+                        </div>
+                    </label>
                 </div>
             </div>
         </div>

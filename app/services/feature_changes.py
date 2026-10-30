@@ -20,6 +20,18 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "blank-week-pto",
+        "title": "A blank week becomes vacation",
+        "added_on": date(2026, 10, 30),
+        "audience": "manager",
+        "summary": (
+            "Before the weekly summary is emailed, an employee with no time at all that week "
+            "is given approved vacation for Monday through Friday. "
+            "A phone call, office punch, or remote site keeps the week unchanged. "
+            "Turn it off under Admin, End of week summary, Fill a blank week with vacation."
+        ),
+    },
+    {
         "slug": "week-progress-off-phone",
         "title": "Week progress includes off-day work",
         "added_on": date(2026, 10, 30),

@@ -13,8 +13,10 @@ from app.models import (
     DailySummary, Employee, EntryType, LeaveRequest, LeaveStatus, LeaveType,
     OffsiteEntry, PhoneSupportEntry, Role, TimeEntry,
 )
+from app.services.audit import log_action
 from app.services.email import _send_email
-from app.services.leave_sync import trim_week_leave
+from app.services.leave_balance import can_request_leave
+from app.services.leave_sync import apply_leave_approval, trim_week_leave
 from app.services.email_layout import render_email
 from app.services.settings import get_bool_setting, get_setting, parse_hhmm_setting, set_setting
 from app.services.time_calc import (
@@ -286,7 +288,7 @@ def _daily_bodies(rows: list[dict], work_date: date) -> tuple[str, str]:
     return html, "\n".join(text_lines)
 
 
-def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) -> tuple[str, str]:
+def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date, note: str = "") -> tuple[str, str]:
     sample = people_days[0][1] if people_days and people_days[0][1] else []
     day_names = [day["day_name"][:3] for day in sample] or ["Sat", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri"]
     week_end = week_start + timedelta(days=max(len(day_names) - 1, 0))
@@ -361,10 +363,16 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date) 
             + '<p style="margin:16px 0 0;font-size:12px;color:#64748b;">'
             "Each day is office + remote site + phone + approved BEOD + leave. "
             "Saturday and Sunday are included. Pending leave is counted and marked pending.</p>"
+            + (
+                f'<p style="margin:12px 0 0;font-size:13px;color:#fbbf24;">{escape(note)}</p>'
+                if note else ""
+            )
         ),
         kicker=title,
     )
     text_lines.append(f"All — {_hours(round(grand, 2))} / {_hours(round(grand_target, 2))}")
+    if note:
+        text_lines.append(note)
     return html, "\n".join(text_lines)
 
 
@@ -393,12 +401,101 @@ def send_daily_summary(db: Session, work_date: date | None = None) -> bool:
     return _deliver(db, subject, html, text)
 
 
+def _week_is_blank(db: Session, employee: Employee, start: date, end: date) -> bool:
+    """True when the week has no punches, remote site, phone, or leave."""
+    if db.query(TimeEntry).filter(
+        TimeEntry.employee_id == employee.id,
+        TimeEntry.date >= start,
+        TimeEntry.date <= end,
+    ).first():
+        return False
+    if db.query(OffsiteEntry).filter(
+        OffsiteEntry.employee_id == employee.id,
+        OffsiteEntry.date >= start,
+        OffsiteEntry.date <= end,
+    ).first():
+        return False
+    if db.query(PhoneSupportEntry).filter(
+        PhoneSupportEntry.employee_id == employee.id,
+        PhoneSupportEntry.date >= start,
+        PhoneSupportEntry.date <= end,
+    ).first():
+        return False
+    if db.query(DailySummary).filter(
+        DailySummary.employee_id == employee.id,
+        DailySummary.date >= start,
+        DailySummary.date <= end,
+        DailySummary.leave_hours > 0,
+    ).first():
+        return False
+    if db.query(LeaveRequest).filter(
+        LeaveRequest.employee_id == employee.id,
+        LeaveRequest.status.in_([LeaveStatus.pending, LeaveStatus.approved]),
+        LeaveRequest.start_date <= end,
+        LeaveRequest.end_date >= start,
+    ).first():
+        return False
+    return True
+
+
+def fill_blank_week_pto(db: Session, week_start: date) -> list[str]:
+    """Approved Monday–Friday vacation for anyone with nothing on the week.
+
+    Returns the names that were filled. Skips a person who does not have
+    enough vacation left. Supervisors are not filled.
+    """
+    end = week_start + timedelta(days=6)
+    monday = week_start + timedelta(days=2)
+    friday = week_start + timedelta(days=6)
+    if get_target_hours(monday) <= 0 or get_target_hours(friday) <= 0:
+        return []
+    approver = _managers(db)
+    approver_id = approver[0].id if approver else None
+    filled = []
+    for person in _people(db):
+        if person.role != Role.employee:
+            continue
+        if not _week_is_blank(db, person, week_start, end):
+            continue
+        err = can_request_leave(db, person, LeaveType.vacation, monday, friday)
+        if err:
+            logger.warning("Blank week not filled for %s: %s", person.name, err)
+            continue
+        leave = LeaveRequest(
+            employee_id=person.id,
+            leave_type=LeaveType.vacation,
+            start_date=monday,
+            end_date=friday,
+            status=LeaveStatus.approved,
+            approved_by=approver_id,
+            comments="Entered automatically before the weekly summary. The week had no time.",
+        )
+        db.add(leave)
+        db.commit()
+        db.refresh(leave)
+        apply_leave_approval(db, leave)
+        log_action(
+            db, action="auto_blank_week_pto", entity_type="LeaveRequest",
+            entity_id=leave.id, employee_id=approver_id,
+            new_values={
+                "target_employee": person.id,
+                "start": monday.isoformat(),
+                "end": friday.isoformat(),
+            },
+        )
+        filled.append(person.name)
+    return filled
+
+
 def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
     from app.services.time_calc import week_start_for
 
     today = date.today()
     if week_start is None:
         week_start = week_start_for(today, "expat")
+    filled = []
+    if get_bool_setting(db, "summary_weekly_blank_pto"):
+        filled = fill_blank_week_pto(db, week_start)
     people_days = []
     for person in _people(db):
         trim_week_leave(db, person.id, week_start + timedelta(days=2))
@@ -409,7 +506,11 @@ def send_weekly_summary(db: Session, week_start: date | None = None) -> bool:
             facts["day_name"] = day.strftime("%A")
             days.append(facts)
         people_days.append((person.name, days))
-    html, text = _weekly_bodies(people_days, week_start)
+    html, text = _weekly_bodies(
+        people_days,
+        week_start,
+        note=("Approved vacation was added for a blank week: " + ", ".join(filled) + ".") if filled else "",
+    )
     subject = (
         f"SDC weekly summary — {week_start.strftime('%d %b')} to "
         f"{(week_start + timedelta(days=6)).strftime('%d %b')}"

@@ -99,6 +99,10 @@ FEATURE_DEFAULTS = {
         "value": "friday",
         "description": "Weekday the weekly summary is sent.",
     },
+    "summary_weekly_blank_pto": {
+        "value": "true",
+        "description": "Before the weekly summary is sent, a person with no time at all that week is given approved vacation for Monday through Friday.",
+    },
 }
 
 
