@@ -15,7 +15,7 @@ from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, SMTP_USER
 from app.models import (
     CheckinToken, CheckoutToken, DailySummary, EmailForm, Employee, EntryType,
     InboundEmail, LeaveRequest, LeaveStatus, LeaveType, MissedEntryToken,
-    OffsiteEntry, PhoneSupportEntry, Role, TimeEntry,
+    OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, Role, TimeEntry,
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
@@ -23,14 +23,14 @@ from app.services.email_checkout import _fresh_reply, _mark_answered, _notify, _
 from app.services.email_layout import render_email
 from app.services.leave_balance import can_request_leave, count_workdays, partial_pto_error
 from app.services.leave_sync import apply_leave_approval
-from app.services.time_calc import get_target_hours, update_daily_summary
+from app.services.time_calc import get_target_hours, update_daily_summary, after_hours_window
 from app.services.time_offset import offset_approved_default
 from app.services.time_state import OFFSITE_CHECKOUT_COMMENT, depart_for_offsite, validate_offsite_range
 
 logger = logging.getLogger(__name__)
 
 _FIELD_RE = re.compile(
-    r"(?im)^\s*(CODE|DATE|HOURS|NOTE|START|END|PLACE|TYPE)\s*:\s*(.*?)\s*$"
+    r"(?im)^\s*(CODE|DATE|HOURS|NOTE|START|END|PLACE|TYPE|LOCATION)\s*:\s*(.*?)\s*$"
 )
 _CODE_RE = re.compile(r"(?im)CODE:\s*([A-Fa-f0-9]{8})")
 _AUTO_RE = re.compile(r"^(automatic reply|auto:|out of office|undeliverable|mail delivery)", re.I)
@@ -38,6 +38,7 @@ _GREETING = {
     "", "hello", "hi", "hey", "menu", "help", "start", "options", "hiya", "good morning",
 }
 _PHONE_WORDS = {"phone", "phone call", "call", "1"}
+_AFTER_WORDS = {"after", "after hours", "afterhours", "after hour"}
 _OFFSITE_WORDS = {"offsite", "off site", "remote", "remote site", "2"}
 _PTO_WORDS = {"pto", "leave", "vacation", "sick", "3"}
 _TIMELINE_WORDS = {"timeline", "status", "4"}
@@ -93,6 +94,8 @@ def _choice(fresh: str, subject: str) -> str:
         return "pto"
     if key in _OFFSITE_WORDS or key.startswith("offsite") or key.startswith("off site"):
         return "offsite"
+    if key in _AFTER_WORDS or key.startswith("after"):
+        return "after"
     if key in _PHONE_WORDS or key.startswith("phone"):
         return "phone"
     return "menu"
@@ -188,6 +191,9 @@ def _menu_text(employee: Employee, unknown: bool) -> tuple[str, str]:
         "PHONE",
         "Log a phone support call.",
         "",
+        "AFTER",
+        "After-hours support. Home is a duration. SDC is when you were told to head in and when you got back.",
+        "",
         "OFFSITE",
         "Log time at another site.",
         "",
@@ -269,6 +275,60 @@ def _apply_phone(db: Session, employee: Employee, fields: dict):
     return None, entry
 
 
+def _apply_after(db: Session, employee: Employee, fields: dict):
+    """Record after-hours support. Returns (error, entry)."""
+    today = date.today()
+    work_date = _parse_date(fields.get("DATE", ""), today)
+    if work_date is None:
+        return "DATE must look like 2026-11-01, today, or yesterday.", None
+    if work_date > today:
+        return "DATE cannot be in the future.", None
+    if work_date < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
+        return f"DATE can only be in the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.", None
+    place = (fields.get("LOCATION") or "home").strip().lower()
+    if place in ("office", "site"):
+        place = "sdc"
+    if place not in ("home", "sdc"):
+        return "LOCATION must be home or sdc.", None
+    note = (fields.get("NOTE") or "").strip()
+    start = end = None
+    if place == "home":
+        hours = _parse_hours(fields.get("HOURS", ""))
+        if hours is None or hours <= 0 or hours > 24:
+            return "HOURS must look like 1.5 or 90m, and be no more than 24.", None
+        length = hours
+    else:
+        start_hm = _split_clock(fields.get("START", ""))
+        end_hm = _split_clock(fields.get("END", ""))
+        if not start_hm or not end_hm:
+            return "START and END must look like 06:30 or 0630.", None
+        start = datetime.combine(work_date, time(start_hm[0], start_hm[1]))
+        end = datetime.combine(work_date, time(end_hm[0], end_hm[1]))
+        window = after_hours_window(work_date, start, end)
+        if isinstance(window, str):
+            return window, None
+        start, end, length = window
+    entry = AfterHoursEntry(
+        employee_id=employee.id,
+        date=work_date,
+        location=place,
+        hours=length,
+        start_time=start,
+        end_time=end,
+        comments=note,
+        submission_time=datetime.now(),
+    )
+    db.add(entry)
+    db.commit()
+    update_daily_summary(db, employee.id, work_date)
+    log_action(
+        db, action="email_after_hours", entity_type="AfterHoursEntry",
+        entity_id=entry.id, employee_id=employee.id,
+        new_values={"date": work_date.isoformat(), "location": place, "hours": length, "comments": note},
+    )
+    return None, entry
+
+
 def _handle_form(db: Session, message, employee: Employee, form: EmailForm, fields: dict) -> bool:
     """Send the result. True when the inbound message should stay closed."""
     if form.employee_id != employee.id:
@@ -306,6 +366,8 @@ def _handle_form(db: Session, message, employee: Employee, form: EmailForm, fiel
         return sent
     if form.kind == "phone":
         return _finish_phone(db, message, employee, form, fields)
+    if form.kind == "after":
+        return _finish_after(db, message, employee, form, fields)
     if form.kind == "offsite":
         return _finish_offsite(db, message, employee, form, fields)
     if form.kind == "pto":
@@ -361,6 +423,29 @@ def _finish_phone(db, message, employee, form, fields) -> bool:
         db, message, employee, form,
         "Phone call recorded",
         f"Accepted. {hours:g} hours of phone support on {when.strftime('%d %b %Y')} are recorded.",
+        undo,
+    )
+
+
+def _finish_after(db, message, employee, form, fields) -> bool:
+    error, entry = _apply_after(db, employee, fields)
+    if error:
+        return _reject(db, message, employee, "After-hours support was not recorded", error)
+    when = entry.date
+    where = "at home" if entry.location == "home" else "at SDC"
+    span = ""
+    if entry.start_time and entry.end_time:
+        span = f" ({entry.start_time.strftime('%H:%M')}–{entry.end_time.strftime('%H:%M')})"
+
+    def undo():
+        if entry is not None:
+            db.delete(entry)
+        update_daily_summary(db, employee.id, when)
+
+    return _accept(
+        db, message, employee, form,
+        "After-hours support recorded",
+        f"Accepted. {entry.hours:g}h {where}{span} on {when.strftime('%d %b %Y')} are recorded. This is not a check-in.",
         undo,
     )
 
@@ -590,7 +675,7 @@ def _send_report(db, employee, kind: str, message) -> bool:
         sent = _notify(
             employee,
             "That report is for a manager",
-            "Reply PHONE, OFFSITE, or PTO. A manager can also reply TIMELINE, EOD, or WEEKLY.",
+            "Reply PHONE, AFTER, OFFSITE, or PTO. A manager can also reply TIMELINE, EOD, or WEEKLY.",
             reply_message_id=message.message_id or "",
             reply_subject=message.subject or "",
         )
@@ -1065,6 +1150,16 @@ def process_email_menu(db: Session) -> int:
                     "The confirmation can take up to 5 minutes.",
                 ],
             ),
+            "after": (
+                "After-hours support",
+                [
+                    "Reply with these lines. Leave CODE unchanged.",
+                    "LOCATION is home or sdc. This does not check you in.",
+                    "Home: fill HOURS, such as 1.5. Leave START and END blank.",
+                    "SDC: START is when you were told to head in. END is when you got back. Travel is included.",
+                    "The confirmation can take up to 5 minutes.",
+                ],
+            ),
             "offsite": (
                 "Off site",
                 [
@@ -1088,6 +1183,16 @@ def process_email_menu(db: Session) -> int:
             form = _issue_form(db, employee, picked)
             if picked == "phone":
                 pre = _phone_form_text(form, date.today())
+            elif picked == "after":
+                pre = (
+                    f"CODE: {form.code}\n"
+                    f"DATE: {date.today().isoformat()}\n"
+                    "LOCATION: sdc\n"
+                    "HOURS:\n"
+                    "START: 06:00\n"
+                    "END: 10:30\n"
+                    "NOTE:"
+                )
             elif picked == "offsite":
                 pre = (
                     f"CODE: {form.code}\n"

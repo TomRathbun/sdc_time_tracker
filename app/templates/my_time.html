@@ -62,7 +62,7 @@
             </div>
             <div class="text-right text-xs text-gray-400 space-y-0.5">
                 <p>Clock {{ totals.clock }}h</p>
-                <p>Offsite {{ totals.offsite }}h · Phone {{ totals.phone }}h</p>
+                <p>Offsite {{ totals.offsite }}h · Phone {{ totals.phone }}h · After {{ totals.after }}h</p>
                 {% if totals.beod %}<p>BEOD +{{ totals.beod }}h</p>{% endif %}
                 {% if totals.leave %}<p>Leave +{{ totals.leave }}h</p>{% endif %}
                 <p class="text-gray-500">FOSC {{ totals.fosc }}h before leave</p>
@@ -84,6 +84,7 @@
                         clock {{ day.clock }}h
                         · offsite {{ day.offsite }}h
                         · phone {{ day.phone }}h
+                        · after {{ day.after_hours }}h
                         {% if day.beod %} · BEOD +{{ day.beod_label or day.beod }}{% if day.beod_pending %} pending{% endif %}{% endif %}
                     </p>
                 </div>
@@ -121,7 +122,7 @@
                 </div>
                 {% endfor %}
             </div>
-            {% elif not day.offsites and not day.phones and not day.leave %}
+            {% elif not day.offsites and not day.phones and not day.after and not day.leave %}
             <p class="text-xs text-gray-600">No entries</p>
             {% endif %}
 
@@ -139,7 +140,20 @@
             </div>
             {% endif %}
 
-            {% if day.phones %}
+            {% if day.after %}
+            <div class="mt-2 space-y-1.5">
+                {% for item in day.after %}
+                <div class="flex items-center gap-3 px-2.5 py-2 rounded-lg bg-violet-500/5 border border-violet-500/10">
+                    <span class="text-[10px] font-semibold text-violet-300 w-12">After</span>
+                    <span class="text-sm text-white">{{ item.location|upper }} · {{ item.hours }}h</span>
+                    {% if item.start_time and item.end_time %}
+                    <span class="text-xs font-mono text-gray-300">{{ item.start_time.strftime("%H:%M") }}–{{ item.end_time.strftime("%H:%M") }}</span>
+                    {% endif %}
+                    {% if item.comments %}<span class="text-xs text-gray-500 truncate">{{ item.comments }}</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
             <div class="mt-2 space-y-1.5">
                 {% for call in day.phones %}
                 <div class="flex items-center gap-3 px-2.5 py-2 rounded-lg bg-cyan-500/5 border border-cyan-500/10">

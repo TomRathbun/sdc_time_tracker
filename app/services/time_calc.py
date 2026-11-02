@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import WEEKDAY_HOURS, BEOD_MINIMUM_HOURS
 from app.models import (
-    TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary, Employee, EntryType,
+    TimeEntry, OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, DailySummary, Employee, EntryType,
     LeaveRequest, LeaveStatus, LeaveType,
 )
 
@@ -63,6 +63,11 @@ def day_work_hours(db: Session, employee_id: int, day: date) -> float:
         .filter(PhoneSupportEntry.employee_id == employee_id, PhoneSupportEntry.date == day)
         .all()
     )
+    after = (
+        db.query(AfterHoursEntry)
+        .filter(AfterHoursEntry.employee_id == employee_id, AfterHoursEntry.date == day)
+        .all()
+    )
     summary = (
         db.query(DailySummary)
         .filter(DailySummary.employee_id == employee_id, DailySummary.date == day)
@@ -75,12 +80,13 @@ def day_work_hours(db: Session, employee_id: int, day: date) -> float:
             clock = round(clock + max(0.0, (now - last.declared_time).total_seconds() / 3600.0), 2)
     off_h = calculate_offsite_hours(offsites)
     phone_h = calculate_phone_hours(phones)
+    after_h = calculate_after_hours(after)
     beod = float(summary.beod_hours or 0) if summary else 0.0
     if summary and summary.lunch_end_of_day and not summary.lunch_approved:
         claimed = float(summary.beod_requested_hours or BEOD_CREDIT_HOURS)
-        if clock + off_h + phone_h >= BEOD_MINIMUM_HOURS:
+        if clock + off_h + phone_h + after_h >= BEOD_MINIMUM_HOURS:
             beod = claimed
-    return round(clock + off_h + phone_h + beod, 2)
+    return round(clock + off_h + phone_h + after_h + beod, 2)
 
 
 def friday_required_hours(db: Session, employee_id: int, work_date: date) -> float:
@@ -306,6 +312,22 @@ def calculate_offsite_hours(offsite_entries: List[OffsiteEntry]) -> float:
     return round(total_seconds / 3600.0, 2)
 
 
+def calculate_after_hours(entries: list) -> float:
+    return round(sum(float(row.hours or 0) for row in entries or []), 2)
+
+
+def after_hours_window(work_date: date, start: datetime, end: datetime):
+    """SDC window. A stop after midnight belongs to the next day. Max 24 hours."""
+    if end <= start:
+        end = end + timedelta(days=1)
+    hours = round((end - start).total_seconds() / 3600.0, 2)
+    if hours <= 0 or hours > 24:
+        return "Stop must be after the start, and the trip cannot be longer than 24 hours."
+    if start.date() != work_date:
+        return "Start must be on the day you were called."
+    return start, end, hours
+
+
 def calculate_phone_hours(phone_entries: List[PhoneSupportEntry]) -> float:
     return round(sum(p.hours or 0.0 for p in phone_entries), 2)
 
@@ -376,12 +398,17 @@ def update_daily_summary(
         PhoneSupportEntry.employee_id == employee_id,
         PhoneSupportEntry.date == work_date,
     ).all()
+    after_entries = db.query(AfterHoursEntry).filter(
+        AfterHoursEntry.employee_id == employee_id,
+        AfterHoursEntry.date == work_date,
+    ).all()
 
     clock_hours = calculate_clock_hours(time_entries)
     offsite_hours = calculate_offsite_hours(offsite_entries)
     phone_hours = calculate_phone_hours(phone_entries)
+    after_h = calculate_after_hours(after_entries)
     # Work hours that count toward the BEOD 5h floor (not leave)
-    work_hours = round(clock_hours + offsite_hours + phone_hours, 2)
+    work_hours = round(clock_hours + offsite_hours + phone_hours + after_h, 2)
     target_hours = get_target_hours(work_date)
 
     summary = db.query(DailySummary).filter(
@@ -431,6 +458,7 @@ def update_daily_summary(
         summary.clock_hours = clock_hours
         summary.offsite_hours = offsite_hours
         summary.phone_hours = phone_hours
+        summary.after_hours = after_h
         summary.beod_hours = beod_hours
         summary.beod_requested_hours = eff_requested
         summary.leave_hours = eff_leave_hours
@@ -448,6 +476,7 @@ def update_daily_summary(
             clock_hours=clock_hours,
             offsite_hours=offsite_hours,
             phone_hours=phone_hours,
+            after_hours=after_h,
             beod_hours=beod_hours,
             beod_requested_hours=eff_requested,
             leave_hours=eff_leave_hours,
@@ -503,6 +532,15 @@ def get_weekly_summary(
         )
         .all()
     )
+    after_rows = (
+        db.query(AfterHoursEntry)
+        .filter(
+            AfterHoursEntry.employee_id == employee_id,
+            AfterHoursEntry.date >= week_start,
+            AfterHoursEntry.date <= week_end,
+        )
+        .all()
+    )
     summaries = (
         db.query(DailySummary)
         .filter(
@@ -531,6 +569,9 @@ def get_weekly_summary(
     by_phone: dict[date, list] = {}
     for row in phones:
         by_phone.setdefault(row.date, []).append(row)
+    by_after: dict[date, list] = {}
+    for row in after_rows:
+        by_after.setdefault(row.date, []).append(row)
     by_sum = {row.date: row for row in summaries}
 
     days = []
@@ -549,12 +590,13 @@ def get_weekly_summary(
             clock = round(clock + max(0.0, (now - day_entries[-1].declared_time).total_seconds() / 3600.0), 2)
         off_h = calculate_offsite_hours(by_off.get(day, []))
         phone_h = calculate_phone_hours(by_phone.get(day, []))
+        after_h = calculate_after_hours(by_after.get(day, []))
         beod = float(summary.beod_hours or 0) if summary else 0.0
         if summary and summary.lunch_end_of_day and not summary.lunch_approved:
             claimed = float(summary.beod_requested_hours or BEOD_CREDIT_HOURS)
-            if clock + off_h + phone_h >= BEOD_MINIMUM_HOURS:
+            if clock + off_h + phone_h + after_h >= BEOD_MINIMUM_HOURS:
                 beod = claimed
-        worked = round(clock + off_h + phone_h + beod, 2)
+        worked = round(clock + off_h + phone_h + after_h + beod, 2)
 
         leave_hrs = float(summary.leave_hours or 0) if summary else 0.0
         leave_type = summary.leave_type if summary else None
@@ -593,6 +635,7 @@ def get_weekly_summary(
             "compliant": effective + 0.01 >= target if target else True,
             "clock_hours": round(clock, 2),
             "phone_hours": round(phone_h, 2),
+            "after_hours": round(after_h, 2),
             "offsite_hours": round(off_h, 2),
             "beod_hours": round(beod, 2),
         })

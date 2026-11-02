@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.services.time_calc import get_target_hours
 from app.config import BASE_DIR
 from app.models import (
-    Employee, TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary,
+    Employee, TimeEntry, OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, DailySummary,
     EntryType, LeaveType, LeaveRequest, LeaveStatus, Role, TempoWeekly,
 )
 
@@ -97,6 +97,13 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
     )
     phone_h = round(sum(p.hours or 0 for p in phones), 2) or None
 
+    after_rows = (
+        db.query(AfterHoursEntry)
+        .filter(AfterHoursEntry.employee_id == emp_id, AfterHoursEntry.date == d)
+        .all()
+    )
+    after_h = round(sum(float(row.hours or 0) for row in after_rows), 2) or None
+
     offsites = (
         db.query(OffsiteEntry)
         .filter(OffsiteEntry.employee_id == emp_id, OffsiteEntry.date == d)
@@ -124,11 +131,12 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
         clock = float(summary.clock_hours or 0)
         phone_s = float(summary.phone_hours or 0)
         off_s = float(summary.offsite_hours or 0)
+        after_s = float(summary.after_hours or 0)
         claimed = 0.0
         if summary.lunch_end_of_day or summary.beod_hours:
             claimed = float(summary.beod_hours or summary.beod_requested_hours or 1.0)
         if clock == 0 and summary.total_hours:
-            clock = max(0.0, float(summary.total_hours) - float(summary.beod_hours or 0) - phone_s - off_s)
+            clock = max(0.0, float(summary.total_hours) - float(summary.beod_hours or 0) - phone_s - off_s - after_s)
         if d.weekday() < 5:
             work = round(clock, 2)
             beod = round(claimed, 2)
@@ -174,6 +182,7 @@ def _day_data(db: Session, emp_id: int, d: date) -> dict:
         "out": last_out,
         "sessions": sessions,
         "phone": phone_h,
+        "after": after_h,
         "offsite": off_h,
         "fosc": work,
         "beod": beod,
@@ -280,8 +289,8 @@ def write_week_sheet(
 
     row = 6
     meta: list[dict] = []
-    team = {key: [0.0] * 5 for key in (
-        "fosc", "beod", "phone", "offsite", "vacation", "sick", "covid", "holiday",
+    team = {key: [0.0] * 7 for key in (
+        "fosc", "beod", "phone", "offsite", "after", "vacation", "sick", "covid", "holiday",
     )}
     weekdays = days[:5]
 
@@ -294,11 +303,15 @@ def write_week_sheet(
             cell = ws.cell(row, 3 + i)
             cell.border = thin
             cell.alignment = center
-            if i >= 5:
+            if i >= len(values) or (i >= 5 and kind == "time"):
                 cell.value = "—"
                 cell.fill = gray
                 continue
             value = values[i]
+            if i >= 5 and kind != "time" and not float(value or 0):
+                cell.value = "—"
+                cell.fill = gray
+                continue
             if kind == "time":
                 cell.value = _excel_time(value)
                 if cell.value is not None:
@@ -337,8 +350,11 @@ def write_week_sheet(
         def _vals(key):
             return [by_day[d][key] for d in weekdays]
 
+        def _vals7(key):
+            return [by_day[d][key] for d in days]
+
         def _any(key):
-            return any(float(by_day[d][key] or 0) > 0 for d in weekdays)
+            return any(float(by_day[d][key] or 0) > 0 for d in days)
 
         pairs = 1
         for d in weekdays:
@@ -355,9 +371,11 @@ def write_week_sheet(
             planned.append((f"In{suffix}", ins, "time", None))
             planned.append((f"Out{suffix}", outs, "time", None))
         if _any("phone"):
-            planned.append(("Phone Call", _vals("phone"), "num", None))
+            planned.append(("Phone Call", _vals7("phone"), "num", None))
         if _any("offsite"):
-            planned.append(("Remote Site", _vals("offsite"), "num", None))
+            planned.append(("Remote Site", _vals7("offsite"), "num", None))
+        if _any("after"):
+            planned.append(("After Hours", _vals7("after"), "num", None))
         if _any("beod"):
             planned.append(("BEOD", _vals("beod"), "num", "beod"))
         planned.append(("Normal Time - FOSC", _vals("fosc"), "num", "fosc"))
@@ -377,10 +395,12 @@ def write_week_sheet(
         if show_all_pto or any(pto_days):
             planned.append(("PTO Total", pto_days, "num", "pto"))
         overall = []
-        for i, d in enumerate(weekdays):
+        for d in days:
             amount = float(by_day[d]["fosc"] or 0) + float(by_day[d]["beod"] or 0)
             amount += float(by_day[d]["phone"] or 0) + float(by_day[d]["offsite"] or 0)
-            amount += pto_days[i]
+            amount += float(by_day[d]["after"] or 0)
+            amount += float(by_day[d]["vacation"] or 0) + float(by_day[d]["sick"] or 0)
+            amount += float(by_day[d]["covid"] or 0) + float(by_day[d]["holiday"] or 0)
             overall.append(round(amount, 2))
         planned.append(("Overall Total", overall, "num", "overall"))
 
@@ -391,7 +411,7 @@ def write_week_sheet(
         name_cell.fill = name_fill
         name_cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
 
-        for i, d in enumerate(weekdays):
+        for i, d in enumerate(days):
             for key in team:
                 team[key][i] += float(by_day[d][key] or 0)
         for label, values, kind, tone in planned:
@@ -407,6 +427,7 @@ def write_week_sheet(
     team_lines = [
         ("Phone Call", ["phone"], beod_fill, "000000"),
         ("Remote Site", ["offsite"], beod_fill, "000000"),
+        ("After Hours", ["after"], beod_fill, "000000"),
         ("BEOD", ["beod"], beod_fill, "000000"),
         ("Normal Time - FOSC", ["fosc"], orange, "000000"),
         ("Vacation", ["vacation"], pto_fill, "000000"),
@@ -416,7 +437,7 @@ def write_week_sheet(
         ("PTO Total", ["vacation", "sick", "covid", "holiday"], pto_fill, "000000"),
         (
             "Overall Total",
-            ["fosc", "beod", "phone", "offsite", "vacation", "sick", "covid", "holiday"],
+            ["fosc", "beod", "phone", "offsite", "after", "vacation", "sick", "covid", "holiday"],
             header_fill,
             "FFFFFF",
         ),
@@ -437,7 +458,7 @@ def write_week_sheet(
             cell.border = thin
             cell.alignment = center
             cell.font = Font(bold=True, color=font_color)
-            if i >= 5:
+            if i >= 5 and amount <= 0:
                 cell.value = "—"
                 cell.fill = gray
             else:

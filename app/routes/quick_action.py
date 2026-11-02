@@ -11,12 +11,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import verify_pin
 from app.config import BEOD_MINIMUM_HOURS, PAST_DAY_MAX_LOOKBACK_DAYS
-from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry, DailySummary
+from app.models import Employee, TimeEntry, EntryType, LocationType, OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, DailySummary
 from app.services.time_calc import (
     update_daily_summary, get_target_hours, friday_required_hours,
     calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
     beod_offered_on, normalize_beod_length, format_beod_length,
-    remember_beod_pref,
+    remember_beod_pref, after_hours_window,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -934,6 +934,110 @@ async def quick_phone(
         "date": str(work_date),
         "fosc_hours": summary.total_hours,
     })
+
+
+@router.post("/quick-after-hours")
+async def quick_after_hours(
+    request: Request,
+    employee_id: int = Form(...),
+    pin: str = Form(...),
+    location: str = Form("home"),
+    hours: str = Form(""),
+    entry_date: str = Form(""),
+    start_time: str = Form(""),
+    end_time: str = Form(""),
+    comments: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """PIN-verified after-hours support. Does not check in or out."""
+    emp = db.query(Employee).filter(
+        Employee.id == employee_id,
+        Employee.is_active == True,
+    ).first()
+    if not emp or not verify_pin(pin, emp.pin_hash):
+        return JSONResponse({"ok": False, "error": "Invalid PIN."}, status_code=401)
+
+    today = date.today()
+    work_date = today
+    if (entry_date or "").strip():
+        try:
+            work_date = date.fromisoformat(entry_date.strip())
+        except ValueError:
+            return JSONResponse({"ok": False, "error": "Pick the day you were called."}, status_code=400)
+    if work_date > today:
+        return JSONResponse({"ok": False, "error": "Cannot log after-hours support in the future."}, status_code=400)
+    if work_date < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
+        return JSONResponse({
+            "ok": False,
+            "error": f"After-hours support can only be logged for the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.",
+        }, status_code=400)
+
+    place = (location or "").strip().lower()
+    if place not in ("home", "sdc"):
+        return JSONResponse({"ok": False, "error": "Pick Home or SDC."}, status_code=400)
+    note = " ".join((comments or "").split())
+    if len(note) > 500:
+        return JSONResponse({"ok": False, "error": "Notes are too long."}, status_code=400)
+
+    start = end = None
+    if place == "home":
+        try:
+            length = round(float(hours), 2)
+        except (TypeError, ValueError):
+            return JSONResponse({"ok": False, "error": "Enter how long."}, status_code=400)
+        if length < 0.25 or length > 24:
+            return JSONResponse({"ok": False, "error": "Hours must be from 0.25 to 24."}, status_code=400)
+    else:
+        def _clock(raw: str):
+            text = (raw or "").strip()
+            try:
+                hour, minute = text.split(":", 1)
+                return datetime.combine(
+                    work_date,
+                    datetime.strptime(f"{int(hour):02d}:{int(minute):02d}", "%H:%M").time(),
+                )
+            except (TypeError, ValueError):
+                return None
+        start = _clock(start_time)
+        end = _clock(end_time)
+        if start is None or end is None:
+            return JSONResponse({
+                "ok": False,
+                "error": "Enter when you were told to head in, and when you got back.",
+            }, status_code=400)
+        window = after_hours_window(work_date, start, end)
+        if isinstance(window, str):
+            return JSONResponse({"ok": False, "error": window}, status_code=400)
+        start, end, length = window
+
+    entry = AfterHoursEntry(
+        employee_id=emp.id,
+        date=work_date,
+        location=place,
+        hours=length,
+        start_time=start,
+        end_time=end,
+        comments=note,
+        submission_time=datetime.now(),
+    )
+    db.add(entry)
+    db.commit()
+    summary = update_daily_summary(db, emp.id, work_date)
+    from app.services.audit import log_action
+    log_action(
+        db, action="quick_after_hours", entity_type="AfterHoursEntry",
+        entity_id=entry.id, employee_id=emp.id,
+        new_values={"date": str(work_date), "location": place, "hours": length, "comments": note},
+        ip_address=request.client.host if request.client else "",
+    )
+    when = "today" if work_date == today else work_date.strftime("%a %d %b")
+    where = "at home" if place == "home" else "at SDC"
+    span = f" {start.strftime('%H:%M')}–{end.strftime('%H:%M')}" if start and end else ""
+    msg = f"Logged {length:g}h after-hours {where}{span} for {when}"
+    if note:
+        msg += f" — {note}"
+    msg += f" · {summary.total_hours}h FOSC"
+    return JSONResponse({"ok": True, "message": msg, "fosc_hours": summary.total_hours})
 
 
 @router.get("/settings")

@@ -239,6 +239,9 @@
                                 {% if cell.phone_hours %}
                                 <div class="text-[9px] text-cyan-400/90 text-center">Phone {{ cell.phone_hours }}h</div>
                                 {% endif %}
+                                {% if cell.after_hours %}
+                                <div class="text-[9px] text-violet-300 text-center">After {{ cell.after_hours }}h</div>
+                                {% endif %}
                                 {% if cell.offsite_hours %}
                                 <div class="text-[9px] text-accent-400/90 text-center">Offsite {{ cell.offsite_hours }}h</div>
                                 {% endif %}

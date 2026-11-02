@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
-    Employee, TimeEntry, OffsiteEntry, PhoneSupportEntry, DailySummary,
+    Employee, TimeEntry, OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, DailySummary,
     LeaveRequest, EntryType, LeaveStatus, Role,
 )
 from app.services.time_calc import (
     get_target_hours, get_weekly_summary,
-    calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours,
+    calculate_clock_hours, calculate_offsite_hours, calculate_phone_hours, calculate_after_hours,
     projected_checkout_from_entries, format_beod_length,
     friday_required_hours, week_start_for, work_week_of,
 )
@@ -56,6 +56,11 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     todays_phone = db.query(PhoneSupportEntry).filter(
         PhoneSupportEntry.employee_id == employee.id,
         PhoneSupportEntry.date == today,
+    ).all()
+
+    todays_after = db.query(AfterHoursEntry).filter(
+        AfterHoursEntry.employee_id == employee.id,
+        AfterHoursEntry.date == today,
     ).all()
 
     daily_summary = db.query(DailySummary).filter(
@@ -112,8 +117,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     offsite_hours = calculate_offsite_hours(todays_offsite)
     phone_hours = calculate_phone_hours(todays_phone)
+    after_hours = calculate_after_hours(todays_after)
     beod_hours = float(daily_summary.beod_hours or 0) if daily_summary else 0.0
-    fosc_hours = round(clock_hours + offsite_hours + phone_hours + beod_hours, 2)
+    fosc_hours = round(clock_hours + offsite_hours + phone_hours + after_hours + beod_hours, 2)
 
     leave_hours = 0.0
     leave_approved = False
@@ -161,6 +167,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         "live_session_hours": round(live_session_hours, 2),
         "offsite_hours": offsite_hours,
         "phone_hours": phone_hours,
+        "after_hours": after_hours,
+        "todays_after": todays_after,
         "beod_hours": beod_hours,
         "fosc_hours": fosc_hours,
         "leave_hours": leave_hours,
@@ -256,6 +264,15 @@ async def my_time_report(
         )
         .all()
     )
+    after_rows = (
+        db.query(AfterHoursEntry)
+        .filter(
+            AfterHoursEntry.employee_id == subject.id,
+            AfterHoursEntry.date >= week_start,
+            AfterHoursEntry.date <= week_end,
+        )
+        .all()
+    )
     summaries = (
         db.query(DailySummary)
         .filter(
@@ -274,12 +291,15 @@ async def my_time_report(
     by_phone = {}
     for e in phones:
         by_phone.setdefault(e.date, []).append(e)
+    by_after = {}
+    for e in after_rows:
+        by_after.setdefault(e.date, []).append(e)
     by_sum = {s.date: s for s in summaries}
 
     now = datetime.now()
     days = []
     totals = {
-        "clock": 0.0, "offsite": 0.0, "phone": 0.0, "beod": 0.0,
+        "clock": 0.0, "offsite": 0.0, "phone": 0.0, "after": 0.0, "beod": 0.0,
         "fosc": 0.0, "leave": 0.0, "effective": 0.0, "target": 0.0,
     }
     for i in range(7):
@@ -287,6 +307,7 @@ async def my_time_report(
         day_entries = by_entry.get(d, [])
         day_off = by_off.get(d, [])
         day_phone = by_phone.get(d, [])
+        day_after = by_after.get(d, [])
         summary = by_sum.get(d)
         target = get_target_hours(d)
 
@@ -295,10 +316,11 @@ async def my_time_report(
             clock = round(clock + max(0.0, (now - day_entries[-1].declared_time).total_seconds() / 3600.0), 2)
         off_h = round(calculate_offsite_hours(day_off), 2)
         phone_h = round(calculate_phone_hours(day_phone), 2)
+        after_h = round(calculate_after_hours(day_after), 2)
         beod = float(summary.beod_hours or 0) if summary else 0.0
         # Hours come from the punches on the page, including a past day that was
         # edited after the stored summary was written.
-        fosc = round(clock + off_h + phone_h + beod, 2)
+        fosc = round(clock + off_h + phone_h + after_h + beod, 2)
 
         leave_h = float(summary.leave_hours or 0) if summary else 0.0
         leave_ok = bool(summary and summary.leave_approved and leave_h)
@@ -318,9 +340,11 @@ async def my_time_report(
             "entries": day_entries,
             "offsites": day_off,
             "phones": day_phone,
+            "after": day_after,
             "clock": round(clock, 2),
             "offsite": round(off_h, 2),
             "phone": round(phone_h, 2),
+            "after_hours": round(after_h, 2),
             "beod": round(beod, 2),
             "beod_label": beod_label,
             "beod_pending": bool(summary and summary.lunch_end_of_day and not summary.lunch_approved),
@@ -334,6 +358,7 @@ async def my_time_report(
         totals["clock"] += clock
         totals["offsite"] += off_h
         totals["phone"] += phone_h
+        totals["after"] += after_h
         totals["beod"] += beod
         totals["fosc"] += fosc
         totals["leave"] += leave_h if leave_ok else 0.0

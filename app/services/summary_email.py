@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import BEOD_MINIMUM_HOURS, EMAIL_ENABLED
 from app.models import (
     DailySummary, Employee, EntryType, LeaveRequest, LeaveStatus, LeaveType,
-    OffsiteEntry, PhoneSupportEntry, Role, TimeEntry,
+    OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, Role, TimeEntry,
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
@@ -24,6 +24,7 @@ from app.services.time_calc import (
     calculate_clock_hours,
     calculate_offsite_hours,
     calculate_phone_hours,
+    calculate_after_hours,
     get_target_hours,
     resolve_beod_request,
 )
@@ -114,6 +115,11 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         .filter(PhoneSupportEntry.employee_id == employee.id, PhoneSupportEntry.date == work_date)
         .all()
     )
+    after_rows = (
+        db.query(AfterHoursEntry)
+        .filter(AfterHoursEntry.employee_id == employee.id, AfterHoursEntry.date == work_date)
+        .all()
+    )
     summary = (
         db.query(DailySummary)
         .filter(DailySummary.employee_id == employee.id, DailySummary.date == work_date)
@@ -136,7 +142,8 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
     clock = calculate_clock_hours(entries)
     offsite_h = calculate_offsite_hours(offsites)
     phone_h = calculate_phone_hours(phones)
-    work = round(clock + offsite_h + phone_h, 2)
+    after_h = calculate_after_hours(after_rows)
+    work = round(clock + offsite_h + phone_h + after_h, 2)
 
     beod = 0.0
     beod_pending = False
@@ -179,6 +186,8 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         notes.append(note)
     if time_pending:
         notes.append("time pending")
+    if after_h:
+        notes.append(f"after {_hours(after_h)}")
     if target and total + 0.01 < target and not still_in and not leave_h:
         notes.append("short")
 
@@ -188,6 +197,7 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         "out": ", ".join(outs) if outs else ("still in" if still_in else "—"),
         "offsite": "; ".join(offsite_bits) if offsite_bits else "—",
         "phone": _hours(phone_h) if phone_h else "—",
+        "after": _hours(after_h) if after_h else "—",
         "hours": total,
         "work_hours": round(work + beod, 2),
         "leave_h": leave_h,
@@ -197,7 +207,7 @@ def _day_facts(db: Session, employee: Employee, work_date: date) -> dict:
         "beod_pending": beod_pending,
         "target": target,
         "notes": ", ".join(notes),
-        "empty": not entries and not offsites and not phones and not leave_h,
+        "empty": not entries and not offsites and not phones and not after_rows and not leave_h,
     }
 
 
@@ -322,6 +332,7 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date, 
                 + ("" if day["out"] in ("", "—", "still in") else f"; out {day['out']}")
                 + ("" if day["offsite"] == "—" else f"; offsite {day['offsite']}")
                 + ("" if day["phone"] == "—" else f"; phone {day['phone']}")
+                + ("" if day.get("after", "—") == "—" else f"; after {day['after']}")
             )
         text_lines.append("")
     foot = (
@@ -345,6 +356,7 @@ def _weekly_bodies(people_days: list[tuple[str, list[dict]]], week_start: date, 
                 + ("" if day["out"] in ("", "—", "still in") else f"; out {escape(day['out'])}")
                 + ("" if day["offsite"] == "—" else f"; offsite {escape(day['offsite'])}")
                 + ("" if day["phone"] == "—" else f"; phone {escape(day['phone'])}")
+                + ("" if day.get("after", "—") == "—" else f"; after {escape(day['after'])}")
             )
         if lines:
             punch_html.append(
@@ -419,6 +431,12 @@ def _week_is_blank(db: Session, employee: Employee, start: date, end: date) -> b
         PhoneSupportEntry.employee_id == employee.id,
         PhoneSupportEntry.date >= start,
         PhoneSupportEntry.date <= end,
+    ).first():
+        return False
+    if db.query(AfterHoursEntry).filter(
+        AfterHoursEntry.employee_id == employee.id,
+        AfterHoursEntry.date >= start,
+        AfterHoursEntry.date <= end,
     ).first():
         return False
     if db.query(DailySummary).filter(

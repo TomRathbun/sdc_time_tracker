@@ -12,7 +12,7 @@ from app.auth import get_current_employee, hash_pin
 from app.models import (
     Employee, Role, RemoteAuthorization, AuthorizationStatus,
     DailySummary, TimeEntry, EntryType, LeaveRequest, LeaveStatus, LeaveType,
-    OffsiteEntry, PhoneSupportEntry, AuditLog,
+    OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, AuditLog,
 )
 from app.services.audit import log_action
 from app.services.time_calc import (
@@ -593,6 +593,7 @@ async def team_timesheet(
                 "leave_request_id": l_req.id if is_leave_pending else None,
                 "clock_hours": s.clock_hours if s else 0.0,
                 "phone_hours": s.phone_hours if s else 0.0,
+                "after_hours": s.after_hours if s else 0.0,
                 "offsite_hours": s.offsite_hours if s else 0.0,
                 "beod_hours": s.beod_hours if s else 0.0,
                 "beod_label": (
@@ -1296,6 +1297,7 @@ async def data_reset_page(request: Request, db: Session = Depends(get_db)):
         "time_entries": db.query(TimeEntry).count(),
         "offsite": db.query(OffsiteEntry).count(),
         "phone": db.query(PhoneSupportEntry).count(),
+        "after_hours": db.query(AfterHoursEntry).count(),
         "summaries": db.query(DailySummary).count(),
         "leave": db.query(LeaveRequest).count(),
         "audit": db.query(AuditLog).count(),
@@ -1356,6 +1358,8 @@ async def data_reset_submit(
             actions.append(f"offsite={n}")
             n = db.query(PhoneSupportEntry).delete()
             actions.append(f"phone={n}")
+            n = db.query(AfterHoursEntry).delete()
+            actions.append(f"after_hours={n}")
             n = db.query(DailySummary).delete()
             actions.append(f"summaries={n}")
             n = db.query(LeaveRequest).delete()

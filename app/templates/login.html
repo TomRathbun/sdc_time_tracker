@@ -195,6 +195,16 @@
                                 <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"></path>
                             </svg>
                         </button>
+                        <button type="button"
+                            onclick="openQuickModal({{ emp.id }}, '{{ emp.name }}', 'afterhours', '')"
+                            class="p-2 rounded-lg transition-all active:scale-95 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20"
+                            title="After-hours support. Home is a duration. SDC includes travel. Does not check in."
+                            id="btn-quick-ah-{{ emp.id }}">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M12 3v1m0 16v1m8-9h1M3 12H2m15.364-6.364l.707.707M5.636 18.364l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707"></path>
+                                <circle cx="12" cy="12" r="4"></circle>
+                            </svg>
+                        </button>
                     </div>
                     {% endif %}
                 </div>
@@ -461,6 +471,50 @@
             <p class="text-[11px] text-cyan-300/90">Yesterday is already selected for a night call you are logging this morning. Hours go on that day's FOSC. Does not check you in or out.</p>
         </div>
 
+        <div id="modal-after" style="display:none" class="mb-4 space-y-3">
+            <div>
+                <label for="after-date" class="block text-xs text-gray-500 mb-1">Day you were called</label>
+                <select id="after-date" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200"></select>
+            </div>
+            <div>
+                <label for="after-location" class="block text-xs text-gray-500 mb-1">Where</label>
+                <select id="after-location" onchange="syncAfterLocation()" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200">
+                    <option value="home">Home — duration only</option>
+                    <option value="sdc">SDC — told to head in, until back</option>
+                </select>
+            </div>
+            <div id="after-home-fields">
+                <label for="after-hours" class="block text-xs text-gray-500 mb-1">How long</label>
+                <select id="after-hours" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200">
+                    <option value="0.5">30 minutes</option>
+                    <option value="1" selected>1 hour</option>
+                    <option value="1.5">1.5 hours</option>
+                    <option value="2">2 hours</option>
+                    <option value="3">3 hours</option>
+                    <option value="4">4 hours</option>
+                    <option value="6">6 hours</option>
+                    <option value="8">8 hours</option>
+                </select>
+            </div>
+            <div id="after-sdc-fields" class="hidden grid grid-cols-2 gap-2">
+                <div>
+                    <label for="after-start" class="block text-xs text-gray-500 mb-1">Told to head in</label>
+                    <input type="time" id="after-start" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200">
+                </div>
+                <div>
+                    <label for="after-end" class="block text-xs text-gray-500 mb-1">Got back</label>
+                    <input type="time" id="after-end" class="w-full bg-surface-900 border border-white/10 rounded-lg px-2 py-2 text-sm text-gray-200">
+                </div>
+            </div>
+            <div>
+                <label for="after-comments" class="block text-xs text-gray-500 mb-1">Notes <span class="text-gray-600">(optional)</span></label>
+                <input type="text" id="after-comments" maxlength="500"
+                    class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500/50"
+                    placeholder="What you were called in for">
+            </div>
+            <p class="text-[11px] text-violet-300/90">This is not a check-in. At SDC, travel both ways is inside the start and stop. A stop after midnight can be earlier than the start.</p>
+        </div>
+
         <!-- Error message -->
         <div id="modal-error" style="display:none"
             class="mb-4 items-center gap-2 p-2.5 rounded-lg bg-danger-500/10 border border-danger-500/20 text-danger-400 text-xs">
@@ -645,7 +699,9 @@
         var timeAdjust = document.getElementById('modal-time-adjust');
         if (offsitePanel) offsitePanel.style.display = action === 'offsite' ? 'block' : 'none';
         if (phonePanel) phonePanel.style.display = action === 'phone' ? 'block' : 'none';
-        if (timeAdjust) timeAdjust.style.display = (action === 'offsite' || action === 'phone') ? 'none' : '';
+        var afterPanel = document.getElementById('modal-after');
+        if (afterPanel) afterPanel.style.display = action === 'afterhours' ? 'block' : 'none';
+        if (timeAdjust) timeAdjust.style.display = (action === 'offsite' || action === 'phone' || action === 'afterhours') ? 'none' : '';
         var offsiteBeod = document.getElementById('quick-offsite-beod');
         if (offsiteBeod) offsiteBeod.checked = false;
         var offsiteBeodLen = document.getElementById('quick-offsite-beod-hours');
@@ -704,6 +760,14 @@
             var phoneNotes = document.getElementById('phone-comments');
             if (phoneNotes) phoneNotes.value = '';
         }
+        if (action === 'afterhours') {
+            fillNamedDates('after-date');
+            var afterLoc = document.getElementById('after-location');
+            if (afterLoc) afterLoc.value = 'sdc';
+            syncAfterLocation();
+            var afterNotes = document.getElementById('after-comments');
+            if (afterNotes) afterNotes.value = '';
+        }
         _adjustDirty = false;
         _adjustTime = null;
         _shownHHMM = '';
@@ -749,6 +813,12 @@
             title.textContent = 'Phone call';
             subtitle.textContent = empName;
         }
+        if (action === 'afterhours') {
+            icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-violet-500/10';
+            icon.innerHTML = '<svg class="w-5 h-5 text-violet-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 3v1m0 16v1m8-9h1M3 12H2"></path></svg>';
+            title.textContent = 'After-hours support';
+            subtitle.textContent = empName + ' · not a check-in';
+        }
         if (action === 'fixin') {
             icon.className = 'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-warning-500/10';
             icon.innerHTML = '<svg class="w-5 h-5 text-warning-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>';
@@ -783,7 +853,20 @@
     }
 
     function fillPhoneDates() {
-        var sel = document.getElementById('phone-date');
+        fillNamedDates('phone-date');
+    }
+
+    function syncAfterLocation() {
+        var loc = document.getElementById('after-location');
+        var home = document.getElementById('after-home-fields');
+        var sdc = document.getElementById('after-sdc-fields');
+        var isSdc = loc && loc.value === 'sdc';
+        if (home) home.classList.toggle('hidden', isSdc);
+        if (sdc) sdc.classList.toggle('hidden', !isSdc);
+    }
+
+    function fillNamedDates(id) {
+        var sel = document.getElementById(id);
         if (!sel) return;
         var lookback = 14;
         var today = new Date();
@@ -1055,7 +1138,7 @@
             return;
         }
 
-        if (currentAction !== 'offsite' && currentAction !== 'phone' && _adjustDirty && _adjustTime && !stepAllowed(_adjustTime)) {
+        if (currentAction !== 'offsite' && currentAction !== 'phone' && currentAction !== 'afterhours' && _adjustDirty && _adjustTime && !stepAllowed(_adjustTime)) {
             showEl(errorEl);
             errorText.textContent = 'That time is more than ' + QUICK_THRESHOLD
                 + ' minutes from the recorded time. Move it closer, or sign in to record a larger change.';
@@ -1068,6 +1151,24 @@
                 showEl(errorEl);
                 errorText.textContent = 'Enter where you worked.';
                 return;
+            }
+        }
+        if (currentAction === 'afterhours') {
+            var afterDay = document.getElementById('after-date');
+            if (!afterDay || !afterDay.value) {
+                showEl(errorEl);
+                errorText.textContent = 'Pick the day you were called.';
+                return;
+            }
+            var afterLoc = document.getElementById('after-location');
+            if (afterLoc && afterLoc.value === 'sdc') {
+                var afterStart = document.getElementById('after-start');
+                var afterEnd = document.getElementById('after-end');
+                if (!afterStart || !afterStart.value || !afterEnd || !afterEnd.value) {
+                    showEl(errorEl);
+                    errorText.textContent = 'Enter when you were told to head in, and when you got back.';
+                    return;
+                }
             }
         }
         if (currentAction === 'phone') {
@@ -1088,6 +1189,7 @@
             : currentAction === 'fixin' ? '/api/quick-fix-checkin'
             : currentAction === 'offsite' ? '/api/quick-offsite'
             : currentAction === 'phone' ? '/api/quick-phone'
+            : currentAction === 'afterhours' ? '/api/quick-after-hours'
             : '/api/quick-checkout';
 
         var formData = new FormData();
@@ -1113,6 +1215,13 @@
             formData.append('hours', phoneHours ? phoneHours.value : '0.5');
             formData.append('entry_date', phoneDate ? phoneDate.value : '');
             formData.append('comments', (document.getElementById('phone-comments').value || '').trim());
+        } else if (currentAction === 'afterhours') {
+            formData.append('location', document.getElementById('after-location').value || 'home');
+            formData.append('hours', document.getElementById('after-hours').value || '1');
+            formData.append('entry_date', document.getElementById('after-date').value || '');
+            formData.append('start_time', document.getElementById('after-start').value || '');
+            formData.append('end_time', document.getElementById('after-end').value || '');
+            formData.append('comments', (document.getElementById('after-comments').value || '').trim());
         } else if (currentAction === 'checkout' || currentAction === 'recheckout') {
             var beodEl = document.getElementById('modal-beod');
             var beodOn = beodEl && beodEl.checked;
@@ -1120,7 +1229,7 @@
             var beodLenEl = document.getElementById('modal-beod-hours');
             formData.append('beod_hours', (beodOn && beodLenEl) ? beodLenEl.value : '1');
         }
-        if (_adjustDirty && _adjustTime && currentAction !== 'offsite' && currentAction !== 'phone') {
+        if (_adjustDirty && _adjustTime && currentAction !== 'offsite' && currentAction !== 'phone' && currentAction !== 'afterhours') {
             formData.append('declared_time', fmtHM(_adjustTime));
         }
 
@@ -1334,6 +1443,9 @@
                         } else if (currentAction === 'phone') {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 shadow-cyan-500/25';
                             btnText.textContent = 'Log Phone Call';
+                        } else if (currentAction === 'afterhours') {
+                            btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-violet-600 to-violet-500 hover:from-violet-500 hover:to-violet-400 shadow-violet-500/25';
+                            btnText.textContent = 'Log After Hours';
                         } else if (currentAction === 'fixin') {
                             btn.className = 'w-full font-semibold py-3 rounded-xl shadow-lg transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 text-white bg-gradient-to-r from-warning-600 to-warning-500 hover:from-warning-500 hover:to-warning-400 shadow-warning-500/25';
                             btnText.textContent = 'Update Check-In';
@@ -1357,9 +1469,11 @@
                             ? (_offsiteChecksOut ? 'Check Out & Start Offsite' : 'Log Offsite')
                             : (currentAction === 'phone'
                                 ? 'Log Phone Call'
-                                : (currentAction === 'fixin'
+                                : (currentAction === 'afterhours'
+                                    ? 'Log After Hours'
+                                    : (currentAction === 'fixin'
                                     ? 'Update Check-In'
-                                    : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out'))));
+                                    : (currentAction === 'recheckout' ? 'Re-Check Out' : 'Check Out')))));
                 });
         }, 300);
     }

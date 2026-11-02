@@ -142,6 +142,7 @@ def _run_migrations():
             ("clock_hours", "FLOAT", "0"),
             ("offsite_hours", "FLOAT", "0"),
             ("phone_hours", "FLOAT", "0"),
+            ("after_hours", "FLOAT", "0"),
             ("beod_hours", "FLOAT", "0"),
         ]:
             if col not in ds_cols:

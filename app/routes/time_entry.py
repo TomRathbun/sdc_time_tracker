@@ -10,14 +10,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import get_current_employee
 from app.models import (
-    TimeEntry, OffsiteEntry, PhoneSupportEntry, EntryType, LocationType,
+    TimeEntry, OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, EntryType, LocationType,
     RemoteAuthorization, AuthorizationStatus, Employee, Role,
     CheckoutToken, MissedEntryToken,
 )
 from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import (
     update_daily_summary, get_target_hours, friday_required_hours, normalize_beod_length, format_beod_length,
-    beod_offered_on, beod_pref_ui, remember_beod_pref,
+    beod_offered_on, beod_pref_ui, remember_beod_pref, after_hours_window,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -1689,4 +1689,133 @@ async def phone_support_submit(
         ip_address=request.client.host if request.client else "",
     )
 
+    return RedirectResponse(url="/", status_code=303)
+
+
+def _parse_clock(raw: str, work_date: date) -> datetime | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        hour, minute = text.split(":", 1)
+        return datetime.combine(work_date, datetime.strptime(f"{int(hour):02d}:{int(minute):02d}", "%H:%M").time())
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/time/after-hours", response_class=HTMLResponse)
+async def after_hours_page(request: Request, db: Session = Depends(get_db)):
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+    today = date.today()
+    existing = (
+        db.query(AfterHoursEntry)
+        .filter(AfterHoursEntry.employee_id == employee.id, AfterHoursEntry.date == today)
+        .order_by(AfterHoursEntry.submission_time.desc())
+        .all()
+    )
+    return templates.TemplateResponse("after_hours.html", {
+        "request": request,
+        "employee": employee,
+        "today": today,
+        "min_date": today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS),
+        "max_date": today,
+        "lookback_days": PAST_DAY_MAX_LOOKBACK_DAYS,
+        "existing": existing,
+        "error": None,
+    })
+
+
+@router.post("/time/after-hours", response_class=HTMLResponse)
+async def after_hours_submit(
+    request: Request,
+    location: str = Form("home"),
+    hours: str = Form(""),
+    start_time: str = Form(""),
+    end_time: str = Form(""),
+    comments: str = Form(""),
+    entry_date: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """Log after-hours support. Does not check the person in or out."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    work_date = today
+    if entry_date:
+        try:
+            work_date = date.fromisoformat(entry_date)
+        except ValueError:
+            work_date = today
+    existing = (
+        db.query(AfterHoursEntry)
+        .filter(AfterHoursEntry.employee_id == employee.id, AfterHoursEntry.date == work_date)
+        .order_by(AfterHoursEntry.submission_time.desc())
+        .all()
+    )
+
+    def fail(message: str):
+        return templates.TemplateResponse("after_hours.html", {
+            "request": request,
+            "employee": employee,
+            "today": work_date,
+            "min_date": today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS),
+            "max_date": today,
+            "lookback_days": PAST_DAY_MAX_LOOKBACK_DAYS,
+            "existing": existing,
+            "error": message,
+        })
+
+    if work_date > today:
+        return fail("Cannot log after-hours support for a future date.")
+    if work_date < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
+        return fail(f"After-hours support is limited to the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.")
+
+    place = (location or "").strip().lower()
+    if place not in ("home", "sdc"):
+        return fail("Pick Home or SDC.")
+    note = " ".join((comments or "").split())
+    if len(note) > 500:
+        return fail("Notes are too long.")
+
+    start = end = None
+    if place == "home":
+        try:
+            length = round(float(hours), 2)
+        except (TypeError, ValueError):
+            return fail("Enter how long you worked at home.")
+        if length < 0.25 or length > 24:
+            return fail("Hours must be from 0.25 to 24.")
+    else:
+        start = _parse_clock(start_time, work_date)
+        end = _parse_clock(end_time, work_date)
+        if start is None or end is None:
+            return fail("Enter the time you were told to head in, and the time you got back.")
+        window = after_hours_window(work_date, start, end)
+        if isinstance(window, str):
+            return fail(window)
+        start, end, length = window
+
+    entry = AfterHoursEntry(
+        employee_id=employee.id,
+        date=work_date,
+        location=place,
+        hours=length,
+        start_time=start,
+        end_time=end,
+        comments=note,
+        submission_time=datetime.now(),
+    )
+    db.add(entry)
+    db.commit()
+    update_daily_summary(db, employee.id, work_date)
+    log_action(
+        db, action="after_hours", entity_type="AfterHoursEntry",
+        entity_id=entry.id, employee_id=employee.id,
+        new_values={"date": str(work_date), "location": place, "hours": length, "comments": note},
+        ip_address=request.client.host if request.client else "",
+    )
     return RedirectResponse(url="/", status_code=303)

@@ -20,6 +20,18 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "after-hours-support",
+        "title": "After-hours support",
+        "added_on": date(2026, 11, 2),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "After-hours support is its own entry. It is not a check-in. "
+            "Home asks how long. SDC asks when you were told to head in and when you got back, so travel both ways is included. "
+            "The hours count on the week total and can shorten Friday. "
+            "Log it from the dashboard, the kiosk moon icon, or reply AFTER to the email menu."
+        ),
+    },
+    {
         "slug": "blank-week-pto",
         "title": "A blank week becomes vacation",
         "added_on": date(2026, 10, 30),

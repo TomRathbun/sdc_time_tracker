@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}After-hours support — SDC Time Tracker{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="/static/css/flatpickr.min.css">
+<link rel="stylesheet" href="/static/css/flatpickr-dark.css">
+<script src="/static/js/flatpickr.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="mb-8">
+        <a href="/" class="text-gray-400 hover:text-white text-sm flex items-center gap-1 mb-4 transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Dashboard
+        </a>
+        <h1 class="text-2xl font-bold text-white">After-hours support</h1>
+        <p class="text-gray-400 mt-1">Not a check-in. Home is how long you worked. SDC is from when you were told to head in until you got back, including travel.</p>
+    </div>
+
+    <div class="glass-card p-8 mb-6">
+        <form method="POST" action="/time/after-hours" id="after-hours-form">
+            {% if error %}
+            <div class="p-4 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm mb-6">{{ error }}</div>
+            {% endif %}
+
+            <div class="mb-6">
+                <label for="entry_date" class="block text-sm font-medium text-gray-300 mb-2">Date you were called</label>
+                <input type="text" name="entry_date" id="entry_date" required readonly data-osk-ignore
+                    class="form-input cursor-pointer" value="{{ today.isoformat() }}"
+                    data-min="{{ min_date.isoformat() }}" data-max="{{ max_date.isoformat() }}">
+                <p class="text-xs text-gray-500 mt-1">Today back {{ lookback_days }} days. A night call is often entered the next morning.</p>
+            </div>
+
+            <div class="mb-6">
+                <p class="block text-sm font-medium text-gray-300 mb-2">Where</p>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="cursor-pointer">
+                        <input type="radio" name="location" value="home" class="peer sr-only" checked>
+                        <span class="block text-center py-3 rounded-xl border border-white/10 peer-checked:border-cyan-400 peer-checked:bg-cyan-500/10 text-sm text-gray-300 peer-checked:text-white">Home</span>
+                    </label>
+                    <label class="cursor-pointer">
+                        <input type="radio" name="location" value="sdc" class="peer sr-only" id="loc-sdc">
+                        <span class="block text-center py-3 rounded-xl border border-white/10 peer-checked:border-cyan-400 peer-checked:bg-cyan-500/10 text-sm text-gray-300 peer-checked:text-white">SDC</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="mb-6" id="after-home">
+                <label for="hours" class="block text-sm font-medium text-gray-300 mb-2">How long</label>
+                <input type="number" name="hours" id="hours" min="0.25" max="24" step="0.25" value="1" class="form-input">
+            </div>
+
+            <div class="mb-6 hidden" id="after-sdc">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label for="start_time" class="block text-sm font-medium text-gray-300 mb-2">Told to head in</label>
+                        <input type="time" name="start_time" id="start_time" class="form-input">
+                    </div>
+                    <div>
+                        <label for="end_time" class="block text-sm font-medium text-gray-300 mb-2">Got back</label>
+                        <input type="time" name="end_time" id="end_time" class="form-input">
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Travel both ways is inside this window. If you got back after midnight, the stop can be earlier than the start.</p>
+            </div>
+
+            <div class="mb-8">
+                <label for="comments" class="block text-sm font-medium text-gray-300 mb-2">Notes</label>
+                <textarea name="comments" id="comments" rows="2" class="form-input resize-none" placeholder="What you were called in for"></textarea>
+            </div>
+
+            <button type="submit" class="w-full btn-primary py-4 text-lg">Log after-hours support</button>
+        </form>
+    </div>
+
+    {% if existing %}
+    <div class="glass-card p-6">
+        <h2 class="text-sm font-semibold text-gray-300 mb-3">Already logged for {{ today.strftime("%b %d") }}</h2>
+        <ul class="space-y-2">
+            {% for e in existing %}
+            <li class="flex justify-between gap-3 text-sm border-b border-white/5 pb-2">
+                <span class="text-white">{{ e.location|upper }} · {{ e.hours }}h
+                    {% if e.start_time and e.end_time %}
+                    <span class="font-mono text-gray-400">{{ e.start_time.strftime("%H:%M") }}–{{ e.end_time.strftime("%H:%M") }}</span>
+                    {% endif %}
+                </span>
+                <span class="text-gray-500 truncate">{{ e.comments or "—" }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var el = document.getElementById('entry_date');
+        if (el && typeof flatpickr === 'function') {
+            flatpickr(el, {
+                dateFormat: 'Y-m-d',
+                defaultDate: el.value || 'today',
+                minDate: el.dataset.min || undefined,
+                maxDate: el.dataset.max || 'today',
+                disableMobile: true,
+                allowInput: false,
+                clickOpens: true
+            });
+        }
+        function sync() {
+            var sdc = document.getElementById('loc-sdc').checked;
+            document.getElementById('after-home').classList.toggle('hidden', sdc);
+            document.getElementById('after-sdc').classList.toggle('hidden', !sdc);
+        }
+        document.querySelectorAll('input[name="location"]').forEach(function (el) {
+            el.addEventListener('change', sync);
+        });
+        sync();
+    });
+</script>
+{% endblock %}

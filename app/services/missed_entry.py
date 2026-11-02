@@ -14,7 +14,7 @@ from app.config import APP_NAME, EMAIL_ENABLED
 from app.models import (
     DailySummary, Employee, EntryType, InboundEmail, LeaveRequest, LeaveStatus,
     LeaveType, LocationType, MissedDigestLog, MissedEntryToken, OffsiteEntry,
-    PhoneSupportEntry, Role, TimeEntry,
+    PhoneSupportEntry, AfterHoursEntry, Role, TimeEntry,
 )
 from app.services.audit import log_action
 from app.services.email import _send_email
@@ -241,6 +241,9 @@ def remind_missed_entries(db: Session, now: datetime | None = None) -> int:
                     ).first()
                     or db.query(PhoneSupportEntry).filter(
                         PhoneSupportEntry.employee_id == person.id, PhoneSupportEntry.date == day,
+                    ).first()
+                    or db.query(AfterHoursEntry).filter(
+                        AfterHoursEntry.employee_id == person.id, AfterHoursEntry.date == day,
                     ).first()
                 )
                 if has_other:

@@ -80,6 +80,7 @@ class Employee(Base):
     time_entries = relationship("TimeEntry", back_populates="employee", lazy="dynamic")
     offsite_entries = relationship("OffsiteEntry", back_populates="employee", lazy="dynamic")
     phone_support_entries = relationship("PhoneSupportEntry", back_populates="employee", lazy="dynamic")
+    after_hours_entries = relationship("AfterHoursEntry", back_populates="employee", lazy="dynamic")
     daily_summaries = relationship("DailySummary", back_populates="employee", lazy="dynamic")
     leave_requests = relationship("LeaveRequest", back_populates="employee",
                                   foreign_keys="LeaveRequest.employee_id", lazy="dynamic")
@@ -152,6 +153,27 @@ class PhoneSupportEntry(Base):
     employee = relationship("Employee", back_populates="phone_support_entries")
 
 
+class AfterHoursEntry(Base):
+    """Weekend or after-hours support. Not a check-in or check-out.
+
+    Home is a duration. SDC is when the person was told to head in and when
+    they got back, so travel both ways is inside the window.
+    """
+    __tablename__ = "after_hours_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    date = Column(Date, nullable=False, index=True)
+    location = Column(String(20), nullable=False)  # home or sdc
+    hours = Column(Float, nullable=False)
+    start_time = Column(DateTime, nullable=True)
+    end_time = Column(DateTime, nullable=True)
+    comments = Column(Text, default="")
+    submission_time = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    employee = relationship("Employee", back_populates="after_hours_entries")
+
+
 class DailySummary(Base):
     __tablename__ = "daily_summaries"
     __table_args__ = (
@@ -166,6 +188,7 @@ class DailySummary(Base):
     clock_hours = Column(Float, default=0.0)
     offsite_hours = Column(Float, default=0.0)
     phone_hours = Column(Float, default=0.0)
+    after_hours = Column(Float, default=0.0)
     beod_hours = Column(Float, default=0.0)  # applied credit: 0, 0.25, 0.5, 0.75, or 1
     beod_requested_hours = Column(Float, default=0.0)  # claimed length; legacy claims are 1h
     leave_hours = Column(Float, default=0.0)
