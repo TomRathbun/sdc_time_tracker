@@ -217,11 +217,25 @@ def normalize_beod_length(hours) -> float:
     return BEOD_CREDIT_HOURS
 
 
+def format_duration(hours) -> str:
+    """1.5 → 1h 30m. Whole hours stay 8h. Zero is 0m."""
+    try:
+        minutes = int(round(float(hours) * 60))
+    except (TypeError, ValueError):
+        return "0m"
+    sign = "-" if minutes < 0 else ""
+    minutes = abs(minutes)
+    whole, part = divmod(minutes, 60)
+    if whole and part:
+        return f"{sign}{whole}h {part}m"
+    if whole:
+        return f"{sign}{whole}h"
+    return f"{sign}{part}m"
+
+
 def format_beod_length(hours: float) -> str:
     """Compact label: 1h, 45m, 30m, 15m."""
-    minutes = int(round(float(hours) * 60))
-    labels = {60: "1h", 45: "45m", 30: "30m", 15: "15m"}
-    return labels.get(minutes, f"{float(hours):g}h")
+    return format_duration(hours)
 
 
 def beod_hours_value(hours) -> str:
@@ -685,7 +699,7 @@ def checkin_notice(db: Session, employee, checkin_time: datetime) -> dict:
         elif day == today and float(row["effective"] or 0) < 0.05:
             shown = "in"
         else:
-            shown = f"{float(row['effective']):.2f}"
+            shown = format_duration(row["effective"])
         days.append({
             "label": day.strftime("%a"),
             "hours": shown,

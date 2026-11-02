@@ -82,7 +82,7 @@
         <ul class="space-y-2">
             {% for e in existing %}
             <li class="flex justify-between gap-3 text-sm border-b border-white/5 pb-2">
-                <span class="text-white">{{ e.location|upper }} · {{ e.hours }}h
+                <span class="text-white">{{ e.location|upper }} · {{ e.hours|hm }}
                     {% if e.start_time and e.end_time %}
                     <span class="font-mono text-gray-400">{{ e.start_time.strftime("%H:%M") }}–{{ e.end_time.strftime("%H:%M") }}</span>
                     {% endif %}

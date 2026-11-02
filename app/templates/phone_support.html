@@ -94,7 +94,7 @@
         <ul class="space-y-2">
             {% for e in existing %}
             <li class="flex justify-between text-sm border-b border-white/5 pb-2">
-                <span class="text-white font-mono">{{ e.hours }}h</span>
+                <span class="text-white font-mono">{{ e.hours|hm }}</span>
                 <span class="text-gray-500">{{ e.comments or "—" }}</span>
             </li>
             {% endfor %}

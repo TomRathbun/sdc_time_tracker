@@ -1297,19 +1297,19 @@
                 }
                 document.getElementById('preview-checkout-time').textContent = data.checkout_time;
                 document.getElementById('preview-fosc').textContent =
-                    data.fosc_hours + 'h / ' + data.target_hours + 'h target';
+                    formatBeodLength(data.fosc_hours) + ' / ' + formatBeodLength(data.target_hours) + ' target';
                 var detail = '';
                 if (data.recheckout && data.last_checkout_time) {
                     detail = 'Already out at ' + data.last_checkout_time +
                         ' → extra session until ' + data.checkout_time +
-                        ' (+' + data.session_hours + 'h). Boss called you back?';
-                    if (data.phone_hours) detail += ' · phone ' + data.phone_hours + 'h';
-                    if (data.offsite_hours) detail += ' · offsite ' + data.offsite_hours + 'h';
+                        ' (+' + formatBeodLength(data.session_hours) + '). Boss called you back?';
+                    if (data.phone_hours) detail += ' · phone ' + formatBeodLength(data.phone_hours);
+                    if (data.offsite_hours) detail += ' · offsite ' + formatBeodLength(data.offsite_hours);
                 } else if (data.checkin_time) {
                     detail = 'In ' + data.checkin_time + ' → Out ' + data.checkout_time +
-                        ' (' + data.session_hours + 'h session)';
-                    if (data.phone_hours) detail += ' · phone ' + data.phone_hours + 'h';
-                    if (data.offsite_hours) detail += ' · offsite ' + data.offsite_hours + 'h';
+                        ' (' + formatBeodLength(data.session_hours) + ' session)';
+                    if (data.phone_hours) detail += ' · phone ' + formatBeodLength(data.phone_hours);
+                    if (data.offsite_hours) detail += ' · offsite ' + formatBeodLength(data.offsite_hours);
                 }
                 document.getElementById('preview-detail').textContent = detail;
 
@@ -1327,12 +1327,12 @@
                     label.textContent = 'Use BEOD — break at end of day';
                     help.textContent = data.beod_eligible
                         ? 'Optional. 1 hour is the usual paid lunch at the end of the day. Pick 30 minutes if you took a half-hour lunch and only a half-hour BEOD.'
-                        : 'Need at least ' + data.beod_minimum_hours + 'h worked for BEOD credit. Currently ' + data.fosc_hours + 'h.';
+                        : 'Need at least ' + formatBeodLength(data.beod_minimum_hours) + ' worked for BEOD credit. Currently ' + formatBeodLength(data.fosc_hours) + '.';
                 } else {
                     label.textContent = 'Request end-of-day break (BEOD)';
                     help.textContent = data.beod_eligible
                         ? 'Optional. Requests manager approval. 1 hour is the full credit; pick a shorter length if you only took part of it at the end of the day.'
-                        : 'Need at least ' + data.beod_minimum_hours + 'h worked. Currently ' + data.fosc_hours + 'h.';
+                        : 'Need at least ' + formatBeodLength(data.beod_minimum_hours) + ' worked. Currently ' + formatBeodLength(data.fosc_hours) + '.';
                 }
                 if (rememberedBeod().claim) {
                     help.textContent += ' Starts from your last choice.';
@@ -1345,12 +1345,14 @@
     }
 
     function formatBeodLength(hours) {
-        var minutes = Math.round(hours * 60);
-        if (minutes === 60) return '1h';
-        if (minutes === 45) return '45m';
-        if (minutes === 30) return '30m';
-        if (minutes === 15) return '15m';
-        return hours + 'h';
+        var minutes = Math.round(Number(hours) * 60);
+        if (!isFinite(minutes)) return '0m';
+        var abs = Math.abs(minutes);
+        var whole = Math.floor(abs / 60);
+        var part = abs % 60;
+        if (whole && part) return whole + 'h ' + part + 'm';
+        if (whole) return whole + 'h';
+        return part + 'm';
     }
 
     function updateBeodPreviewResult() {
@@ -1365,10 +1367,10 @@
         if (!isFinite(credit) || credit <= 0) credit = 1;
         if (beod.checked && data.beod_eligible) {
             var total = Math.round((data.fosc_hours + credit) * 100) / 100;
-            res.textContent = 'With BEOD (' + formatBeodLength(credit) + '): ' + total + 'h FOSC today';
+            res.textContent = 'With BEOD (' + formatBeodLength(credit) + '): ' + formatBeodLength(total) + ' FOSC today';
             res.classList.remove('hidden');
         } else if (beod.checked && !data.beod_eligible) {
-            res.textContent = 'BEOD will not add credit (under ' + data.beod_minimum_hours + 'h worked).';
+            res.textContent = 'BEOD will not add credit (under ' + formatBeodLength(data.beod_minimum_hours) + ' worked).';
             res.classList.remove('hidden');
         } else {
             res.classList.add('hidden');

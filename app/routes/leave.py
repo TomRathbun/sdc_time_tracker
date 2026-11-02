@@ -4,7 +4,7 @@ from datetime import date
 
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import get_templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -15,7 +15,7 @@ from app.services.leave_sync import apply_leave_approval, clear_full_day_leave_f
 from app.services.leave_balance import can_request_leave, get_leave_balance, count_workdays
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = get_templates()
 
 
 def _leave_page_context(request, db, employee, error=None, success=None):

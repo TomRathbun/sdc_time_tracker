@@ -400,6 +400,7 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
     week_text = ""
     week_days = notice.get("week_days") or []
     if week_days:
+        from app.services.time_calc import format_duration
         heads = ""
         cells = ""
         for day in week_days:
@@ -412,8 +413,8 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
             cells += (
                 f'<td style="padding:4px;text-align:center;font-size:14px;font-weight:{weight};color:{color};">{day["hours"]}</td>'
             )
-        done = notice.get("week_done", 0)
-        target = notice.get("week_target", 40)
+        done = format_duration(notice.get("week_done", 0))
+        target = format_duration(notice.get("week_target", 40))
         week_html = f"""
         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top:24px;background-color:#1e293b;border-radius:8px;border:1px solid #334155;">
             <tr><td style="padding:16px;">
@@ -422,11 +423,11 @@ def send_checkin_email(employee, checkin_time: datetime, checkout_time: datetime
                     <tr>{heads}</tr>
                     <tr>{cells}</tr>
                 </table>
-                <div style="margin-top:10px;font-size:13px;color:#94a3b8;">{done:.2f}h of {target:.0f}h so far</div>
+                <div style="margin-top:10px;font-size:13px;color:#94a3b8;">{done} of {target} so far</div>
             </td></tr>
         </table>"""
         week_text = "\nThis week: " + "  ".join(f"{d['label']} {d['hours']}" for d in week_days)
-        week_text += f"\n{done:.2f}h of {target:.0f}h so far\n"
+        week_text += f"\n{done} of {target} so far\n"
 
     html = render_email(
         greeting,

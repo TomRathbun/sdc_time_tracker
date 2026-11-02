@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import get_templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -13,7 +13,7 @@ from app.models import Employee, InboundEmail, Role
 from app.services.inbox import poll_inbox
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = get_templates()
 
 
 def _staff(request: Request, db: Session):

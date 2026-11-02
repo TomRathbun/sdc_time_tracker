@@ -11,8 +11,14 @@
             const checkinTime = new Date(clock.dataset.checkinTime);
             if (isNaN(checkinTime.getTime())) return;
             const diffMs = Math.max(0, now - checkinTime);
-            const total = (baseHours + diffMs / 3600000).toFixed(2);
-            clock.textContent = `${total}h`;
+            const total = baseHours + diffMs / 3600000;
+            const minutes = Math.round(total * 60);
+            const sign = minutes < 0 ? '-' : '';
+            const abs = Math.abs(minutes);
+            const whole = Math.floor(abs / 60);
+            const part = abs % 60;
+            const label = whole && part ? (whole + 'h ' + part + 'm') : (whole ? (whole + 'h') : (part + 'm'));
+            clock.textContent = sign + label;
         });
     }
     setInterval(updateLiveClocks, 10000);
@@ -183,7 +189,7 @@
                                         {% if cell.status == 'leave' and cell.worked <= 0 %}
                                         Leave
                                         {% else %}
-                                        {{ cell.live_worked if cell.is_in else cell.worked }}h
+                                        {{ (cell.live_worked if cell.is_in else cell.worked)|hm }}
                                         {% endif %}
                                     </span>
                                     {% if cell.beod_hours %}
@@ -237,17 +243,17 @@
                                 {% endif %}
 
                                 {% if cell.phone_hours %}
-                                <div class="text-[9px] text-cyan-400/90 text-center">Phone {{ cell.phone_hours }}h</div>
+                                <div class="text-[9px] text-cyan-400/90 text-center">Phone {{ cell.phone_hours|hm }}</div>
                                 {% endif %}
                                 {% if cell.after_hours %}
-                                <div class="text-[9px] text-violet-300 text-center">After {{ cell.after_hours }}h</div>
+                                <div class="text-[9px] text-violet-300 text-center">After {{ cell.after_hours|hm }}</div>
                                 {% endif %}
                                 {% if cell.offsite_hours %}
-                                <div class="text-[9px] text-accent-400/90 text-center">Offsite {{ cell.offsite_hours }}h</div>
+                                <div class="text-[9px] text-accent-400/90 text-center">Offsite {{ cell.offsite_hours|hm }}</div>
                                 {% endif %}
 
                                 {% if cell.pto_approved and cell.display_leave_hours %}
-                                <div class="text-[9px] text-accent-400 text-center mt-0.5">{{ cell.leave_type_label }} +{{ cell.display_leave_hours }}h ✓</div>
+                                <div class="text-[9px] text-accent-400 text-center mt-0.5">{{ cell.leave_type_label }} +{{ cell.display_leave_hours|hm }} ✓</div>
                                 {% endif %}
                                 {% if cell.lunch_approved %}
                                 <div class="text-[9px] text-success-400 text-center">BEOD +{{ cell.beod_label }} ✓</div>
@@ -313,7 +319,7 @@
                                 {% if cell.pto_pending %}
                                 <div class="text-[10px] text-amber-300 text-center mt-0.5">
                                     {{ cell.leave_type_label or "Leave" }}
-                                    {% if cell.display_leave_hours %}+{{ cell.display_leave_hours }}h{% endif %}
+                                    {% if cell.display_leave_hours %}+{{ cell.display_leave_hours|hm }}{% endif %}
                                 </div>
                                 {% if not viewer_is_customer and cell.leave_request_id %}
                                 <form method="POST" action="/admin/approve-leave-request" class="mt-1">
@@ -366,9 +372,9 @@
 
                         <td class="py-3 px-3 text-center">
                             <span class="text-sm font-mono font-bold {% if row.week_compliant %}text-success-400{% else %}text-white{% endif %}">
-                                {{ row.week_total }}h
+                                {{ row.week_total|hm }}
                             </span>
-                            <div class="text-[10px] text-gray-600">/ {{ row.week_target | int }}h</div>
+                            <div class="text-[10px] text-gray-600">/ {{ row.week_target|hm }}</div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -377,9 +383,9 @@
                     <tr class="border-t border-white/5 bg-surface-900/30">
                         <td class="py-2 px-4 text-xs text-gray-500 sticky left-0 bg-surface-900/90">Day target</td>
                         {% for day in days %}
-                        <td class="py-2 px-2 text-center text-xs font-mono text-gray-500">{{ day.target | int }}h</td>
+                        <td class="py-2 px-2 text-center text-xs font-mono text-gray-500">{{ day.target|hm }}</td>
                         {% endfor %}
-                        <td class="py-2 px-3 text-center text-xs font-mono text-gray-500">{{ days | sum(attribute='target') | int }}h</td>
+                        <td class="py-2 px-3 text-center text-xs font-mono text-gray-500">{{ days | sum(attribute='target') | hm }}</td>
                     </tr>
                 </tfoot>
             </table>

@@ -320,14 +320,25 @@
                         }
                         const clock = Math.round((completedClock + sessionH) * 100) / 100;
                         const fosc = Math.round((clock + offsiteH + phoneH) * 100) / 100;
+                        function hm(hours) {
+                            const minutes = Math.round(Number(hours) * 60);
+                            if (!isFinite(minutes)) return '0m';
+                            const sign = minutes < 0 ? '-' : '';
+                            const abs = Math.abs(minutes);
+                            const whole = Math.floor(abs / 60);
+                            const part = abs % 60;
+                            if (whole && part) return sign + whole + 'h ' + part + 'm';
+                            if (whole) return sign + whole + 'h';
+                            return sign + part + 'm';
+                        }
                         const foscEl = document.getElementById('preview-fosc-hours');
-                        if (foscEl) foscEl.textContent = fosc + 'h';
+                        if (foscEl) foscEl.textContent = hm(fosc);
                         const detail = document.getElementById('preview-fosc-detail');
                         if (detail) {
-                            let t = 'clock ' + clock + 'h';
+                            let t = 'clock ' + hm(clock);
                             if (sessionH) t += ' (includes this session)';
-                            if (offsiteH) t += ' · offsite ' + offsiteH + 'h';
-                            if (phoneH) t += ' · phone ' + phoneH + 'h';
+                            if (offsiteH) t += ' · offsite ' + hm(offsiteH);
+                            if (phoneH) t += ' · phone ' + hm(phoneH);
                             detail.textContent = t;
                         }
                         const withBeod = document.getElementById('preview-fosc-with-beod');
@@ -342,7 +353,7 @@
                                 const creditLabel = minutes === 60 ? '1h' : (minutes + 'm');
                                 if (fosc >= beodMin) {
                                     const total = Math.round((fosc + (isFinite(credit) ? credit : 1)) * 100) / 100;
-                                    withBeod.textContent = 'With BEOD (' + creditLabel + '): ' + total + 'h FOSC (target ' + target + 'h)';
+                                    withBeod.textContent = 'With BEOD (' + creditLabel + '): ' + hm(total) + ' FOSC (target ' + hm(target) + ')';
                                 } else {
                                     withBeod.textContent = 'BEOD checked but under ' + beodMin + 'h worked — no credit.';
                                 }

@@ -20,6 +20,16 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "hours-and-minutes",
+        "title": "Hours and minutes",
+        "added_on": date(2026, 11, 2),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "Durations now read as hours and minutes, such as 1h 30m, instead of 1.5h. "
+            "A whole hour still reads 8h. The Lockheed spreadsheet stays in decimal hours."
+        ),
+    },
+    {
         "slug": "after-hours-support",
         "title": "After-hours support",
         "added_on": date(2026, 11, 2),

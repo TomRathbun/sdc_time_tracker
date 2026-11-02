@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import get_templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -34,7 +34,7 @@ from app.services.audit import log_action
 from app.services.settings import get_bool_setting
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = get_templates()
 
 
 def _comment_threshold(db: Session) -> int:

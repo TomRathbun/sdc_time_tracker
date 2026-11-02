@@ -74,7 +74,7 @@
                 </div>
                 <div>
                     <p class="font-semibold text-white">Not checked in yet</p>
-                    <p class="text-sm text-gray-400">Target: {{ target_hours }}h today</p>
+                    <p class="text-sm text-gray-400">Target: {{ target_hours|hm }} today</p>
                 </div>
             </div>
             <a href="/time/checkin" class="btn-primary" id="btn-checkin-banner">Check In</a>
@@ -90,8 +90,8 @@
                 <div>
                     <p class="font-semibold text-white">Currently working</p>
                     <p class="text-sm text-gray-400">
-                        {{ fosc_hours }}h FOSC so far · Target: {{ target_hours }}h
-                        {% if live_session_hours %} · session {{ live_session_hours }}h{% endif %}
+                        {{ fosc_hours|hm }} FOSC so far · Target: {{ target_hours|hm }}
+                        {% if live_session_hours %} · session {{ live_session_hours|hm }}{% endif %}
                     </p>
                     {% if projected_checkout %}
                     <p class="text-sm text-accent-400 mt-0.5">
@@ -120,11 +120,11 @@
                 <div>
                     <p class="font-semibold text-white">Checked out</p>
                     <p class="text-sm text-gray-400">
-                        {{ fosc_hours }}h FOSC
+                        {{ fosc_hours|hm }} FOSC
                         {% if effective_hours >= target_hours and target_hours > 0 %}
                         <span class="text-success-400">· Target met</span>
                         {% elif target_hours > 0 %}
-                        <span class="text-warning-400">· Below target ({{ target_hours }}h)</span>
+                        <span class="text-warning-400">· Below target ({{ target_hours|hm }})</span>
                         {% endif %}
                     </p>
                     <p class="text-xs text-gray-500 mt-1">Boss called you back? Return, or re-check out to capture extra time.</p>
@@ -146,23 +146,23 @@
         <div class="glass-card p-4 border-l-4 border-primary-400">
             <p class="text-[10px] uppercase tracking-wider text-gray-500">Vacation</p>
             <p class="text-xl font-bold text-white font-mono mt-0.5">
-                {{ '%g'|format(leave_balance.vacation.remaining) }}h
-                <span class="text-xs font-normal text-gray-400">/ {{ '%g'|format(leave_balance.vacation.entitlement) }}h</span>
+                {{ leave_balance.vacation.remaining|hm }}
+                <span class="text-xs font-normal text-gray-400">/ {{ leave_balance.vacation.entitlement|hm }}</span>
             </p>
             <p class="text-[11px] text-gray-500 mt-0.5">
                 {{ '%g'|format(leave_balance.vacation.entitlement_days) }} days
-                · {{ '%g'|format(leave_balance.vacation.used) }}h used{% if leave_balance.vacation.pending %} · {{ '%g'|format(leave_balance.vacation.pending) }}h pend.{% endif %}
+                · {{ leave_balance.vacation.used|hm }} used{% if leave_balance.vacation.pending %} · {{ leave_balance.vacation.pending|hm }} pending{% endif %}
             </p>
         </div>
         <div class="glass-card p-4 border-l-4 border-danger-400">
             <p class="text-[10px] uppercase tracking-wider text-gray-500">Sick</p>
             <p class="text-xl font-bold text-white font-mono mt-0.5">
-                {{ '%g'|format(leave_balance.sick.remaining) }}h
-                <span class="text-xs font-normal text-gray-400">/ {{ '%g'|format(leave_balance.sick.entitlement) }}h</span>
+                {{ leave_balance.sick.remaining|hm }}
+                <span class="text-xs font-normal text-gray-400">/ {{ leave_balance.sick.entitlement|hm }}</span>
             </p>
             <p class="text-[11px] text-gray-500 mt-0.5">
                 {{ '%g'|format(leave_balance.sick.entitlement_days) }} days
-                · {{ '%g'|format(leave_balance.sick.used) }}h used{% if leave_balance.sick.pending %} · {{ '%g'|format(leave_balance.sick.pending) }}h pend.{% endif %}
+                · {{ leave_balance.sick.used|hm }} used{% if leave_balance.sick.pending %} · {{ leave_balance.sick.pending|hm }} pending{% endif %}
             </p>
         </div>
     </div>
@@ -269,22 +269,22 @@
             </h2>
             <div class="text-center mb-3">
                 <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Normal Time – FOSC</p>
-                <p class="text-4xl font-bold text-white">{{ fosc_hours }}<span class="text-lg text-gray-500">h</span></p>
+                <p class="text-4xl font-bold text-white">{{ fosc_hours|hm }}</p>
                 <p class="text-xs text-gray-500 mt-2">
-                    clock {{ clock_hours }}h
-                    · offsite {{ offsite_hours }}h
-                    · phone {{ phone_hours }}h{% if after_hours %} · after {{ after_hours }}h{% endif %}
-                    {% if beod_hours %} · BEOD +{{ beod_hours }}h{% endif %}
+                    clock {{ clock_hours|hm }}
+                    · offsite {{ offsite_hours|hm }}
+                    · phone {{ phone_hours|hm }}{% if after_hours %} · after {{ after_hours|hm }}{% endif %}
+                    {% if beod_hours %} · BEOD +{{ beod_hours|hm }}{% endif %}
                 </p>
                 {% if leave_hours > 0 %}
                 <p class="text-sm mt-1 {% if leave_approved %}text-accent-400{% else %}text-warning-400{% endif %}">
-                    + {{ leave_hours }}h {{ leave_type_label or "Leave" }}
+                    + {{ leave_hours|hm }} {{ leave_type_label or "Leave" }}
                     {% if leave_approved %}✓{% else %}(pending){% endif %}
                 </p>
                 {% endif %}
-                <p class="text-sm text-gray-400 mt-1">of {{ target_hours }}h target
+                <p class="text-sm text-gray-400 mt-1">of {{ target_hours|hm }} target
                     {% if leave_approved and leave_hours %}
-                    <span class="text-gray-500">({{ effective_hours }}h effective)</span>
+                    <span class="text-gray-500">({{ effective_hours|hm }} effective)</span>
                     {% endif %}
                 </p>
             </div>
@@ -325,7 +325,7 @@
                             {% else %}bg-transparent{% endif %}"
                             style="width: {{ [day_pct, 100] | min }}%"></div>
                     </div>
-                    <span class="text-xs font-mono text-gray-400 w-16 text-right flex-shrink-0">{% if day.target > 0 %}{{ day.effective }}/{{ day.target | int }}h{% else %}{{ day.effective }}h{% endif %}</span>
+                    <span class="text-xs font-mono text-gray-400 w-24 text-right flex-shrink-0">{% if day.target > 0 %}{{ day.effective|hm }} / {{ day.target|hm }}{% else %}{{ day.effective|hm }}{% endif %}</span>
                 </div>
                 {% endfor %}
             </div>
@@ -440,7 +440,7 @@
                     <p class="text-xs text-gray-500 truncate">{{ entry.comments or "—" }}</p>
                 </div>
                 <p class="text-sm font-mono text-violet-300">
-                    {% if entry.start_time and entry.end_time %}{{ entry.start_time.strftime("%H:%M") }}–{{ entry.end_time.strftime("%H:%M") }} · {% endif %}{{ entry.hours }}h
+                    {% if entry.start_time and entry.end_time %}{{ entry.start_time.strftime("%H:%M") }}–{{ entry.end_time.strftime("%H:%M") }} · {% endif %}{{ entry.hours|hm }}
                 </p>
             </div>
             {% endfor %}
@@ -456,7 +456,7 @@
                     <p class="font-medium text-white text-sm">Phone support</p>
                     <p class="text-xs text-gray-500 truncate">{{ entry.comments or "—" }}</p>
                 </div>
-                <p class="text-sm font-mono text-cyan-300">{{ entry.hours }}h</p>
+                <p class="text-sm font-mono text-cyan-300">{{ entry.hours|hm }}</p>
             </div>
             {% endfor %}
         </div>

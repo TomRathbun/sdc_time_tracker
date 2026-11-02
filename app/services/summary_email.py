@@ -27,6 +27,7 @@ from app.services.time_calc import (
     calculate_after_hours,
     get_target_hours,
     resolve_beod_request,
+    format_duration,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ def _pending_request(db: Session, employee_id: int, work_date: date) -> LeaveReq
 
 
 def _hours(value: float) -> str:
-    return f"{value:.2f}"
+    return format_duration(value)
 
 
 def _people(db: Session) -> list[Employee]:

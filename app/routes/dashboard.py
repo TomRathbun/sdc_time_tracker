@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Request, Depends, Query, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import get_templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -22,7 +22,7 @@ from app.services.time_calc import (
 from app.services.leave_balance import get_leave_balance
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = get_templates()
 
 
 def _monday_of_week(d: date) -> date:

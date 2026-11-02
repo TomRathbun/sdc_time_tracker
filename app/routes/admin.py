@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, time
 
 from fastapi import APIRouter, Request, Depends, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import get_templates
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -28,7 +28,7 @@ from app.services.leave_sync import apply_leave_approval, clear_full_day_leave_f
 from app.services.time_state import squash_continuous_sessions
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = get_templates()
 
 
 @router.get("/admin", response_class=HTMLResponse)

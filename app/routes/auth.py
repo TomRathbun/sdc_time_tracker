@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Request, Depends, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
-from fastapi.templating import Jinja2Templates
+from app.templating import get_templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ from app.services.time_calc import (
 )
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
+templates = get_templates()
 
 
 def _beod_login_flags(db: Session) -> dict:
