@@ -20,6 +20,16 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "morning-space-fact",
+        "title": "Morning space fact",
+        "added_on": date(2026, 11, 2),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "The morning check-in email now includes one short space fact under the greeting. "
+            "If the fact site does not answer, the check-in email still goes out."
+        ),
+    },
+    {
         "slug": "hours-and-minutes",
         "title": "Hours and minutes",
         "added_on": date(2026, 11, 2),

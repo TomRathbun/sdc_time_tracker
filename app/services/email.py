@@ -125,6 +125,36 @@ def _get_checkout_greeting(name: str) -> str:
     return random.choice(_CHECKOUT_GREETINGS).format(name=name)
 
 
+def _space_fact() -> tuple[str, str]:
+    """One space fact for the morning mail. Empty if the site does not answer."""
+    import json
+    from html import escape
+    from urllib.request import Request, urlopen
+
+    try:
+        req = Request(
+            "https://factfacts.com/api.php?cat=space",
+            headers={"User-Agent": "SDCTimeTracker/1.0"},
+        )
+        with urlopen(req, timeout=3) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        text = ((payload.get("fact") or {}).get("text") or "").strip()
+    except Exception as exc:
+        logger.info("Space fact skipped: %s", exc)
+        return "", ""
+    if not text or len(text) > 400:
+        return "", ""
+    html = (
+        '<p style="margin:0 0 16px;padding:12px 14px;background:#1e293b;'
+        'border-radius:10px;border:1px solid #334155;color:#e2e8f0;'
+        'font-size:14px;line-height:1.5;">'
+        f"{escape(text)}"
+        '<br><a href="https://factfacts.com" '
+        'style="font-size:11px;color:#64748b;text-decoration:none;">FactFacts</a></p>'
+    )
+    return html, f"\n{text}\n— https://factfacts.com\n"
+
+
 def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "", attachments: list = None) -> bool:
     """Send an email via SMTP. Returns True on success, False on failure.
     
@@ -506,6 +536,7 @@ def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fie
     greeting = _get_greeting(name, checkin_time.hour)
     ci_str = checkin_time.strftime("%H:%M")
     fields = reply_fields.strip()
+    fact_html, fact_text = _space_fact()
 
     images = [
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
@@ -514,6 +545,7 @@ def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fie
     html = render_email(
         greeting,
         f"""
+        {fact_html}
         <p style="margin:8px 0 16px;">Your usual check-in is <strong style="color:#4ade80;">{ci_str}</strong>, about 15 minutes from now.</p>
         <p style="margin:0 0 12px;">Reply to this email to check in. Leave the CODE line unchanged. A time typed at the top of the reply is used. Otherwise DECLARED TIME is used. 06:30 and 0630 are both accepted.</p>
         <p style="margin:0 0 8px;"><strong style="color:#f8fafc;">What is allowed</strong></p>
@@ -525,7 +557,7 @@ def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fie
         show_logo=True,
     )
     text = f"""{greeting}
-
+{fact_text}
 Your usual check-in is {ci_str}, about 15 minutes from now.
 
 Reply to this email to check in. Leave the CODE line unchanged.
