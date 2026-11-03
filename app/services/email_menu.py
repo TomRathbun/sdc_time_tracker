@@ -18,7 +18,7 @@ from app.models import (
     OffsiteEntry, PhoneSupportEntry, AfterHoursEntry, Role, TimeEntry,
 )
 from app.services.audit import log_action
-from app.services.email import _send_email, nasa_note
+from app.services.email import _send_email, nasa_note, nasa_picture_path
 from app.services.email_checkout import _fresh_reply, _mark_answered, _notify, _split_clock
 from app.services.email_layout import render_email
 from app.services.leave_balance import can_request_leave, count_workdays, partial_pto_error
@@ -1221,6 +1221,7 @@ def process_email_menu(db: Session) -> int:
             continue
         title, text = _menu_text(employee, not _recognized(fresh, subject))
         fact_html, fact_text = nasa_note()
+        picture = nasa_picture_path()
         sent = _notify(
             employee,
             title,
@@ -1229,6 +1230,7 @@ def process_email_menu(db: Session) -> int:
             reply_subject=subject,
             extra_html=fact_html,
             extra_text=fact_text,
+            images=[("nasa_apod", picture)] if picture else None,
         )
         if sent:
             _mark_answered(db, message)

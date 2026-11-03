@@ -232,7 +232,7 @@ def parse_checkout_reply(body: str) -> dict | None:
     }
 
 
-def _notify(employee: Employee, subject: str, text: str, reply_message_id: str = "", reply_subject: str = "", extra_html: str = "", extra_text: str = "") -> bool:
+def _notify(employee: Employee, subject: str, text: str, reply_message_id: str = "", reply_subject: str = "", extra_html: str = "", extra_text: str = "", images: list = None) -> bool:
     address = (employee.email or "").strip()
     if not address:
         logger.error("Checkout mail not sent: %s has no email", employee.name)
@@ -256,7 +256,7 @@ def _notify(employee: Employee, subject: str, text: str, reply_message_id: str =
     )
     if extra_text:
         text = extra_text.rstrip() + "\n\n" + text
-    ok = _send_email(address, subject, html, text, in_reply_to=message_id)
+    ok = _send_email(address, subject, html, text, images=images, in_reply_to=message_id)
     if ok:
         logger.info("Checkout reply mailed to %s: %s", address, subject)
     else:

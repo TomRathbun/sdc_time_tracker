@@ -25,7 +25,7 @@ FEATURE_CATALOG = (
         "added_on": date(2026, 11, 2),
         "audience": "employee,supervisor,manager",
         "summary": (
-            "The morning check-in email includes NASA's Astronomy Picture of the Day under the greeting "
+            "The morning check-in email includes NASA's picture of the day under the greeting "
             "when a NASA key is set. Email hello to the tracker to see that note without waiting for morning. "
             "If NASA does not answer, a short space fact is used instead. "
             "If neither answers, the check-in email still goes out."

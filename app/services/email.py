@@ -125,16 +125,17 @@ def _get_checkout_greeting(name: str) -> str:
     return random.choice(_CHECKOUT_GREETINGS).format(name=name)
 
 
-def _fact_card(text: str, credit_html: str, credit_text: str) -> tuple[str, str]:
+def _fact_card(text: str, credit_html: str, credit_text: str, picture_html: str = "") -> tuple[str, str]:
     from html import escape
 
     html = (
-        '<p style="margin:0 0 16px;padding:12px 14px;background:#1e293b;'
-        'border-radius:10px;border:1px solid #334155;color:#e2e8f0;'
-        'font-size:14px;line-height:1.5;">'
+        '<table width="100%" border="0" cellspacing="0" cellpadding="0" '
+        'style="margin:0 0 16px;background:#1e293b;border-radius:10px;border:1px solid #334155;">'
+        + (f"<tr><td>{picture_html}</td></tr>" if picture_html else "")
+        + '<tr><td style="padding:12px 14px;color:#e2e8f0;font-size:14px;line-height:1.5;">'
         f"{escape(text)}"
         + (f"<br>{credit_html}" if credit_html else "")
-        + "</p>"
+        + "</td></tr></table>"
     )
     return html, f"\n{text}\n{credit_text}\n"
 
@@ -147,12 +148,70 @@ def _clip_sentence(text: str, limit: int = 420) -> str:
     return f"{cut}…"
 
 
-_nasa_cache = {"day": "", "html": "", "text": ""}
+_nasa_cache = {"day": "", "html": "", "text": "", "image": ""}
+
+
+def _save_nasa_image(url: str) -> str:
+    """Save today's picture for the email. Skip videos and oversized files."""
+    from urllib.request import Request, urlopen
+
+    from app.config import UPLOAD_DIR
+
+    if not url or not url.lower().startswith("https://"):
+        return ""
+    try:
+        req = Request(url, headers={"User-Agent": "SDCTimeTracker/1.0"})
+        with urlopen(req, timeout=8) as resp:
+            kind = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            chunks = []
+            size = 0
+            while True:
+                block = resp.read(65536)
+                if not block:
+                    break
+                size += len(block)
+                if size > 1_500_000:
+                    return ""
+                chunks.append(block)
+        data = b"".join(chunks)
+    except Exception as exc:
+        logger.info("NASA picture skipped: %s", exc)
+        return ""
+    if kind not in ("image/jpeg", "image/jpg", "image/png", "image/gif"):
+        if data[:3] == b"\xff\xd8\xff":
+            kind = "image/jpeg"
+        elif data[:8] == b"\x89PNG\r\n\x1a\n":
+            kind = "image/png"
+        elif data[:6] in (b"GIF87a", b"GIF89a"):
+            kind = "image/gif"
+        else:
+            return ""
+    ext = {"image/png": ".png", "image/gif": ".gif"}.get(kind, ".jpg")
+    path = os.path.join(str(UPLOAD_DIR), f"nasa_apod{ext}")
+    for old in ("nasa_apod.jpg", "nasa_apod.png", "nasa_apod.gif"):
+        stale = os.path.join(str(UPLOAD_DIR), old)
+        if stale != path and os.path.exists(stale):
+            try:
+                os.remove(stale)
+            except OSError:
+                pass
+    with open(path, "wb") as handle:
+        handle.write(data)
+    return path
+
+
+def nasa_picture_path() -> str:
+    """Local file for today's picture, after a NASA note has been built."""
+    path = _nasa_cache.get("image") or ""
+    if _nasa_cache.get("day") == date.today().isoformat() and path and os.path.exists(path):
+        return path
+    return ""
 
 
 def _nasa_fact() -> tuple[str, str]:
     """Today's Astronomy Picture of the Day. Empty if the key is unset or NASA is down."""
     import json
+    from html import escape
     from urllib.parse import quote
     from urllib.request import Request, urlopen
 
@@ -175,15 +234,27 @@ def _nasa_fact() -> tuple[str, str]:
         explanation = _clip_sentence(payload.get("explanation") or "")
         if not title or not explanation:
             return "", ""
+        media = (payload.get("media_type") or "").lower()
+        picture_url = payload.get("url") if media == "image" else payload.get("thumbnail_url")
+        image_path = _save_nasa_image(picture_url or "")
+        picture = ""
+        if image_path:
+            picture = (
+                f'<img src="cid:nasa_apod" width="520" alt="{escape(title)}" '
+                'style="display:block;width:100%;max-width:520px;height:auto;'
+                'border-radius:10px 10px 0 0;border:0;">'
+            )
         html, text = _fact_card(
             f"{title}. {explanation}",
             '<a href="https://apod.nasa.gov/apod/astropix.html" '
             'style="font-size:11px;color:#64748b;text-decoration:none;">NASA Astronomy Picture of the Day</a>',
             "— https://apod.nasa.gov/apod/astropix.html",
+            picture,
         )
         _nasa_cache["day"] = day
         _nasa_cache["html"] = html
         _nasa_cache["text"] = text
+        _nasa_cache["image"] = image_path
         return html, text
     except Exception as exc:
         logger.info("NASA fact skipped: %s", str(exc).replace(key, "…"))
@@ -625,6 +696,9 @@ def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fie
     images = [
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
     ]
+    picture = nasa_picture_path()
+    if picture:
+        images.append(("nasa_apod", picture))
 
     html = render_email(
         greeting,
