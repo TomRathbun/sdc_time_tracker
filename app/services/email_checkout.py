@@ -232,7 +232,7 @@ def parse_checkout_reply(body: str) -> dict | None:
     }
 
 
-def _notify(employee: Employee, subject: str, text: str, reply_message_id: str = "", reply_subject: str = "") -> bool:
+def _notify(employee: Employee, subject: str, text: str, reply_message_id: str = "", reply_subject: str = "", extra_html: str = "", extra_text: str = "") -> bool:
     address = (employee.email or "").strip()
     if not address:
         logger.error("Checkout mail not sent: %s has no email", employee.name)
@@ -246,12 +246,16 @@ def _notify(employee: Employee, subject: str, text: str, reply_message_id: str =
         subject = base if base.lower().startswith("re:") else f"Re: {base}"
     html = render_email(
         title,
-        "".join(
-            f'<p style="margin:0 0 10px;">{escape(line) if line else "&nbsp;"}</p>'
-            for line in text.splitlines()
-        ) or "<p></p>",
+        (extra_html or "") + (
+            "".join(
+                f'<p style="margin:0 0 10px;">{escape(line) if line else "&nbsp;"}</p>'
+                for line in text.splitlines()
+            ) or "<p></p>"
+        ),
         kicker="SDC Time Tracker",
     )
+    if extra_text:
+        text = extra_text.rstrip() + "\n\n" + text
     ok = _send_email(address, subject, html, text, in_reply_to=message_id)
     if ok:
         logger.info("Checkout reply mailed to %s: %s", address, subject)

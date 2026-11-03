@@ -133,7 +133,8 @@ def _fact_card(text: str, credit_html: str, credit_text: str) -> tuple[str, str]
         'border-radius:10px;border:1px solid #334155;color:#e2e8f0;'
         'font-size:14px;line-height:1.5;">'
         f"{escape(text)}"
-        f"<br>{credit_html}</p>"
+        + (f"<br>{credit_html}" if credit_html else "")
+        + "</p>"
     )
     return html, f"\n{text}\n{credit_text}\n"
 
@@ -187,6 +188,26 @@ def _nasa_fact() -> tuple[str, str]:
     except Exception as exc:
         logger.info("NASA fact skipped: %s", str(exc).replace(key, "…"))
         return "", ""
+
+
+def nasa_note() -> tuple[str, str]:
+    """Same NASA card as the morning mail. The hello reply uses this as a test."""
+    from app.config import NASA_API_KEY
+
+    html, text = _nasa_fact()
+    if html:
+        return html, text
+    if not (NASA_API_KEY or "").strip():
+        message = (
+            "NASA is not set on this tracker. "
+            "Add NASA_API_KEY and restart. Until then the morning mail uses a space fact."
+        )
+    else:
+        message = (
+            "NASA did not answer just now. "
+            "The morning check-in mail still goes out, with a space fact if that site answers."
+        )
+    return _fact_card(message, "", "")
 
 
 def _space_fact() -> tuple[str, str]:
