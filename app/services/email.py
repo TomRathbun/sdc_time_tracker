@@ -148,188 +148,45 @@ def _clip_sentence(text: str, limit: int = 420) -> str:
     return f"{cut}…"
 
 
-_nasa_cache = {"day": "", "html": "", "text": "", "image": ""}
+_quote_cache = {"day": "", "html": "", "text": ""}
 
 
-def _save_nasa_image(url: str) -> str:
-    """Save today's picture for the email. Skip the NASA logo and oversized files."""
-    from urllib.request import Request, urlopen
-
-    from app.config import UPLOAD_DIR
-
-    if not url or not url.lower().startswith("https://"):
-        return ""
-    try:
-        req = Request(
-            url,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/122.0.0.0 Safari/537.36"
-                ),
-                "Accept": "image/jpeg,image/png,image/*;q=0.8",
-                "Referer": "https://apod.nasa.gov/apod/astropix.html",
-            },
-        )
-        with urlopen(req, timeout=12) as resp:
-            kind = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
-            chunks = []
-            size = 0
-            while True:
-                block = resp.read(65536)
-                if not block:
-                    break
-                size += len(block)
-                if size > 1_500_000:
-                    logger.info("NASA picture too large, skipped")
-                    return ""
-                chunks.append(block)
-        data = b"".join(chunks)
-    except Exception as exc:
-        logger.info("NASA picture skipped: %s", exc)
-        return ""
-    if data[:3] == b"\xff\xd8\xff":
-        kind = "image/jpeg"
-    elif data[:8] == b"\x89PNG\r\n\x1a\n":
-        kind = "image/png"
-    elif data[:6] in (b"GIF87a", b"GIF89a"):
-        kind = "image/gif"
-    else:
-        return ""
-    # A blocked download comes back as the small NASA insignia, not the photo.
-    if len(data) < 50000:
-        logger.info("NASA picture too small (%s bytes), skipped", len(data))
-        return ""
-    ext = {"image/png": ".png", "image/gif": ".gif"}.get(kind, ".jpg")
-    path = os.path.join(str(UPLOAD_DIR), f"nasa_apod{ext}")
-    for old in ("nasa_apod.jpg", "nasa_apod.png", "nasa_apod.gif"):
-        stale = os.path.join(str(UPLOAD_DIR), old)
-        if stale != path and os.path.exists(stale):
-            try:
-                os.remove(stale)
-            except OSError:
-                pass
-    with open(path, "wb") as handle:
-        handle.write(data)
-    return path
-
-
-def nasa_picture_path() -> str:
-    """Local file for today's picture, after a NASA note has been built."""
-    path = _nasa_cache.get("image") or ""
-    if _nasa_cache.get("day") == date.today().isoformat() and path and os.path.exists(path):
-        return path
-    return ""
-
-
-def _nasa_fact() -> tuple[str, str]:
-    """Today's Astronomy Picture of the Day. Empty if the key is unset or NASA is down."""
+def _morning_quote() -> tuple[str, str]:
+    """One ZenQuotes line for the day. Empty if the site does not answer."""
     import json
-    from html import escape
-    from urllib.parse import quote
     from urllib.request import Request, urlopen
 
-    from app.config import NASA_API_KEY
-
-    key = (NASA_API_KEY or "").strip()
-    if not key:
-        return "", ""
     day = date.today().isoformat()
-    if _nasa_cache["day"] == day and _nasa_cache["html"]:
-        return _nasa_cache["html"], _nasa_cache["text"]
+    if _quote_cache["day"] == day and _quote_cache["html"]:
+        return _quote_cache["html"], _quote_cache["text"]
     try:
         req = Request(
-            f"https://api.nasa.gov/planetary/apod?api_key={quote(key)}",
+            "https://zenquotes.io/api/random",
             headers={"User-Agent": "SDCTimeTracker/1.0"},
         )
         with urlopen(req, timeout=4) as resp:
             payload = json.loads(resp.read().decode("utf-8", errors="replace"))
-        title = (payload.get("title") or "").strip()
-        explanation = _clip_sentence(payload.get("explanation") or "")
-        if not title or not explanation:
-            return "", ""
-        media = (payload.get("media_type") or "").lower()
-        if media == "image":
-            candidates = [payload.get("url") or "", payload.get("hdurl") or ""]
-        else:
-            candidates = [payload.get("thumbnail_url") or ""]
-        image_path = ""
-        for candidate in candidates:
-            image_path = _save_nasa_image(candidate)
-            if image_path:
-                break
-        picture = ""
-        if image_path:
-            picture = (
-                f'<img src="cid:nasa_apod" width="520" alt="{escape(title)}" '
-                'style="display:block;width:100%;max-width:520px;height:auto;'
-                'border-radius:10px 10px 0 0;border:0;">'
-            )
-        html, text = _fact_card(
-            f"{title}. {explanation}",
-            '<a href="https://apod.nasa.gov/apod/astropix.html" '
-            'style="font-size:11px;color:#64748b;text-decoration:none;">NASA Astronomy Picture of the Day</a>',
-            "— https://apod.nasa.gov/apod/astropix.html",
-            picture,
-        )
-        _nasa_cache["day"] = day
-        _nasa_cache["html"] = html
-        _nasa_cache["text"] = text
-        _nasa_cache["image"] = image_path
-        return html, text
+        row = payload[0] if isinstance(payload, list) and payload else {}
+        quote = _clip_sentence((row.get("q") or "").strip(), 400)
+        author = (row.get("a") or "").strip()
     except Exception as exc:
-        logger.info("NASA fact skipped: %s", str(exc).replace(key, "…"))
+        logger.info("Quote skipped: %s", exc)
         return "", ""
-
-
-def nasa_note() -> tuple[str, str]:
-    """Same NASA card as the morning mail. The hello reply uses this as a test."""
-    from app.config import NASA_API_KEY
-
-    html, text = _nasa_fact()
-    if html:
-        return html, text
-    if not (NASA_API_KEY or "").strip():
-        message = (
-            "NASA is not set on this tracker. "
-            "Add NASA_API_KEY and restart. Until then the morning mail uses a space fact."
-        )
-    else:
-        message = (
-            "NASA did not answer just now. "
-            "The morning check-in mail still goes out, with a space fact if that site answers."
-        )
-    return _fact_card(message, "", "")
-
-
-def _space_fact() -> tuple[str, str]:
-    """Morning note. NASA when the key is set, otherwise one FactFacts line."""
-    import json
-    from urllib.request import Request, urlopen
-
-    nasa_html, nasa_text = _nasa_fact()
-    if nasa_html:
-        return nasa_html, nasa_text
-    try:
-        req = Request(
-            "https://factfacts.com/api.php?cat=space",
-            headers={"User-Agent": "SDCTimeTracker/1.0"},
-        )
-        with urlopen(req, timeout=3) as resp:
-            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
-        text = ((payload.get("fact") or {}).get("text") or "").strip()
-    except Exception as exc:
-        logger.info("Space fact skipped: %s", exc)
+    if not quote:
         return "", ""
-    if not text or len(text) > 400:
-        return "", ""
-    return _fact_card(
-        text,
-        '<a href="https://factfacts.com" '
-        'style="font-size:11px;color:#64748b;text-decoration:none;">FactFacts</a>',
-        "— https://factfacts.com",
+    line = f'"{quote}"'
+    if author:
+        line = f"{line} — {author}"
+    html, text = _fact_card(
+        line,
+        '<a href="https://zenquotes.io/" '
+        'style="font-size:11px;color:#64748b;text-decoration:none;">ZenQuotes</a>',
+        "— https://zenquotes.io/",
     )
+    _quote_cache["day"] = day
+    _quote_cache["html"] = html
+    _quote_cache["text"] = text
+    return html, text
 
 
 def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "", attachments: list = None) -> bool:
@@ -713,14 +570,11 @@ def send_checkin_reminder(employee, checkin_time: datetime, code: str, reply_fie
     greeting = _get_greeting(name, checkin_time.hour)
     ci_str = checkin_time.strftime("%H:%M")
     fields = reply_fields.strip()
-    fact_html, fact_text = _space_fact()
+    fact_html, fact_text = _morning_quote()
 
     images = [
         ("app_logo", os.path.join(os.path.dirname(__file__), "..", "static", "images", "app_icon.png")),
     ]
-    picture = nasa_picture_path()
-    if picture:
-        images.append(("nasa_apod", picture))
 
     html = render_email(
         greeting,

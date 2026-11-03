@@ -21,14 +21,14 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 FEATURE_CATALOG = (
     {
         "slug": "morning-space-fact",
-        "title": "Morning space fact",
+        "title": "Morning quote",
         "added_on": date(2026, 11, 2),
         "audience": "employee,supervisor,manager",
         "summary": (
-            "The morning check-in email includes NASA's picture of the day under the greeting "
-            "when a NASA key is set. Email hello to the tracker to see that note without waiting for morning. "
-            "If NASA does not answer, a short space fact is used instead. "
-            "If neither answers, the check-in email still goes out."
+            "The morning check-in email no longer uses NASA. "
+            "A short quote sits under the greeting instead. "
+            "The same quote is on the hello menu. "
+            "If the quote site does not answer, the check-in email still goes out."
         ),
     },
     {

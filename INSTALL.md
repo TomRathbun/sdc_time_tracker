@@ -95,8 +95,6 @@ The window should say `Mail: on` and nothing else about the account.
 
 `start-sdc.cmd` does the same if you prefer cmd. Its secrets go in `smtp.local.cmd`, copied from `smtp.local.cmd.example`. Do not leave `set SMTP_...` lines in the starter. With echo on, those lines print the password, and a password with spaces is easy to break.
 
-The morning check-in note uses NASA's Astronomy Picture of the Day when `NASA_API_KEY` is set in that same local file. Leave it blank and the mail uses a short space fact instead. The greeting itself stays local.
-
 Shortcut: press **Win+R**, type `shell:startup`, and point the shortcut at the PowerShell command above. Log in as the kiosk account at boot.
 
 Task Scheduler: trigger **At log on**, program `powershell.exe`, arguments `-NoProfile -ExecutionPolicy Bypass -File C:\sdc_time_tracker\start-sdc.ps1`, start in `C:\sdc_time_tracker`.
