@@ -148,45 +148,48 @@ def _clip_sentence(text: str, limit: int = 420) -> str:
     return f"{cut}…"
 
 
-_quote_cache = {"day": "", "html": "", "text": ""}
+_quote_pool: list[tuple[str, str]] = []
 
 
-def _morning_quote() -> tuple[str, str]:
-    """One ZenQuotes line for the day. Empty if the site does not answer."""
+def _fill_quote_pool() -> None:
     import json
     from urllib.request import Request, urlopen
 
-    day = date.today().isoformat()
-    if _quote_cache["day"] == day and _quote_cache["html"]:
-        return _quote_cache["html"], _quote_cache["text"]
-    try:
-        req = Request(
-            "https://zenquotes.io/api/random",
-            headers={"User-Agent": "SDCTimeTracker/1.0"},
-        )
-        with urlopen(req, timeout=4) as resp:
-            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
-        row = payload[0] if isinstance(payload, list) and payload else {}
+    req = Request(
+        "https://zenquotes.io/api/quotes",
+        headers={"User-Agent": "SDCTimeTracker/1.0"},
+    )
+    with urlopen(req, timeout=4) as resp:
+        payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+    if not isinstance(payload, list):
+        return
+    for row in payload:
         quote = _clip_sentence((row.get("q") or "").strip(), 400)
         author = (row.get("a") or "").strip()
-    except Exception as exc:
-        logger.info("Quote skipped: %s", exc)
+        if quote:
+            _quote_pool.append((quote, author))
+
+
+def _morning_quote() -> tuple[str, str]:
+    """A different ZenQuotes line each time. Empty if the site does not answer."""
+    if not _quote_pool:
+        try:
+            _fill_quote_pool()
+        except Exception as exc:
+            logger.info("Quote skipped: %s", exc)
+            return "", ""
+    if not _quote_pool:
         return "", ""
-    if not quote:
-        return "", ""
+    quote, author = _quote_pool.pop(random.randrange(len(_quote_pool)))
     line = f'"{quote}"'
     if author:
         line = f"{line} — {author}"
-    html, text = _fact_card(
+    return _fact_card(
         line,
         '<a href="https://zenquotes.io/" '
         'style="font-size:11px;color:#64748b;text-decoration:none;">ZenQuotes</a>',
         "— https://zenquotes.io/",
     )
-    _quote_cache["day"] = day
-    _quote_cache["html"] = html
-    _quote_cache["text"] = text
-    return html, text
 
 
 def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "", attachments: list = None) -> bool:

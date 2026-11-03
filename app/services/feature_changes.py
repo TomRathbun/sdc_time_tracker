@@ -26,7 +26,7 @@ FEATURE_CATALOG = (
         "audience": "employee,supervisor,manager",
         "summary": (
             "The morning check-in email no longer uses NASA. "
-            "A short quote sits under the greeting instead. "
+            "A different ZenQuotes line sits under the greeting. "
             "The same quote is on the hello menu. "
             "If the quote site does not answer, the check-in email still goes out."
         ),
