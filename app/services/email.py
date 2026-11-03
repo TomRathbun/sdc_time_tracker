@@ -152,7 +152,7 @@ _nasa_cache = {"day": "", "html": "", "text": "", "image": ""}
 
 
 def _save_nasa_image(url: str) -> str:
-    """Save today's picture for the email. Skip videos and oversized files."""
+    """Save today's picture for the email. Skip the NASA logo and oversized files."""
     from urllib.request import Request, urlopen
 
     from app.config import UPLOAD_DIR
@@ -160,8 +160,19 @@ def _save_nasa_image(url: str) -> str:
     if not url or not url.lower().startswith("https://"):
         return ""
     try:
-        req = Request(url, headers={"User-Agent": "SDCTimeTracker/1.0"})
-        with urlopen(req, timeout=8) as resp:
+        req = Request(
+            url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+                "Accept": "image/jpeg,image/png,image/*;q=0.8",
+                "Referer": "https://apod.nasa.gov/apod/astropix.html",
+            },
+        )
+        with urlopen(req, timeout=12) as resp:
             kind = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
             chunks = []
             size = 0
@@ -171,21 +182,25 @@ def _save_nasa_image(url: str) -> str:
                     break
                 size += len(block)
                 if size > 1_500_000:
+                    logger.info("NASA picture too large, skipped")
                     return ""
                 chunks.append(block)
         data = b"".join(chunks)
     except Exception as exc:
         logger.info("NASA picture skipped: %s", exc)
         return ""
-    if kind not in ("image/jpeg", "image/jpg", "image/png", "image/gif"):
-        if data[:3] == b"\xff\xd8\xff":
-            kind = "image/jpeg"
-        elif data[:8] == b"\x89PNG\r\n\x1a\n":
-            kind = "image/png"
-        elif data[:6] in (b"GIF87a", b"GIF89a"):
-            kind = "image/gif"
-        else:
-            return ""
+    if data[:3] == b"\xff\xd8\xff":
+        kind = "image/jpeg"
+    elif data[:8] == b"\x89PNG\r\n\x1a\n":
+        kind = "image/png"
+    elif data[:6] in (b"GIF87a", b"GIF89a"):
+        kind = "image/gif"
+    else:
+        return ""
+    # A blocked download comes back as the small NASA insignia, not the photo.
+    if len(data) < 50000:
+        logger.info("NASA picture too small (%s bytes), skipped", len(data))
+        return ""
     ext = {"image/png": ".png", "image/gif": ".gif"}.get(kind, ".jpg")
     path = os.path.join(str(UPLOAD_DIR), f"nasa_apod{ext}")
     for old in ("nasa_apod.jpg", "nasa_apod.png", "nasa_apod.gif"):
@@ -235,8 +250,15 @@ def _nasa_fact() -> tuple[str, str]:
         if not title or not explanation:
             return "", ""
         media = (payload.get("media_type") or "").lower()
-        picture_url = payload.get("url") if media == "image" else payload.get("thumbnail_url")
-        image_path = _save_nasa_image(picture_url or "")
+        if media == "image":
+            candidates = [payload.get("url") or "", payload.get("hdurl") or ""]
+        else:
+            candidates = [payload.get("thumbnail_url") or ""]
+        image_path = ""
+        for candidate in candidates:
+            image_path = _save_nasa_image(candidate)
+            if image_path:
+                break
         picture = ""
         if image_path:
             picture = (
