@@ -125,12 +125,78 @@ def _get_checkout_greeting(name: str) -> str:
     return random.choice(_CHECKOUT_GREETINGS).format(name=name)
 
 
-def _space_fact() -> tuple[str, str]:
-    """One space fact for the morning mail. Empty if the site does not answer."""
-    import json
+def _fact_card(text: str, credit_html: str, credit_text: str) -> tuple[str, str]:
     from html import escape
+
+    html = (
+        '<p style="margin:0 0 16px;padding:12px 14px;background:#1e293b;'
+        'border-radius:10px;border:1px solid #334155;color:#e2e8f0;'
+        'font-size:14px;line-height:1.5;">'
+        f"{escape(text)}"
+        f"<br>{credit_html}</p>"
+    )
+    return html, f"\n{text}\n{credit_text}\n"
+
+
+def _clip_sentence(text: str, limit: int = 420) -> str:
+    text = " ".join((text or "").split())
+    if len(text) <= limit:
+        return text
+    cut = text[:limit].rsplit(" ", 1)[0].rstrip(".,;")
+    return f"{cut}…"
+
+
+_nasa_cache = {"day": "", "html": "", "text": ""}
+
+
+def _nasa_fact() -> tuple[str, str]:
+    """Today's Astronomy Picture of the Day. Empty if the key is unset or NASA is down."""
+    import json
+    from urllib.parse import quote
     from urllib.request import Request, urlopen
 
+    from app.config import NASA_API_KEY
+
+    key = (NASA_API_KEY or "").strip()
+    if not key:
+        return "", ""
+    day = date.today().isoformat()
+    if _nasa_cache["day"] == day and _nasa_cache["html"]:
+        return _nasa_cache["html"], _nasa_cache["text"]
+    try:
+        req = Request(
+            f"https://api.nasa.gov/planetary/apod?api_key={quote(key)}",
+            headers={"User-Agent": "SDCTimeTracker/1.0"},
+        )
+        with urlopen(req, timeout=4) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+        title = (payload.get("title") or "").strip()
+        explanation = _clip_sentence(payload.get("explanation") or "")
+        if not title or not explanation:
+            return "", ""
+        html, text = _fact_card(
+            f"{title}. {explanation}",
+            '<a href="https://apod.nasa.gov/apod/astropix.html" '
+            'style="font-size:11px;color:#64748b;text-decoration:none;">NASA Astronomy Picture of the Day</a>',
+            "— https://apod.nasa.gov/apod/astropix.html",
+        )
+        _nasa_cache["day"] = day
+        _nasa_cache["html"] = html
+        _nasa_cache["text"] = text
+        return html, text
+    except Exception as exc:
+        logger.info("NASA fact skipped: %s", str(exc).replace(key, "…"))
+        return "", ""
+
+
+def _space_fact() -> tuple[str, str]:
+    """Morning note. NASA when the key is set, otherwise one FactFacts line."""
+    import json
+    from urllib.request import Request, urlopen
+
+    nasa_html, nasa_text = _nasa_fact()
+    if nasa_html:
+        return nasa_html, nasa_text
     try:
         req = Request(
             "https://factfacts.com/api.php?cat=space",
@@ -144,15 +210,12 @@ def _space_fact() -> tuple[str, str]:
         return "", ""
     if not text or len(text) > 400:
         return "", ""
-    html = (
-        '<p style="margin:0 0 16px;padding:12px 14px;background:#1e293b;'
-        'border-radius:10px;border:1px solid #334155;color:#e2e8f0;'
-        'font-size:14px;line-height:1.5;">'
-        f"{escape(text)}"
-        '<br><a href="https://factfacts.com" '
-        'style="font-size:11px;color:#64748b;text-decoration:none;">FactFacts</a></p>'
+    return _fact_card(
+        text,
+        '<a href="https://factfacts.com" '
+        'style="font-size:11px;color:#64748b;text-decoration:none;">FactFacts</a>',
+        "— https://factfacts.com",
     )
-    return html, f"\n{text}\n— https://factfacts.com\n"
 
 
 def _send_email(to_email: str, subject: str, html_body: str, text_body: str = "", images: list = None, errors: list = None, in_reply_to: str = "", attachments: list = None) -> bool:

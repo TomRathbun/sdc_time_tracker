@@ -59,3 +59,6 @@ EMAIL_ENABLED = bool(SMTP_HOST)
 IMAP_HOST = os.environ.get("IMAP_HOST", "imap.gmail.com")
 IMAP_PORT = int(os.environ.get("IMAP_PORT", "993"))
 IMAP_ENABLED = os.environ.get("IMAP_ENABLED", "true").lower() == "true" and bool(SMTP_USER and SMTP_PASSWORD)
+
+# Morning check-in note. Set in smtp.local, not in this file.
+NASA_API_KEY = os.environ.get("NASA_API_KEY", "")

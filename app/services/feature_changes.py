@@ -25,8 +25,9 @@ FEATURE_CATALOG = (
         "added_on": date(2026, 11, 2),
         "audience": "employee,supervisor,manager",
         "summary": (
-            "The morning check-in email now includes one short space fact under the greeting. "
-            "If the fact site does not answer, the check-in email still goes out."
+            "The morning check-in email includes NASA's Astronomy Picture of the Day under the greeting "
+            "when a NASA key is set. If NASA does not answer, a short space fact is used instead. "
+            "If neither answers, the check-in email still goes out."
         ),
     },
     {
