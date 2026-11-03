@@ -23,7 +23,7 @@ from app.services.email_checkout import _fresh_reply, _mark_answered, _notify, _
 from app.services.email_layout import render_email
 from app.services.leave_balance import can_request_leave, count_workdays, partial_pto_error
 from app.services.leave_sync import apply_leave_approval
-from app.services.time_calc import get_target_hours, update_daily_summary, after_hours_window
+from app.services.time_calc import format_duration, get_target_hours, update_daily_summary, after_hours_window
 from app.services.time_offset import offset_approved_default
 from app.services.time_state import OFFSITE_CHECKOUT_COMMENT, depart_for_offsite, validate_offsite_range
 
@@ -580,7 +580,7 @@ def _apply_pto(db, employee, fields):
     full = hours_raw in ("", "full", "day", "all", "fullday", "full day")
     hours = None if full else _parse_hours(hours_raw)
     if not full and hours is None:
-        return "HOURS must be full, or a number such as 4.5.", None
+        return "HOURS must be full, or a duration such as 5h 45m, 5:45, or 5.75.", None
     note = (fields.get("NOTE") or "").strip()
     target = get_target_hours(start)
     if hours is not None and (end != start):
@@ -631,7 +631,7 @@ def _apply_pto(db, employee, fields):
     if start < today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS):
         return f"START can only be in the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.", None
     if hours <= 0 or hours > target + 0.001:
-        return f"HOURS must be more than 0 and no more than {target:g}, or full.", None
+        return f"HOURS must be more than 0 and no more than {format_duration(target)}, or full.", None
     if kind not in (LeaveType.vacation, LeaveType.sick):
         return "A partial day can be vacation or sick. Covid and holiday are full days.", None
     err = partial_pto_error(db, employee, kind.value, start, hours)
@@ -656,7 +656,7 @@ def _apply_pto(db, employee, fields):
         )
 
     return None, (
-        f"Accepted. {hours:g} hours of {label} on {start.strftime('%d %b %Y')}. "
+        f"Accepted. {format_duration(hours)} of {label} on {start.strftime('%d %b %Y')}. "
         "Pending manager approval.",
         undo,
     )
@@ -800,7 +800,7 @@ def _pending_items(db: Session) -> tuple[list[dict], bool]:
                 {
                     "kind": "pto",
                     "id": summary.id,
-                    "label": f"{who}  {when}  {leave} {float(summary.leave_hours):g}h",
+                    "label": f"{who}  {when}  {leave} {format_duration(summary.leave_hours)}",
                 },
             ))
     for leave in db.query(LeaveRequest).filter(
@@ -1173,7 +1173,7 @@ def process_email_menu(db: Session) -> int:
                 [
                     "Reply with these lines. Leave CODE unchanged.",
                     "TYPE is vacation, sick, covid, or holiday.",
-                    "HOURS is full for a whole day, or a number such as 4.5 for part of one day.",
+                    "HOURS is full for a whole day, or a duration such as 5h 45m, 5:45, or 5.75 for part of one day.",
                     "Weekend days are not counted. The confirmation can take up to 5 minutes.",
                 ],
             ),

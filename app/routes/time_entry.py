@@ -18,6 +18,7 @@ from app.config import PAST_DAY_MAX_LOOKBACK_DAYS, BEOD_MINIMUM_HOURS
 from app.services.time_calc import (
     update_daily_summary, get_target_hours, friday_required_hours, normalize_beod_length, format_beod_length,
     beod_offered_on, beod_pref_ui, remember_beod_pref, after_hours_window,
+    combine_duration, format_duration, split_duration,
 )
 from app.services.time_state import (
     can_check_in, can_check_out, can_recheckout, current_status,
@@ -1376,6 +1377,8 @@ async def partial_leave_page(
         if t > 0:  # only workdays
             recent_days.append({"date": d, "label": d.strftime("%a %b %d"), "target": t})
 
+    leave_h, leave_m = split_duration(summary.leave_hours if summary else 0)
+
     return templates.TemplateResponse("partial_leave.html", {
         "request": request,
         "employee": employee,
@@ -1386,6 +1389,8 @@ async def partial_leave_page(
         "current_leave_type": summary.leave_type.value if summary and summary.leave_type else None,
         "current_leave_approved": summary.leave_approved if summary else False,
         "current_worked": summary.total_hours if summary else 0.0,
+        "leave_h": leave_h if summary and summary.leave_hours else 0,
+        "leave_m": leave_m if summary and summary.leave_hours else 0,
         "recent_days": recent_days,
         "balance": balance,
         "error": None,
@@ -1397,10 +1402,11 @@ async def partial_leave_submit(
     request: Request,
     leave_date: str = Form(...),
     leave_type: str = Form(...),
-    leave_hours: float = Form(...),
+    leave_h: str = Form("0"),
+    leave_m: str = Form("0"),
     db: Session = Depends(get_db),
 ):
-    """Submit or update PTO hours for a given date."""
+    """Submit or update PTO for a given date. Duration is hours and minutes."""
     employee = get_current_employee(request, db)
     if not employee:
         return RedirectResponse(url="/login", status_code=303)
@@ -1426,9 +1432,13 @@ async def partial_leave_submit(
     if leave_type not in ("vacation", "sick"):
         leave_type = "vacation"
 
+    leave_hours = combine_duration(leave_h, leave_m)
     error = None
-    if leave_hours < 0 or leave_hours > target:
-        error = f"PTO hours must be between 0 and {target}."
+    if leave_hours is None:
+        error = "Minutes must be from 0 to 59."
+        leave_hours = 0.0
+    elif leave_hours < 0 or leave_hours > target + 0.001:
+        error = f"PTO must be between 0m and {format_duration(target)}."
     else:
         error = partial_pto_error(
             db, employee, leave_type, selected_date, leave_hours, old_hrs, old_type,
@@ -1441,6 +1451,7 @@ async def partial_leave_submit(
             t = get_target_hours(d)
             if t > 0:
                 recent_days.append({"date": d, "label": d.strftime("%a %b %d"), "target": t})
+        shown_h, shown_m = split_duration(leave_hours)
         return templates.TemplateResponse("partial_leave.html", {
             "request": request,
             "employee": employee,
@@ -1451,6 +1462,8 @@ async def partial_leave_submit(
             "current_leave_type": summary.leave_type.value if summary and summary.leave_type else None,
             "current_leave_approved": summary.leave_approved if summary else False,
             "current_worked": summary.total_hours if summary else 0.0,
+            "leave_h": shown_h,
+            "leave_m": shown_m,
             "recent_days": recent_days,
             "balance": get_leave_balance(db, employee, year=selected_date.year),
             "error": error,
@@ -1491,7 +1504,7 @@ async def partial_leave_submit(
                 mgr_emails,
                 [
                     ("Leave Type", f"{old_type.capitalize()} → {leave_type.capitalize()}"),
-                    ("Hours Added", f"{old_hrs}h → {leave_hours}h")
+                    ("Hours Added", f"{format_duration(old_hrs)} → {format_duration(leave_hours)}")
                 ]
             ),
             daemon=True,

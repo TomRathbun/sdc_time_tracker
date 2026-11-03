@@ -13,7 +13,7 @@ from app.config import (
     LEAVE_HOURS_PER_WORK_DAY,
 )
 from app.models import DailySummary, Employee, LeaveRequest, LeaveStatus, LeaveType
-from app.services.time_calc import get_target_hours
+from app.services.time_calc import format_duration, get_target_hours
 
 
 def iter_workdays(start: date, end: date) -> Iterable[date]:
@@ -279,10 +279,10 @@ def can_request_leave(
 
     if bucket is not None and hours > bucket["remaining"] + 1e-6:
         return (
-            f"Not enough {label} hours. This request uses {format_hours(hours)}h "
+            f"Not enough {label} hours. This request uses {format_duration(hours)} "
             f"({workdays} workday(s) at the day's target); "
-            f"you have {format_hours(bucket['remaining'])}h remaining "
-            f"of {format_hours(bucket['entitlement'])}h "
+            f"you have {format_duration(bucket['remaining'])} remaining "
+            f"of {format_duration(bucket['entitlement'])} "
             f"({format_hours(bucket['days'])} work days)."
         )
 
@@ -336,9 +336,9 @@ def partial_pto_error(
     bucket = balance[bucket_name]
     if extra > bucket["remaining"] + 1e-6:
         return (
-            f"Not enough {bucket_name} hours. This adds {format_hours(extra)}h; "
-            f"you have {format_hours(bucket['remaining'])}h remaining "
-            f"of {format_hours(bucket['entitlement'])}h "
+            f"Not enough {bucket_name} hours. This adds {format_duration(extra)}; "
+            f"you have {format_duration(bucket['remaining'])} remaining "
+            f"of {format_duration(bucket['entitlement'])} "
             f"({format_hours(bucket['days'])} work days)."
         )
     return None

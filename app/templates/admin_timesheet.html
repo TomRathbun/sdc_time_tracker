@@ -344,7 +344,7 @@
 
                                 {% if not viewer_is_customer and cell.target %}
                                 <details class="mt-1">
-                                    <summary class="cursor-pointer text-[10px] font-semibold text-primary-300" title="Enter approved PTO. Use 0 hours to clear this day.">+ PTO</summary>
+                                    <summary class="cursor-pointer text-[10px] font-semibold text-primary-300" title="Enter approved PTO as hours and minutes. 0 and 0 clears this day.">+ PTO</summary>
                                     <form method="POST" action="/admin/set-pto" class="mt-1 space-y-1">
                                         <input type="hidden" name="employee_id" value="{{ row.employee.id }}">
                                         <input type="hidden" name="work_date" value="{{ cell.date.isoformat() }}">
@@ -355,10 +355,19 @@
                                             <option value="covid_sick" {% if cell.leave_type_value == 'covid_sick' %}selected{% endif %}>COVID</option>
                                             <option value="uae_holiday" {% if cell.leave_type_value == 'uae_holiday' %}selected{% endif %}>Holiday</option>
                                         </select>
-                                        <input type="number" name="leave_hours" min="0" max="{{ cell.target }}" step="0.25"
-                                            value="{{ cell.leave_hours if cell.leave_hours else '' }}"
-                                            placeholder="0–{{ cell.target }}h"
-                                            class="w-full text-[10px] font-mono bg-surface-900 border border-white/10 rounded px-1 py-0.5 text-white">
+                                        {% set leave_mins = ((cell.leave_hours or 0) * 60)|round(0)|int %}
+                                        <div class="flex gap-1">
+                                            <input type="number" name="leave_h" min="0" max="{{ cell.target|int }}" step="1"
+                                                value="{% if cell.leave_hours %}{{ leave_mins // 60 }}{% endif %}"
+                                                placeholder="h"
+                                                title="Hours"
+                                                class="w-1/2 text-[10px] font-mono bg-surface-900 border border-white/10 rounded px-1 py-0.5 text-white">
+                                            <input type="number" name="leave_m" min="0" max="59" step="1"
+                                                value="{% if cell.leave_hours %}{{ leave_mins % 60 }}{% endif %}"
+                                                placeholder="m"
+                                                title="Minutes"
+                                                class="w-1/2 text-[10px] font-mono bg-surface-900 border border-white/10 rounded px-1 py-0.5 text-white">
+                                        </div>
                                         <div class="flex gap-1">
                                             <button type="submit" class="flex-1 px-1 py-0.5 rounded text-[10px] font-semibold bg-primary-500/15 text-primary-300 border border-primary-500/20">Save</button>
                                             <button type="submit" name="full_day" value="1" class="flex-1 px-1 py-0.5 rounded text-[10px] font-semibold bg-accent-500/15 text-accent-300 border border-accent-500/20">Full day</button>

@@ -41,13 +41,13 @@
         <div class="grid grid-cols-3 gap-4 text-center">
             <div>
                 <p class="text-xs text-gray-500 mb-1">Worked</p>
-                <p class="text-lg font-mono font-bold text-white">{{ current_worked }}h</p>
+                <p class="text-lg font-mono font-bold text-white">{{ current_worked|hm }}</p>
             </div>
             <div>
                 <p class="text-xs text-gray-500 mb-1">PTO</p>
                 <p
                     class="text-lg font-mono font-bold {% if current_leave_hours > 0 %}text-accent-400{% else %}text-gray-600{% endif %}">
-                    {{ current_leave_hours }}h
+                    {{ current_leave_hours|hm }}
                 </p>
                 {% if current_leave_hours > 0 %}
                 <p class="text-[10px] mt-0.5
@@ -60,7 +60,7 @@
             </div>
             <div>
                 <p class="text-xs text-gray-500 mb-1">Target</p>
-                <p class="text-lg font-mono font-bold text-gray-300">{{ target }}h</p>
+                <p class="text-lg font-mono font-bold text-gray-300">{{ target|hm }}</p>
             </div>
         </div>
     </div>
@@ -118,16 +118,25 @@
 
                 <!-- Hours -->
                 <div>
-                    <label for="leave_hours" class="block text-sm font-medium text-gray-300 mb-2">PTO Hours</label>
-                    <p class="text-xs text-gray-500 mb-3">Enter 0 to remove PTO for this date. Quarter hours are allowed, such as 5.75. This day is {{ target }}h.
-                        {% if balance %}Vacation {{ '%g'|format(balance.vacation.remaining) }}h left ({{ '%g'|format(balance.vacation.entitlement_days) }} days). Sick {{ '%g'|format(balance.sick.remaining) }}h left ({{ '%g'|format(balance.sick.entitlement_days) }} days).{% endif %}
+                    <label class="block text-sm font-medium text-gray-300 mb-2">PTO duration</label>
+                    <p class="text-xs text-gray-500 mb-3">Enter 0 hours and 0 minutes to remove PTO for this date. This day is {{ target|hm }}.
+                        {% if balance %}Vacation {{ balance.vacation.remaining|hm }} left ({{ '%g'|format(balance.vacation.entitlement_days) }} days). Sick {{ balance.sick.remaining|hm }} left ({{ '%g'|format(balance.sick.entitlement_days) }} days).{% endif %}
                     </p>
-                    <div class="relative">
-                        <input type="number" name="leave_hours" id="leave_hours" step="0.25" min="0" max="{{ target }}"
-                            value="{{ current_leave_hours if current_leave_hours > 0 else '' }}" required
-                            class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3.5 text-white text-lg font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
-                            placeholder="e.g. 5">
-                        <span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 text-sm">hours</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="leave_h" class="block text-xs text-gray-500 mb-1">Hours</label>
+                            <input type="number" name="leave_h" id="leave_h" step="1" min="0" max="{{ target|int }}"
+                                value="{{ leave_h }}" required
+                                class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3.5 text-white text-lg font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                                placeholder="5">
+                        </div>
+                        <div>
+                            <label for="leave_m" class="block text-xs text-gray-500 mb-1">Minutes</label>
+                            <input type="number" name="leave_m" id="leave_m" step="1" min="0" max="59"
+                                value="{{ leave_m }}" required
+                                class="w-full bg-surface-900/50 border border-white/10 rounded-xl px-4 py-3.5 text-white text-lg font-mono placeholder-gray-600 focus:outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                                placeholder="45">
+                        </div>
                     </div>
                 </div>
 

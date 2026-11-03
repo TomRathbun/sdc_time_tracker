@@ -233,6 +233,29 @@ def format_duration(hours) -> str:
     return f"{sign}{part}m"
 
 
+def split_duration(hours) -> tuple[int, int]:
+    """1.75 → (1, 45). Bad input is (0, 0)."""
+    try:
+        minutes = int(round(float(hours) * 60))
+    except (TypeError, ValueError):
+        return 0, 0
+    if minutes < 0:
+        return 0, 0
+    return divmod(minutes, 60)
+
+
+def combine_duration(hours, minutes) -> float | None:
+    """Hours and minutes fields → decimal hours. Minutes must be 0–59."""
+    h_text = str(hours if hours is not None else "").strip() or "0"
+    m_text = str(minutes if minutes is not None else "").strip() or "0"
+    if not h_text.isdigit() or not m_text.isdigit():
+        return None
+    whole, part = int(h_text), int(m_text)
+    if part > 59:
+        return None
+    return round(whole + part / 60.0, 2)
+
+
 def format_beod_length(hours: float) -> str:
     """Compact label: 1h, 45m, 30m, 15m."""
     return format_duration(hours)

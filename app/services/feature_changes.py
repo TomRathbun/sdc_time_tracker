@@ -36,6 +36,7 @@ FEATURE_CATALOG = (
         "audience": "employee,supervisor,manager",
         "summary": (
             "Durations now read as hours and minutes, such as 1h 30m, instead of 1.5h. "
+            "Vacation and sick balances, partial PTO, and the timesheet PTO box use the same form. "
             "A whole hour still reads 8h. The Lockheed spreadsheet stays in decimal hours."
         ),
     },

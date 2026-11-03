@@ -18,7 +18,9 @@ from app.services.audit import log_action
 from app.services.time_calc import (
     BEOD_CREDIT_HOURS,
     beod_offered_on,
+    combine_duration,
     format_beod_length,
+    format_duration,
     get_target_hours,
     normalize_beod_length,
     update_daily_summary,
@@ -870,6 +872,8 @@ async def set_pto(
     employee_id: int = Form(...),
     work_date: str = Form(...),
     leave_type: str = Form(...),
+    leave_h: str = Form(""),
+    leave_m: str = Form(""),
     leave_hours: str = Form(""),
     full_day: str = Form(""),
     week: str = Form(""),
@@ -908,13 +912,18 @@ async def set_pto(
 
     if full_day == "1":
         hours = float(target)
+    elif str(leave_h).strip() or str(leave_m).strip():
+        combined = combine_duration(leave_h or "0", leave_m or "0")
+        if combined is None:
+            return fail("Minutes must be from 0 to 59.")
+        hours = combined
     else:
         try:
             hours = round(float(leave_hours), 2)
         except (TypeError, ValueError):
-            return fail("Enter the hours, or choose Full day.")
+            return fail("Enter hours and minutes, or choose Full day.")
     if hours < 0 or hours > target + 0.001:
-        return fail(f"Hours must be from 0 to {target:g}.")
+        return fail(f"PTO must be from 0m to {format_duration(target)}.")
 
     covering = (
         db.query(LeaveRequest)

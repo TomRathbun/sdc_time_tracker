@@ -22,7 +22,7 @@ from app.services.email_layout import render_email
 from app.services.leave_sync import apply_leave_approval
 from app.services.email_checkout import _split_clock
 from app.services.settings import get_bool_setting, get_setting, parse_hhmm_setting
-from app.services.time_calc import friday_required_hours, get_target_hours, update_daily_summary
+from app.services.time_calc import format_duration, friday_required_hours, get_target_hours, update_daily_summary
 from app.services.time_state import STATUS_CHECKED_IN, STATUS_NOT_STARTED, can_check_out, current_status
 
 logger = logging.getLogger(__name__)
@@ -420,7 +420,7 @@ def process_missed_replies(db: Session) -> int:
                         _notify(
                             employee,
                             f"{label} recorded",
-                            f"Accepted. {token.work_date.strftime('%A %d %b')} is {label} ({hours:g} hours).",
+                            f"Accepted. {token.work_date.strftime('%A %d %b')} is {label} ({format_duration(hours)}).",
                             reply_message_id=message.message_id or "",
                             reply_subject=message.subject or "",
                         )
