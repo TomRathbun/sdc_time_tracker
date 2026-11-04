@@ -25,9 +25,8 @@ FEATURE_CATALOG = (
         "added_on": date(2026, 11, 2),
         "audience": "employee,supervisor,manager",
         "summary": (
-            "The morning check-in email no longer uses NASA. "
-            "A different ZenQuotes line sits under the greeting. "
-            "The same quote is on the hello menu. "
+            "The check-in confirmation includes today's ZenQuotes line under the greeting. "
+            "The morning reminder and the hello menu use the same quote. "
             "If the quote site does not answer, the check-in email still goes out."
         ),
     },
