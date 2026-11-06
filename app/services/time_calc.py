@@ -90,14 +90,15 @@ def day_work_hours(db: Session, employee_id: int, day: date) -> float:
 
 
 def friday_required_hours(db: Session, employee_id: int, work_date: date) -> float:
-    """Hours this person may count toward leaving early on Friday.
+    """Hours still required on this date.
 
-    This does not change the recorded target. Monday–Thursday stay at 9.
-    Friday starts at 4 and drops by hours worked above the Monday–Thursday
-    target of 36. Off-day work inside the work week reduces Friday too:
-    Saturday and Sunday for an expat, Sunday for an Emirati. That work can
-    be in the office, at a remote site, or a phone call. Leave is not extra
-    time. Never below 0.
+    Monday–Thursday stay at 9. Friday starts at 4. Hours above the
+    Monday–Thursday target of 36, plus off-day work in this work week,
+    come off Friday. A short Monday–Thursday day reduces that credit
+    first, so extra Saturday hours do not survive two early departures.
+    Off days are Saturday and Sunday for an expat, Sunday for an Emirati.
+    Office, remote site, phone, and after-hours all count. Leave does not.
+    Friday never goes above 4 or below 0.
     """
     base = get_target_hours(work_date)
     if work_date.weekday() != 4 or base <= 0:
@@ -109,15 +110,16 @@ def friday_required_hours(db: Session, employee_id: int, work_date: date) -> flo
         day = monday + timedelta(days=offset)
         target += get_target_hours(day)
         worked += day_work_hours(db, employee_id, day)
-    surplus = max(0.0, round(worked - target, 2))
+    net = round(worked - target, 2)
     person = db.query(Employee).filter(Employee.id == employee_id).first()
     kind = work_week_of(person) if person else "expat"
     extra_days = [monday - timedelta(days=1)]
     if kind != "emirati":
         extra_days.insert(0, monday - timedelta(days=2))
     for day in extra_days:
-        surplus = round(surplus + day_work_hours(db, employee_id, day), 2)
-    return round(max(0.0, base - surplus), 2)
+        net = round(net + day_work_hours(db, employee_id, day), 2)
+    credit = max(0.0, net)
+    return round(max(0.0, base - credit), 2)
 
 
 def hours_to_meet_target(work_date: date, *, beod: bool = False) -> float:

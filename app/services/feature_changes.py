@@ -232,9 +232,9 @@ FEATURE_CATALOG = (
         "added_on": date(2026, 10, 16),
         "audience": "employee,supervisor,manager",
         "summary": (
-            "Friday is a 4-hour day. Hours worked above the Monday–Thursday target "
-            "come off Friday, so you can leave early. A short day earlier in the week "
-            "cancels a long one. Approved leave does not count as extra time."
+            "Friday is a 4-hour day. Extra hours, including Saturday or Sunday, "
+            "come off Friday. A short day earlier in the week reduces that credit first. "
+            "Approved leave does not count as extra time."
         ),
     },
     {
