@@ -897,12 +897,26 @@ def _render_past_day(
         DailySummary.date == selected_date,
     ).first()
 
+    existing_after = (
+        db.query(AfterHoursEntry)
+        .filter(
+            AfterHoursEntry.employee_id == employee.id,
+            AfterHoursEntry.date == selected_date,
+        )
+        .order_by(AfterHoursEntry.id)
+        .all()
+    )
+
     recent_days = []
     for i in range(1, PAST_DAY_MAX_LOOKBACK_DAYS + 1):
         d = today - timedelta(days=i)
         t = get_target_hours(d)
-        if t > 0:
-            recent_days.append({"date": d, "label": d.strftime("%a %b %d"), "target": t})
+        recent_days.append({
+            "date": d,
+            "label": d.strftime("%a %b %d"),
+            "target": t,
+            "off": t <= 0,
+        })
 
     last_co = None
     can_add_extra = False
@@ -934,6 +948,7 @@ def _render_past_day(
         "target": target,
         "existing_entries": existing_checkins,
         "existing_offsite": existing_offsite,
+        "existing_after": existing_after,
         "current_worked": summary.total_hours if summary else 0.0,
         "recent_days": recent_days,
         "error": error,
@@ -1336,6 +1351,78 @@ async def past_day_extra_session(
     )
 
 
+@router.post("/time/past-day/delete-after-hours", response_class=HTMLResponse)
+async def past_day_delete_after_hours(
+    request: Request,
+    entry_id: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Remove one after-hours entry. Weekends are allowed. Office punches stay."""
+    employee = get_current_employee(request, db)
+    if not employee:
+        return RedirectResponse(url="/login", status_code=303)
+
+    today = date.today()
+    row = (
+        db.query(AfterHoursEntry)
+        .filter(
+            AfterHoursEntry.id == entry_id,
+            AfterHoursEntry.employee_id == employee.id,
+        )
+        .first()
+    )
+    if row is None:
+        return _render_past_day(
+            request, db, employee, today - timedelta(days=1),
+            error="That after-hours entry was not found.",
+        )
+    selected_date = row.date
+    earliest = today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS)
+    if selected_date > today or selected_date < earliest:
+        return _render_past_day(
+            request, db, employee, today - timedelta(days=1),
+            error=f"After-hours entries can only be removed for the last {PAST_DAY_MAX_LOOKBACK_DAYS} days.",
+        )
+
+    where = (row.location or "").upper()
+    length = format_duration(row.hours)
+    window = ""
+    if row.start_time and row.end_time:
+        window = f" {row.start_time.strftime('%H:%M')}–{row.end_time.strftime('%H:%M')}"
+    db.delete(row)
+    db.commit()
+    update_daily_summary(db, employee.id, selected_date)
+    log_action(
+        db, action="delete_after_hours", entity_type="AfterHoursEntry",
+        entity_id=entry_id, employee_id=employee.id,
+        new_values={"date": str(selected_date), "location": where, "hours": length},
+        ip_address=request.client.host if request.client else "",
+    )
+    if selected_date < today:
+        import threading
+        from app.services.email import send_past_day_modification_email
+        from app.services.email_prefs import recipient_emails
+        threading.Thread(
+            target=send_past_day_modification_email,
+            args=(
+                employee.name,
+                employee.name,
+                str(selected_date),
+                "After-hours removed",
+                "Removed from Past Day",
+                recipient_emails(db, "admin_notice"),
+                [("After-hours", f"{where} {length}{window}")],
+            ),
+            daemon=True,
+        ).start()
+    if selected_date >= today:
+        return RedirectResponse(url="/time/after-hours?removed=1", status_code=303)
+    return _render_past_day(
+        request, db, employee, selected_date,
+        success=f"Removed the {length} after-hours entry. The office punches were left as they were.",
+    )
+
+
 @router.get("/time/partial-leave", response_class=HTMLResponse)
 async def partial_leave_page(
     request: Request,
@@ -1717,25 +1804,40 @@ def _parse_clock(raw: str, work_date: date) -> datetime | None:
 
 
 @router.get("/time/after-hours", response_class=HTMLResponse)
-async def after_hours_page(request: Request, db: Session = Depends(get_db)):
+async def after_hours_page(
+    request: Request,
+    entry_date: str = None,
+    removed: str = None,
+    db: Session = Depends(get_db),
+):
     employee = get_current_employee(request, db)
     if not employee:
         return RedirectResponse(url="/login", status_code=303)
     today = date.today()
+    chosen = today
+    if entry_date:
+        try:
+            chosen = date.fromisoformat(entry_date)
+        except ValueError:
+            chosen = today
+    earliest = today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS)
+    if chosen > today or chosen < earliest:
+        chosen = today
     existing = (
         db.query(AfterHoursEntry)
-        .filter(AfterHoursEntry.employee_id == employee.id, AfterHoursEntry.date == today)
+        .filter(AfterHoursEntry.employee_id == employee.id, AfterHoursEntry.date == chosen)
         .order_by(AfterHoursEntry.submission_time.desc())
         .all()
     )
     return templates.TemplateResponse("after_hours.html", {
         "request": request,
         "employee": employee,
-        "today": today,
-        "min_date": today - timedelta(days=PAST_DAY_MAX_LOOKBACK_DAYS),
+        "today": chosen,
+        "min_date": earliest,
         "max_date": today,
         "lookback_days": PAST_DAY_MAX_LOOKBACK_DAYS,
         "existing": existing,
+        "removed": removed == "1",
         "error": None,
     })
 

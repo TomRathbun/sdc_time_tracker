@@ -20,6 +20,17 @@ AUDIENCES = ("employee", "supervisor", "manager", "customer")
 # Newest user-facing behavior. Slug is stable so a restart does not add a second row.
 FEATURE_CATALOG = (
     {
+        "slug": "remove-after-hours",
+        "title": "Remove a wrong after-hours entry",
+        "added_on": date(2026, 11, 18),
+        "audience": "employee,supervisor,manager",
+        "summary": (
+            "Past Day now lists Saturday and Sunday. "
+            "After-hours entries on the day you pick are shown, including a weekend. "
+            "Remove the wrong one there. The office check-in is left as it was."
+        ),
+    },
+    {
         "slug": "morning-space-fact",
         "title": "Morning quote",
         "added_on": date(2026, 11, 2),

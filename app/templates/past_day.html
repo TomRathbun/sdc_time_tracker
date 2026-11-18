@@ -19,7 +19,7 @@
             </div>
             Past Day Entry
         </h1>
-        <p class="text-gray-400 mt-1">Log your timeline for a previous workday</p>
+        <p class="text-gray-400 mt-1">Fix a previous day. Weekends are listed so a wrong after-hours entry can be removed.</p>
     </div>
 
     {% if error %}
@@ -59,7 +59,7 @@
             </div>
             <div class="text-right">
                 <div class="text-xs text-gray-500 uppercase tracking-wider">Target</div>
-                <div class="text-lg font-bold text-accent-400 font-mono mt-1">{{ target }}h</div>
+                <div class="text-lg font-bold text-accent-400 font-mono mt-1">{% if target > 0 %}{{ target }}h{% else %}Off day{% endif %}</div>
             </div>
         </div>
 
@@ -96,7 +96,40 @@
         {% endif %}
     </div>
 
-    {% if can_add_extra|default(false) %}
+    {% if target <= 0 or existing_after %}
+    <div class="glass-card p-6 mb-6">
+        <h2 class="text-sm font-semibold text-white mb-1">After-hours</h2>
+        {% if target <= 0 %}
+        <p class="text-xs text-gray-400 mb-4">This is not a scheduled workday, so there is no office check-in to edit. Remove a wrong after-hours entry here.</p>
+        {% else %}
+        <p class="text-xs text-gray-400 mb-4">Removing one does not change the check-in or check-out.</p>
+        {% endif %}
+        {% if existing_after %}
+        <ul class="space-y-3">
+            {% for e in existing_after %}
+            <li class="flex items-center justify-between gap-3 text-sm">
+                <span class="text-white">
+                    {{ e.location|upper }} · {{ e.hours|hm }}
+                    {% if e.start_time and e.end_time %}
+                    <span class="font-mono text-gray-400">{{ e.start_time.strftime("%H:%M") }}–{{ e.end_time.strftime("%H:%M") }}</span>
+                    {% endif %}
+                    {% if e.comments %}<span class="block text-xs text-gray-500">{{ e.comments }}</span>{% endif %}
+                </span>
+                <form method="POST" action="/time/past-day/delete-after-hours">
+                    <input type="hidden" name="entry_id" value="{{ e.id }}">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-danger-500/40 text-danger-300 hover:bg-danger-500/10">Remove</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-gray-500">No after-hours entry on this day.</p>
+        {% endif %}
+        <a href="/time/after-hours?entry_date={{ selected_date.isoformat() }}" class="inline-block mt-4 text-sm text-primary-300 hover:text-white">Log after-hours for this day</a>
+    </div>
+    {% endif %}
+
+    {% if target > 0 and can_add_extra|default(false) %}
     <div class="glass-card p-6 mb-6 border-l-4 border-warning-400">
         <h2 class="text-sm font-semibold text-white mb-1">Called back after checkout?</h2>
         <p class="text-xs text-gray-400 mb-4">
@@ -149,6 +182,7 @@
     </div>
     {% endif %}
 
+    {% if target > 0 %}
     <!-- Entry Form -->
     <div class="glass-card p-6">
         <form method="POST" action="/time/past-day" id="past-day-form">
@@ -312,6 +346,7 @@
             </button>
         </form>
     </div>
+    {% endif %}
 
     <p class="text-center text-xs text-gray-600 mt-4">
         ⓘ Past day entries may be reviewed by your Engineering Manager

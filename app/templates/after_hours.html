@@ -22,6 +22,9 @@
 
     <div class="glass-card p-8 mb-6">
         <form method="POST" action="/time/after-hours" id="after-hours-form">
+            {% if removed %}
+            <div class="p-4 rounded-xl bg-success-500/10 border border-success-500/20 text-success-300 text-sm mb-6">Removed.</div>
+            {% endif %}
             {% if error %}
             <div class="p-4 rounded-xl bg-danger-500/10 border border-danger-500/20 text-danger-400 text-sm mb-6">{{ error }}</div>
             {% endif %}
@@ -81,13 +84,17 @@
         <h2 class="text-sm font-semibold text-gray-300 mb-3">Already logged for {{ today.strftime("%b %d") }}</h2>
         <ul class="space-y-2">
             {% for e in existing %}
-            <li class="flex justify-between gap-3 text-sm border-b border-white/5 pb-2">
+            <li class="flex items-center justify-between gap-3 text-sm border-b border-white/5 pb-2">
                 <span class="text-white">{{ e.location|upper }} · {{ e.hours|hm }}
                     {% if e.start_time and e.end_time %}
                     <span class="font-mono text-gray-400">{{ e.start_time.strftime("%H:%M") }}–{{ e.end_time.strftime("%H:%M") }}</span>
                     {% endif %}
+                    {% if e.comments %}<span class="block text-xs text-gray-500">{{ e.comments }}</span>{% endif %}
                 </span>
-                <span class="text-gray-500 truncate">{{ e.comments or "—" }}</span>
+                <form method="POST" action="/time/past-day/delete-after-hours">
+                    <input type="hidden" name="entry_id" value="{{ e.id }}">
+                    <button type="submit" class="px-3 py-1.5 rounded-lg text-xs font-medium border border-danger-500/40 text-danger-300 hover:bg-danger-500/10">Remove</button>
+                </form>
             </li>
             {% endfor %}
         </ul>
